@@ -1,7 +1,8 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_camera"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="3_hitbox"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 radius = 0.4
@@ -13,6 +14,16 @@ height = 1.8
 
 [sub_resource type="StandardMaterial3D" id="body_mat"]
 albedo_color = Color(0.4, 0.6, 0.9, 1)
+
+[sub_resource type="BoxShape3D" id="hitbox_shape"]
+size = Vector3(1.4, 1.4, 1.6)
+
+[sub_resource type="BoxMesh" id="hitbox_mesh"]
+size = Vector3(1.4, 1.4, 1.6)
+
+[sub_resource type="StandardMaterial3D" id="hitbox_mat"]
+transparency = 1
+albedo_color = Color(1, 0.3, 0.3, 0.35)
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_player")
@@ -27,6 +38,23 @@ shape = SubResource("capsule_shape")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 mesh = SubResource("capsule_mesh")
 surface_material_override/0 = SubResource("body_mat")
+
+[node name="AttackHitbox" type="Area3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.2)
+collision_layer = 8
+collision_mask = 16
+monitoring = false
+monitorable = true
+script = ExtResource("3_hitbox")
+damage = 25.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackHitbox"]
+shape = SubResource("hitbox_shape")
+
+[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackHitbox"]
+mesh = SubResource("hitbox_mesh")
+material_override = SubResource("hitbox_mat")
+visible = false
 
 [node name="CameraRig" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

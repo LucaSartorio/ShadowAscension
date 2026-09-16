@@ -1,6 +1,8 @@
 class_name CameraRig
 extends Node3D
 
+signal attack_light_pressed
+
 @export var mouse_sensitivity: float = 0.005
 @export var minimum_pitch: float = -1.2
 @export var maximum_pitch: float = 1.2
@@ -33,8 +35,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		return
 
-	if event is InputEventMouseButton:
-		var mb: InputEventMouseButton = event
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
-				Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	if event.is_action_pressed("attack_light"):
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			attack_light_pressed.emit()
+		else:
+			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		get_viewport().set_input_as_handled()
