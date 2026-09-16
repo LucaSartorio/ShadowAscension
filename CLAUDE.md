@@ -1,42 +1,228 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Operational rules for Claude Code (claude.ai/code) when working in this repository. These rules OVERRIDE default behavior and MUST be followed.
 
-## Project
+---
 
-ShadowAscension — Godot 4.7 game project. Renderer: Forward+ (D3D12 on Windows). Physics: Jolt (3D). Currently a bare-bones project skeleton — no scenes, scripts, or assets beyond the default icon.
+## 1. Project overview
 
-## Layout
+**ShadowAscension** — Action RPG 3D built with Godot 4.7.x and GDScript.
 
-- Repo root contains only `README.md` and the Godot project directory `shadow-ascension/`.
-- `shadow-ascension/project.godot` is the engine config. Open the editor with this directory as the project root.
-- `.godot/` is generated cache (gitignored). `/android/` export dir also gitignored.
+Core pillars (design intent, not yet implemented):
+- Player-driven combat with shadow/soul mechanics
+- Procedural or curated dungeon runs
+- Data-driven progression: enemies, skills, items, shadows defined as `Resource` assets
 
-## Common commands
+Current state: project skeleton only. No gameplay code yet.
 
-Run all commands from `shadow-ascension/`.
+---
 
-```powershell
-# Open project in editor
-godot -e --path .
+## 2. Technology stack
 
-# Run project (main scene)
-godot --path .
+- **Engine:** Godot 4.7.x (stable)
+- **Language:** GDScript (static typing preferred)
+- **Renderer:** Forward+ (D3D12 pinned on Windows via `project.godot [rendering]`)
+- **Physics:** Jolt Physics (3D)
+- **Editor integration:** Godot MCP addon (`addons/godot_mcp`)
+- **VCS:** Git
 
-# Run a specific scene headless-safe
-godot --path . res://path/to/Scene.tscn
+Do **not** introduce C# without explicit user approval. Do **not** add external addons or dependencies without approval.
 
-# Headless mode (CI / scripting)
-godot --headless --path . --quit
+---
 
-# Export (after configuring export presets)
-godot --headless --path . --export-release "<preset-name>" <output-path>
+## 3. Repository structure
+
+Repo root:
+```
+CLAUDE.md
+README.md
+shadow-ascension/          # Godot project root
 ```
 
-No test framework, lint config, or build script configured yet. If tests are added (e.g. GUT), document the runner command here.
+Godot project (`shadow-ascension/`):
+```
+Main.tscn                  # entry point — do not rename without user approval
+project.godot
+icon.svg
+addons/
+    godot_mcp/             # editor integration
 
-## Conventions
+assets/                    # raw art/audio (import source)
+    audio/
+    characters/
+    environments/
+    fx/
+    materials/
+    models/
+    textures/
 
-- EOL: LF for all text files (`.gitattributes`).
-- Charset: UTF-8 (`.editorconfig`).
-- Windows rendering driver is pinned to D3D12 — Vulkan changes go in `project.godot [rendering]`.
+scenes/                    # .tscn files, grouped by domain
+    core/                  # bootstrap, root controllers, global scene wiring
+    player/
+    enemies/
+    world/
+    dungeons/
+    ui/
+
+scripts/                   # .gd files, grouped by system
+    core/                  # framework, autoloads, base classes
+    player/
+    combat/
+    enemies/
+    dungeon/
+    shadow/                # shadow/soul mechanic
+    ui/
+
+resources/                 # custom Resource (.tres) data
+    characters/
+    enemies/
+    items/
+    skills/
+    shadows/
+
+docs/                      # architecture notes, design docs
+tests/                     # test scenes/scripts (framework TBD)
+```
+
+Every new feature MUST live in the correct directory. Do not create parallel/ad-hoc folders.
+
+---
+
+## 4. Godot architecture rules
+
+- **Composition over deep inheritance.** Build behavior from small nodes/components; avoid inheritance chains deeper than 2 levels except when extending engine base types.
+- **No monolithic scenes.** Split large scenes into sub-scenes by responsibility. Instance, don't inline.
+- **Separate data from behavior.** Data lives in `Resource` assets (`resources/`). Behavior lives in scripts (`scripts/`). Nodes glue them together in scenes (`scenes/`).
+- **Custom Resources for gameplay data.** Enemies, skills, items, shadows, and similar tuning MUST be `Resource` subclasses stored under `resources/<domain>/`. No hardcoded stats in scripts once a value becomes configurable.
+- **Signals for decoupling.** Cross-system communication uses signals. Do not reach across the tree with `get_node("../../..")` when a signal or bus works.
+- **No unnecessary globals.** Autoload (`AutoLoad`/singleton) ONLY for genuine global services (save system, event bus, audio bus, scene router). Gameplay state does not belong in autoload.
+- **Single responsibility.** Each system owns one clear concern. If a script mixes input + combat + audio, split it.
+- **No logic duplication.** If the same rule appears twice, extract it (helper, base component, resource, or signal).
+
+---
+
+## 5. GDScript coding conventions
+
+Naming:
+- **Files & directories:** `snake_case` (e.g. `player_controller.gd`, `enemy_stats.tres`)
+- **Classes / `class_name`:** `PascalCase` (e.g. `class_name PlayerController`)
+- **Variables & functions:** `snake_case`
+- **Constants & enum values:** `UPPER_SNAKE_CASE`
+- **Signals:** `snake_case`, past-tense or event-shaped (e.g. `health_changed`, `died`)
+- **Private members:** prefix `_` (e.g. `_internal_state`)
+
+Typing:
+- Use **static typing** where reasonable: `var hp: int = 100`, `func take_damage(amount: int) -> void:`.
+- Prefer typed arrays / dictionaries when element type is stable.
+- Declare `class_name` for scripts meant to be referenced by type or attached to Resources.
+
+Style:
+- Tabs for indentation (Godot default).
+- One class per file. Filename matches `class_name` in snake_case.
+- `@export` for editor-tunable values on nodes; Resource fields for data assets.
+- No magic numbers in gameplay code — extract to `const` or Resource field.
+
+---
+
+## 6. Scene conventions
+
+- Scenes live in `scenes/<domain>/`. Filename `snake_case.tscn`. Root node name `PascalCase`.
+- One responsibility per scene. Composed scenes reference sub-scenes by instancing.
+- Scripts attached to a scene root live in `scripts/<same_domain>/` with a matching name when practical.
+- `Main.tscn` is the project entry point (`application/run/main_scene`). Do not repurpose it as a gameplay scene; keep it as a bootstrap/router.
+- Groups (`add_to_group`) are OK for tagging; do not use them as a replacement for typed references.
+
+---
+
+## 7. Resource conventions
+
+- Custom Resources under `resources/<domain>/` as `.tres` (text) assets, not `.res` (binary), for diff-ability.
+- Resource *scripts* (the `extends Resource` class definitions) live in `scripts/<domain>/` (e.g. `scripts/enemies/enemy_stats.gd` defines `class_name EnemyStats`, instances live in `resources/enemies/*.tres`).
+- Resources hold pure data + minimal derived getters. No per-frame logic, no scene-tree access.
+- Reuse instances via `preload`/`load` — do not duplicate data in code.
+
+---
+
+## 8. Signal / event conventions
+
+- Prefer signals emitted by the owning node over polling.
+- For truly global events (run started, player died, save requested), use a dedicated autoload event bus rather than reaching into arbitrary nodes.
+- Connect signals in `_ready()` (or via editor) and disconnect in `_exit_tree()` when the connection outlives the emitter's parent.
+- Signal names describe *what happened*, not what to do: `health_changed`, not `update_health_bar`.
+
+---
+
+## 9. Performance rules
+
+- Avoid per-frame allocations in `_process` / `_physics_process` (no `Array`/`Dictionary` literals in hot paths — reuse).
+- Cache `get_node` results in `_ready`. Do not call `get_node` every frame.
+- Use `_physics_process` for physics/movement, `_process` for visuals/UI. Do not mix.
+- Prefer signals over polling for state changes.
+- Static typing helps the compiler — use it in hot paths.
+- Profile before optimizing (Godot profiler / `print_debug` + timers). No speculative micro-optimizations.
+
+---
+
+## 10. Git workflow
+
+- Do **not** commit or push unless the user explicitly requests it.
+- Do **not** add files to staging speculatively.
+- When asked to commit: small, focused commits. Conventional-style subject preferred (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`). Subject ≤ 72 chars.
+- Never force-push to `main`. Never rewrite shared history without approval.
+- `.godot/`, `/android/`, and other generated dirs stay gitignored.
+
+---
+
+## 11. Testing and validation
+
+- No test framework wired yet. When one is added (GUT or similar), document the runner in this file.
+- Tests live under `tests/` (test scenes + scripts).
+- After significant changes: **launch the project** and confirm zero runtime errors and zero parser warnings before declaring the task done.
+
+Manual validation commands (run from `shadow-ascension/`):
+
+```powershell
+# Open editor
+godot -e --path .
+
+# Run project (Main.tscn)
+godot --path .
+
+# Headless smoke test (loads project, quits)
+godot --headless --path . --quit
+```
+
+Fix all errors and parser warnings before considering a task complete. Warnings that are legitimately intentional must be silenced with an explicit `@warning_ignore` and a comment explaining why.
+
+---
+
+## 12. Documentation rules
+
+- `docs/` holds architecture notes, design decisions, system diagrams.
+- Update `docs/` and this `CLAUDE.md` when architecture changes (new autoload, new core system, changed folder layout, changed conventions).
+- Do NOT create documentation files unless the change warrants it — no speculative or per-feature READMEs.
+- Comments in code: only for non-obvious *why*. Do not narrate *what* — code + names cover that.
+
+---
+
+## 13. Definition of Done
+
+A task is Done only when ALL of these hold:
+
+1. **Project launches** — `godot --path .` starts without crash.
+2. **Zero runtime errors** in the Godot output.
+3. **Zero GDScript parser errors**; warnings addressed or explicitly justified.
+4. **Structure is coherent** — new files placed in the correct directory per §3, naming per §5.
+5. **Feature is verifiable** — reproducible manual steps or a test scene exists.
+6. **Documentation updated** if the change touched architecture, conventions, or the folder layout.
+
+---
+
+## Operational reminders (Claude)
+
+- Use **Godot MCP** when work touches scenes, nodes, or editor configuration. Prefer MCP over hand-editing `.tscn` when the operation is expressive in MCP.
+- After significant changes, **run the project** (or at minimum `--headless --quit`) to catch parser/runtime issues.
+- Do **not** modify unrelated systems. No opportunistic refactors during simple features.
+- Do **not** perform mass refactors while implementing a small feature — propose them separately.
+- Ask before adding external dependencies (addons, plugins, third-party GDScript libs).
+- Do **not** commit or push without an explicit request.
