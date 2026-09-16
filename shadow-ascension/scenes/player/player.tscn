@@ -1,8 +1,9 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="3_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/attack_step.gd" id="4_step"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 radius = 0.4
@@ -25,8 +26,37 @@ size = Vector3(1.4, 1.4, 1.6)
 transparency = 1
 albedo_color = Color(1, 0.3, 0.3, 0.35)
 
+[sub_resource type="Resource" id="step_1"]
+script = ExtResource("4_step")
+damage = 20.0
+startup = 0.12
+active = 0.12
+recovery = 0.22
+debug_color = Color(1, 0.55, 0.35, 0.4)
+visual_tilt_degrees = 6.0
+
+[sub_resource type="Resource" id="step_2"]
+script = ExtResource("4_step")
+damage = 25.0
+startup = 0.14
+active = 0.14
+recovery = 0.24
+debug_color = Color(1, 0.35, 0.35, 0.4)
+visual_tilt_degrees = 10.0
+
+[sub_resource type="Resource" id="step_3"]
+script = ExtResource("4_step")
+damage = 35.0
+startup = 0.18
+active = 0.16
+recovery = 0.32
+debug_color = Color(0.65, 0.2, 0.9, 0.45)
+visual_tilt_degrees = 15.0
+
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_player")
+combo_steps = Array[Resource]([SubResource("step_1"), SubResource("step_2"), SubResource("step_3")])
+combo_reset_time = 0.8
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)

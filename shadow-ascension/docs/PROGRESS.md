@@ -8,7 +8,11 @@
 
 **M2 — Basic Combat** (In Progress)
 
-First iteration delivers the combat foundation: light attack, `HealthComponent`, `Hitbox`, `Hurtbox`, damage pipeline, and a training dummy that dies. Combo, heavy attack, dodge, sprint, stamina, mana, skills, weapons, inventory, lock-on, enemy AI, loot, and XP are **not** implemented — deferred to later iterations / milestones.
+Two iterations delivered so far:
+- **M2.1 — Combat Foundation**: `HealthComponent`, `Hitbox`, `Hurtbox`, damage pipeline, single light attack, training dummy with death behavior.
+- **M2.2 — Light Attack Combo**: 3-step light combo (Attack 1 → 2 → 3), per-step data via `AttackStep` Resource, input buffering (single-deep), combo reset after `combo_reset_time`, per-step aim orientation, per-step debug feedback (color + tilt tween).
+
+Next iteration: **M2.3 — Dodge and Combat Cancel Windows** (not started).
 
 ---
 
@@ -25,15 +29,34 @@ First iteration delivers the combat foundation: light attack, `HealthComponent`,
 - `CLAUDE.md` created
 - Documentation files created
 - **M0 — Project Foundation** (Completed)
-- **M1 — Player Controller** (Completed). Delivered:
-    - `scenes/player/player.tscn` — `CharacterBody3D` root with `CollisionShape3D`, `VisualRoot` (mesh), and `CameraRig → PitchPivot → SpringArm3D → Camera3D`
-    - `scripts/player/player.gd` (`class_name Player`) — WASD camera-relative movement, 360° direction, diagonal normalization, `move_toward`-based acceleration/deceleration, gravity, `move_and_slide` collision, rate-limited `VisualRoot` yaw interpolation toward movement direction
-    - `scripts/player/camera_rig.gd` (`class_name CameraRig`) — mouse-driven yaw (rig) and pitch (`PitchPivot`) with pitch clamp, `SpringArm3D` collision with player body excluded, mouse capture on `_ready`, ESC releases the mouse, left-click recaptures when visible
-    - Exported tuning — Player: `movement_speed`, `acceleration`, `deceleration`, `rotation_speed`, `gravity`; CameraRig: `mouse_sensitivity`, `minimum_pitch`, `maximum_pitch`, `camera_distance`
-    - `scenes/core/test_world.tscn` — floor, four walls, `DirectionalLight3D`, `WorldEnvironment`, `Player` instance
-    - `Main.tscn` acts as bootstrap router, instancing `TestWorld` (no gameplay logic in Main)
-    - Input map in `project.godot`: `move_forward` W, `move_backward` S, `move_left` A, `move_right` D (physical keycodes)
-    - Validation: `godot --headless --path . --quit` clean; `--quit-after 120` clean; verbose scan for ERROR / WARNING / Failed / Parse Error returned no hits
+- **M1 — Player Controller** (Completed)
+- **M2 progress — Combat Foundation** (delivered within M2):
+    - `scripts/combat/health_component.gd` — reusable `HealthComponent` (max/current/is_dead, `receive_damage`, `heal`, signals `health_changed`, `died`)
+    - `scripts/combat/hitbox.gd` — reusable `Hitbox` (Area3D, `activate`/`deactivate`, per-activation target dedup, `hit_landed` signal, optional debug mesh visualization, `set_debug_color`)
+    - `scripts/combat/hurtbox.gd` — reusable `Hurtbox` (Area3D, auto-wires sibling `HealthComponent` + parent `owner_entity`, `receive_hit` forwards to health, no Player/Enemy coupling)
+    - Damage pipeline: `Hitbox.area_entered` → `Hurtbox.receive_hit` → `HealthComponent.receive_damage`
+    - Training dummy (`scripts/enemies/training_dummy.gd`, `scenes/enemies/training_dummy.tscn`): CharacterBody3D + HealthComponent + Hurtbox; logs hits; on death disables body/hurtbox collisions and topples via short tween. No AI.
+- **M2 progress — Single Light Attack Foundation** (delivered within M2, then upgraded in M2.2):
+    - Player attack state machine (`AttackState` enum: `IDLE / STARTUP / ACTIVE / RECOVERY`) with per-phase timers
+    - Hitbox activation only during the `ACTIVE` window
+    - Player faces aim/camera XZ direction at attack start
+    - New attack blocked until state returns to `IDLE`
+- **M2 progress — 3-Step Light Combo** (M2.2):
+    - `scripts/combat/attack_step.gd` — `class_name AttackStep extends Resource` with `damage`, `startup`, `active`, `recovery`, `debug_color`, `visual_tilt_degrees`. Small dedicated Resource; no generic ability framework.
+    - Player exports `combo_steps: Array[AttackStep]` and `combo_reset_time` (default 0.8).
+    - 3 combo steps defined as inline sub-resources in `scenes/player/player.tscn`:
+        - Attack 1 — damage 20, startup 0.12, active 0.12, recovery 0.22
+        - Attack 2 — damage 25, startup 0.14, active 0.14, recovery 0.24
+        - Attack 3 — damage 35, startup 0.18, active 0.16, recovery 0.32
+    - `_combo_index` tracks next step to fire. Cycles 0 → 1 → 2 → 3-then-wraps-to-0.
+    - Input buffer: single-deep `_queued_next` flag. Additional presses while `_attack_state != IDLE` set the flag but do not accumulate. Fires the next combo step at the end of `RECOVERY` if buffered.
+    - Spam bounded: 10+ rapid clicks in one frame result in at most 2 landed attacks (Attack 1 + queued Attack 2), never a runaway chain.
+    - Combo termination: when `_combo_index` reaches `combo_steps.size()` at end of `RECOVERY`, index resets to 0 and the queued flag is cleared. Next click starts a fresh Attack 1.
+    - Combo reset: while `_attack_state == IDLE` and `_combo_index > 0`, an idle timer counts up. If it exceeds `combo_reset_time`, the index resets to 0.
+    - Per-step aim orientation: `_face_aim_direction()` snaps `VisualRoot.rotation.y` to the camera XZ forward each time a step starts (not the movement direction).
+    - Per-step target de-dup: `Hitbox._hit_targets` is cleared on each `activate()`, so every swing can damage each target at most once but consecutive combo steps can hit the same target again.
+    - Per-step debug feedback: `Hitbox.set_debug_color()` swaps the debug mesh tint per step, `VisualRoot.rotation:z` tweens by `visual_tilt_degrees` and back (bigger tilt on Attack 3 for a slightly weightier prototype feel).
+    - Hitbox damage is written from `_current_step.damage` on activation each swing.
 
 ---
 
@@ -46,37 +69,21 @@ First iteration delivers the combat foundation: light attack, `HealthComponent`,
     - combat feel direction
   Still in progress: other systems (progression, loot, shadow mechanic, dungeon structure, UI, etc.) not yet defined.
 - Technical architecture definition — grows as systems land.
-- **M2 — Basic Combat** (In Progress). Implemented so far:
-    - Reusable combat components under `scripts/combat/`:
-        - `health_component.gd` (`class_name HealthComponent`, extends `Node`) — `max_health`, `current_health`, `is_dead`, `receive_damage()`, `heal()`, signals `health_changed(current, maximum)` and `died`. No entity-specific logic.
-        - `hitbox.gd` (`class_name Hitbox`, extends `Area3D`) — `damage`, `source`, `activate()` / `deactivate()`, per-activation `_hit_targets` deduplication, emits `hit_landed(target, damage)`, toggles optional child `DebugMesh` for debug feedback.
-        - `hurtbox.gd` (`class_name Hurtbox`, extends `Area3D`) — auto-resolves sibling `HealthComponent` and parent `owner_entity`, forwards hits to the `HealthComponent`, no `Player`/`Enemy` coupling.
-    - Player light-attack pipeline in `scripts/player/player.gd`:
-        - `AttackState` enum (`IDLE`, `STARTUP`, `ACTIVE`, `RECOVERY`) with per-phase timers `attack_startup_time`, `attack_active_time`, `attack_recovery_time` (defaults 0.15 / 0.15 / 0.25 — placeholders per `GAME_DESIGN.md`).
-        - New attack starts only while `IDLE` (spam blocked during startup/active/recovery).
-        - On attack start, `VisualRoot` snaps to aim/camera XZ direction; per-frame movement-rotation suppressed while attacking.
-        - Hitbox activates only during the `ACTIVE` window and deactivates on transition to `RECOVERY`.
-    - `CameraRig` (`scripts/player/camera_rig.gd`) refactor:
-        - Emits `attack_light_pressed` signal only when the mouse is already captured.
-        - Left-click while mouse is visible recaptures the mouse and consumes the event — no attack fires on the recapture click.
-        - Signal-based binding so `Player` receives attack input without racing the mouse-mode toggle.
-    - `Player` scene (`scenes/player/player.tscn`) — adds `AttackHitbox` (Area3D + child `CollisionShape3D` + debug `MeshInstance3D`) at `VisualRoot`-local `(0, 0.9, -1.2)`, size `1.4 × 1.4 × 1.6`, `Hitbox` script with `damage = 25`.
-    - Training dummy:
-        - `scripts/enemies/training_dummy.gd` (`class_name TrainingDummy`, extends `CharacterBody3D`) — subscribes to `HealthComponent.health_changed` and `died`, logs on hit, on death: disables body + hurtbox collision (deferred) and topples via a short `Tween` on `VisualRoot.rotation:x`. No AI.
-        - `scenes/enemies/training_dummy.tscn` — `CharacterBody3D` with `CollisionShape3D`, `VisualRoot`, `HealthComponent` (`max_health = 100`), and `Hurtbox` with capsule shape.
-    - Test world updated: `Player` + 2 `TrainingDummy` instances, extra walking room.
-    - Input map: `attack_light` bound to left mouse button.
-    - Collision layers/masks:
-        - Layer 1: world/physics bodies (floor, walls, Player CharacterBody3D, Dummy CharacterBody3D).
-        - Layer 4 (bit value 8): damage-dealing hitboxes. Player `AttackHitbox` on this layer.
-        - Layer 5 (bit value 16): damage-receiving hurtboxes. Dummy `Hurtbox` on this layer.
-        - Player `AttackHitbox`: `collision_layer=8`, `collision_mask=16`, monitoring toggled by state.
-        - Dummy `Hurtbox`: `collision_layer=16`, `collision_mask=0`, `monitorable=true`.
-    - Automated headless test — `tests/combat/attack_test.tscn` + `attack_test.gd`:
-        - PASS: attack 1 deals 25 damage to dummy (100 → 75).
-        - PASS: spam attempt during startup blocked (attack state unchanged).
-        - PASS: 4 attacks kill the dummy (100 → 75 → 50 → 25 → 0), `died` signal fires.
-    - Validation: `godot --headless --path . --quit-after 180` clean, no ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR.
+- **M2 — Basic Combat** (In Progress). Remaining scope before M2 close:
+    - Player-side `HealthComponent` + `Hurtbox` + death state
+    - Combat cancel windows (dodge cancels recovery, etc.) — landing with **M2.3 — Dodge and Combat Cancel Windows**
+    - Playtest-tuning of combo timings and damages
+- Automated headless verification for M2.2 (`res://tests/combat/attack_test.tscn`) — 10/10 tests PASS:
+    1. Single click → Attack 1 dmg = 20
+    2. Two clicks → Attack 1 + Attack 2 = 45
+    3. Three clicks → full combo = 80
+    4. After Attack 3 next click starts Attack 1 (dmg 20)
+    5. Spam 10 rapid clicks → only 2 attacks land (dmg 45)
+    6. Two Attack 1s separated by > `combo_reset_time` → dmg 40 (combo restarted)
+    7. Single swing hits each target exactly once
+    8. Out-of-range attack deals 0 damage
+    9. Two dummies inside hitbox both take 20 dmg
+    10. After camera yaw = 90°, player yaw snaps to +π/2 at attack start
 
 ---
 
@@ -84,10 +91,10 @@ First iteration delivers the combat foundation: light attack, `HealthComponent`,
 
 - Complete `GAME_DESIGN.md` (systems beyond camera/movement/aim/combat feel)
 - Complete `ARCHITECTURE.md` (fill out as systems land)
-- Manual editor playtest of M1 + M2 combat feel (mouse aim, hit registration, dummy topple, spam-block feel)
-- Playtest-tune M2 exported parameters (attack timings, damage, hitbox size/position)
-- M2 remaining scope: combo foundation (input-buffered chain window), Player `HealthComponent` + `Hurtbox`, death of Player
-- Close M2 once combo + player-side death land and playtest passes acceptance
+- Manual editor playtest of M1 + M2 combat feel (mouse aim, hit registration, dummy topple, combo cadence, spam-block feel, per-step debug feedback)
+- Playtest-tune M2 combo values (damages, timings, hitbox size/position, `combo_reset_time`)
+- **M2.3 — Dodge and Combat Cancel Windows** (next iteration inside M2)
+- Player-side `HealthComponent` + `Hurtbox` + death, then close M2
 - Start M3 — Enemy Foundation
 
 ---

@@ -9,9 +9,8 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @export var rotation_speed: float = 10.0
 @export var gravity: float = 20.0
 
-@export var attack_startup_time: float = 0.15
-@export var attack_active_time: float = 0.15
-@export var attack_recovery_time: float = 0.25
+@export var combo_steps: Array[AttackStep] = []
+@export var combo_reset_time: float = 0.8
 
 @onready var visual_root: Node3D = $VisualRoot
 @onready var camera_rig: CameraRig = $CameraRig
@@ -19,6 +18,11 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 
 var _attack_state: AttackState = AttackState.IDLE
 var _attack_timer: float = 0.0
+var _combo_index: int = 0
+var _idle_since_step_ended: float = 0.0
+var _queued_next: bool = false
+var _current_step: AttackStep = null
+var _visual_tween: Tween = null
 
 
 func _ready() -> void:
@@ -68,11 +72,27 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_attack_light_pressed() -> void:
-	if _attack_state != AttackState.IDLE:
+	if combo_steps.is_empty():
 		return
+	if _attack_state == AttackState.IDLE:
+		_fire_step(_combo_index)
+	else:
+		_queued_next = true
+
+
+func _fire_step(index: int) -> void:
+	if index < 0 or index >= combo_steps.size():
+		index = 0
+	var step: AttackStep = combo_steps[index]
+	if step == null:
+		return
+	_current_step = step
+	_combo_index = index + 1
+	_idle_since_step_ended = 0.0
 	_face_aim_direction()
+	_do_visual_feedback(step)
 	_attack_state = AttackState.STARTUP
-	_attack_timer = attack_startup_time
+	_attack_timer = step.startup
 
 
 func _face_aim_direction() -> void:
@@ -85,8 +105,24 @@ func _face_aim_direction() -> void:
 	visual_root.rotation.y = atan2(-forward.x, -forward.z)
 
 
+func _do_visual_feedback(step: AttackStep) -> void:
+	if _visual_tween != null and _visual_tween.is_running():
+		_visual_tween.kill()
+	var tilt: float = deg_to_rad(step.visual_tilt_degrees)
+	var to_tilt_time: float = max(0.05, step.startup + step.active * 0.5)
+	var to_zero_time: float = max(0.05, step.recovery)
+	_visual_tween = create_tween()
+	_visual_tween.tween_property(visual_root, "rotation:z", tilt, to_tilt_time)
+	_visual_tween.tween_property(visual_root, "rotation:z", 0.0, to_zero_time)
+
+
 func _update_attack(delta: float) -> void:
 	if _attack_state == AttackState.IDLE:
+		if _combo_index > 0 and _combo_index <= combo_steps.size():
+			_idle_since_step_ended += delta
+			if _idle_since_step_ended >= combo_reset_time:
+				_combo_index = 0
+				_idle_since_step_ended = 0.0
 		return
 	_attack_timer -= delta
 	if _attack_timer > 0.0:
@@ -94,12 +130,23 @@ func _update_attack(delta: float) -> void:
 	match _attack_state:
 		AttackState.STARTUP:
 			_attack_state = AttackState.ACTIVE
-			_attack_timer = attack_active_time
+			_attack_timer = _current_step.active
+			attack_hitbox.damage = _current_step.damage
+			attack_hitbox.set_debug_color(_current_step.debug_color)
 			attack_hitbox.activate()
 		AttackState.ACTIVE:
 			attack_hitbox.deactivate()
 			_attack_state = AttackState.RECOVERY
-			_attack_timer = attack_recovery_time
+			_attack_timer = _current_step.recovery
 		AttackState.RECOVERY:
 			_attack_state = AttackState.IDLE
 			_attack_timer = 0.0
+			if _combo_index >= combo_steps.size():
+				_combo_index = 0
+				_queued_next = false
+				_idle_since_step_ended = 0.0
+			elif _queued_next:
+				_queued_next = false
+				_fire_step(_combo_index)
+			else:
+				_idle_since_step_ended = 0.0

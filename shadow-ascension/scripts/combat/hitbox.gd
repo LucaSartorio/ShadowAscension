@@ -18,6 +18,17 @@ func _ready() -> void:
 	_debug_visual = get_node_or_null("DebugMesh") as MeshInstance3D
 	if _debug_visual != null:
 		_debug_visual.visible = false
+		if _debug_visual.material_override != null:
+			_debug_visual.material_override = _debug_visual.material_override.duplicate()
+
+
+func set_debug_color(color: Color) -> void:
+	if _debug_visual == null:
+		return
+	var mat: StandardMaterial3D = _debug_visual.material_override as StandardMaterial3D
+	if mat == null:
+		return
+	mat.albedo_color = color
 
 
 func activate() -> void:
