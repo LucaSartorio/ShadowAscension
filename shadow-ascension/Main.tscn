@@ -1,7 +1,7 @@
-[gd_scene format=3]
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/core/test_world.tscn" id="1_world"]
 
 [node name="Main" type="Node3D"]
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="TestWorld" parent="." instance=ExtResource("1_world")]
