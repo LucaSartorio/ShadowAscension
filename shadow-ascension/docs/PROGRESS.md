@@ -8,11 +8,12 @@
 
 **M2 — Basic Combat** (In Progress)
 
-Two iterations delivered so far:
+Iterations delivered so far:
 - **M2.1 — Combat Foundation**: `HealthComponent`, `Hitbox`, `Hurtbox`, damage pipeline, single light attack, training dummy with death behavior.
-- **M2.2 — Light Attack Combo**: 3-step light combo (Attack 1 → 2 → 3), per-step data via `AttackStep` Resource, input buffering (single-deep), combo reset after `combo_reset_time`, per-step aim orientation, per-step debug feedback (color + tilt tween).
+- **M2.2 — Light Attack Combo**: 3-step light combo, per-step `AttackStep` Resource, single-slot input buffer, `combo_reset_time`, per-step aim orientation and debug feedback.
+- **M2.3 — Dodge, i-Frames, Attack Cancel Windows**: directional/backstep dodge, invulnerability window on `Hurtbox`, per-step cancel windows on `AttackStep`, dodge cooldown, Player `HealthComponent` + `Hurtbox`, debug damage zone in `test_world` for manual i-frame verification.
 
-Next iteration: **M2.3 — Dodge and Combat Cancel Windows** (not started).
+Next iteration: **M2 close** — Player death handling + playtest tuning. Then M3.
 
 ---
 
@@ -21,8 +22,7 @@ Next iteration: **M2.3 — Dodge and Combat Cancel Windows** (not started).
 - Godot 4.7.x project created
 - Git repository configured
 - Claude Code configured
-- Godot MCP installed
-- Godot MCP connection verified
+- Godot MCP installed / verified
 - `Main.tscn` created
 - Project starts successfully
 - Repository folder structure created
@@ -30,33 +30,66 @@ Next iteration: **M2.3 — Dodge and Combat Cancel Windows** (not started).
 - Documentation files created
 - **M0 — Project Foundation** (Completed)
 - **M1 — Player Controller** (Completed)
-- **M2 progress — Combat Foundation** (delivered within M2):
-    - `scripts/combat/health_component.gd` — reusable `HealthComponent` (max/current/is_dead, `receive_damage`, `heal`, signals `health_changed`, `died`)
-    - `scripts/combat/hitbox.gd` — reusable `Hitbox` (Area3D, `activate`/`deactivate`, per-activation target dedup, `hit_landed` signal, optional debug mesh visualization, `set_debug_color`)
-    - `scripts/combat/hurtbox.gd` — reusable `Hurtbox` (Area3D, auto-wires sibling `HealthComponent` + parent `owner_entity`, `receive_hit` forwards to health, no Player/Enemy coupling)
+- **M2 progress — Combat Foundation**:
+    - `HealthComponent`, `Hitbox`, `Hurtbox` reusable components under `scripts/combat/`
     - Damage pipeline: `Hitbox.area_entered` → `Hurtbox.receive_hit` → `HealthComponent.receive_damage`
-    - Training dummy (`scripts/enemies/training_dummy.gd`, `scenes/enemies/training_dummy.tscn`): CharacterBody3D + HealthComponent + Hurtbox; logs hits; on death disables body/hurtbox collisions and topples via short tween. No AI.
-- **M2 progress — Single Light Attack Foundation** (delivered within M2, then upgraded in M2.2):
-    - Player attack state machine (`AttackState` enum: `IDLE / STARTUP / ACTIVE / RECOVERY`) with per-phase timers
-    - Hitbox activation only during the `ACTIVE` window
-    - Player faces aim/camera XZ direction at attack start
-    - New attack blocked until state returns to `IDLE`
-- **M2 progress — 3-Step Light Combo** (M2.2):
-    - `scripts/combat/attack_step.gd` — `class_name AttackStep extends Resource` with `damage`, `startup`, `active`, `recovery`, `debug_color`, `visual_tilt_degrees`. Small dedicated Resource; no generic ability framework.
-    - Player exports `combo_steps: Array[AttackStep]` and `combo_reset_time` (default 0.8).
-    - 3 combo steps defined as inline sub-resources in `scenes/player/player.tscn`:
-        - Attack 1 — damage 20, startup 0.12, active 0.12, recovery 0.22
-        - Attack 2 — damage 25, startup 0.14, active 0.14, recovery 0.24
-        - Attack 3 — damage 35, startup 0.18, active 0.16, recovery 0.32
-    - `_combo_index` tracks next step to fire. Cycles 0 → 1 → 2 → 3-then-wraps-to-0.
-    - Input buffer: single-deep `_queued_next` flag. Additional presses while `_attack_state != IDLE` set the flag but do not accumulate. Fires the next combo step at the end of `RECOVERY` if buffered.
-    - Spam bounded: 10+ rapid clicks in one frame result in at most 2 landed attacks (Attack 1 + queued Attack 2), never a runaway chain.
-    - Combo termination: when `_combo_index` reaches `combo_steps.size()` at end of `RECOVERY`, index resets to 0 and the queued flag is cleared. Next click starts a fresh Attack 1.
-    - Combo reset: while `_attack_state == IDLE` and `_combo_index > 0`, an idle timer counts up. If it exceeds `combo_reset_time`, the index resets to 0.
-    - Per-step aim orientation: `_face_aim_direction()` snaps `VisualRoot.rotation.y` to the camera XZ forward each time a step starts (not the movement direction).
-    - Per-step target de-dup: `Hitbox._hit_targets` is cleared on each `activate()`, so every swing can damage each target at most once but consecutive combo steps can hit the same target again.
-    - Per-step debug feedback: `Hitbox.set_debug_color()` swaps the debug mesh tint per step, `VisualRoot.rotation:z` tweens by `visual_tilt_degrees` and back (bigger tilt on Attack 3 for a slightly weightier prototype feel).
-    - Hitbox damage is written from `_current_step.damage` on activation each swing.
+    - Training dummy with sibling `HealthComponent`, `Hurtbox`, on-death disable + topple tween. No AI.
+- **M2 progress — 3-Step Light Combo**:
+    - `AttackStep` Resource (`scripts/combat/attack_step.gd`) — data-only, per-step tuning
+    - Player exports `combo_steps: Array[AttackStep]` and `combo_reset_time`
+    - 3 combo steps as inline sub-resources in `player.tscn`
+    - Attack 1: dmg 20, 0.12 / 0.12 / 0.22
+    - Attack 2: dmg 25, 0.14 / 0.14 / 0.24
+    - Attack 3: dmg 35, 0.18 / 0.16 / 0.32
+    - Single-slot input buffer, spam bounded to next step, combo termination after Attack 3, `combo_reset_time` = 0.8
+    - Per-step aim orientation, per-step debug color, `VisualRoot.rotation:z` tween per step (bigger tilt on Attack 3)
+    - `Hitbox.set_debug_color()` swaps material tint per swing; material duplicated on `_ready` for per-instance state
+- **M2 progress — Dodge, i-Frames, Attack Cancel Windows** (M2.3):
+    - Input action `dodge = Space` in `project.godot`
+    - Player exports: `dodge_duration = 0.35`, `dodge_speed = 11.5`, `invulnerability_start = 0.06`, `invulnerability_end = 0.24`, `dodge_cooldown = 0.15`, `dodge_visual_tilt_degrees = -15`
+    - Dodge direction: camera-relative on XZ when movement input present, backstep along `-VisualRoot.forward` when no input; diagonals normalized via `Input.get_vector`
+    - Dodge uses `move_and_slide` with `dodge_direction * dodge_speed` — respects world collisions, no teleport, no wall clipping
+    - Direction latched at dodge start; cannot be changed mid-dodge; cannot restart another dodge until current + cooldown finish
+    - Player `Hurtbox` extended with `is_invulnerable` flag + `set_invulnerable(value)`; `receive_hit` ignores damage while invulnerable — no dodge-specific logic in `HealthComponent`
+    - i-frame window driven by `Player._tick_dodge`: enables `Hurtbox.set_invulnerable(true)` when `_dodge_elapsed ∈ [invulnerability_start, invulnerability_end)`, disables otherwise, ensures cleanup on `_end_dodge`
+    - `AttackStep.dodge_cancel_recovery_fraction` — per-step fraction of recovery after which dodge can cancel the attack
+        - Attack 1: 0.0 (immediate on recovery)
+        - Attack 2: 0.35
+        - Attack 3: 0.6
+    - `Player._in_cancel_window()` gates dodge input during attacks. Startup and Active always block dodge. Recovery admits dodge once `_recovery_elapsed >= recovery * fraction`
+    - `Player._cancel_current_attack()` deactivates any active Hitbox, resets `_attack_state`, `_attack_timer`, `_recovery_elapsed`, `_combo_index`, `_queued_next`, `_idle_since_step_ended`, `_current_step` — no dangling active hitbox after cancel
+    - `_start_dodge()` also resets combo state (`_combo_index = 0`, `_queued_next = false`) so next attack after any dodge starts fresh at Attack 1
+    - `VisualRoot.rotation:x` tween lean forward during dodge for prototype visual feedback (kills any conflicting attack tween)
+    - Player `HealthComponent` + `Hurtbox` added to `player.tscn`. Collision layers:
+        - Layer 8: player-dealt hitboxes (Player AttackHitbox)
+        - Layer 16: enemy hurtboxes (Dummy Hurtbox)
+        - Layer 32: enemy-dealt hitboxes (test-only debug damage zone)
+        - Layer 64: player hurtboxes (Player Hurtbox)
+        - Player AttackHitbox: layer 8, mask 16. Dummy Hurtbox: layer 16, mask 0. Player Hurtbox: layer 64, mask 0. Debug damage zone: layer 32, mask 64.
+    - Debug damage zone in `test_world.tscn` — Area3D + `tests/combat/debug_damage_zone.gd`, ticks damage every 0.5s on overlapping Hurtboxes, layer 32 mask 64, clearly marked as prototype/test object; only damages Player (not dummies)
+    - `_unhandled_input` on Player consumes the `dodge` action and calls `_on_dodge_pressed`
+- Automated headless validation:
+    - **Combo test** `res://tests/combat/attack_test.tscn` — 10/10 PASS (single click, chained combo, spam bounding, reset time, per-swing dedup, out-of-range, multi-target, orientation)
+    - **Dodge test** `res://tests/combat/dodge_test.tscn` — 18/18 PASS:
+        1. W+Space → forward dodge direction
+        2. W+D diagonal → normalized dodge direction
+        3. Space with no input → backstep along `+VisualRoot.z`
+        4. Direction latched mid-dodge (changing input mid-dodge has no effect)
+        5. Dodge blocked by wall (`move_and_slide` collision honored)
+        6. Second dodge during current dodge is blocked (direction unchanged)
+        7. Cooldown: mid-cooldown blocked, past-cooldown allowed
+        8. i-frame timing: false before 0.06, true in [0.06, 0.24), false after
+        9. Damage ignored during i-frames
+        10. Damage applied outside i-frames (25 damage → 100 → 75)
+        11. Attack 1 not cancelable during Startup / Active
+        12. Attack 1 cancelable during Recovery (fraction 0.0)
+        13. Attack 2 cancel window (blocked early, allowed after 35% of recovery)
+        14. Attack 3 cancel window (blocked early, allowed after 60% of recovery)
+        15. `attack_hitbox.is_active()` and `.monitoring` both false after cancel
+        16. `_queued_next` cleared and `_combo_index` reset to 0 on dodge cancel
+        17. `_combo_index == 0` after dodge + cooldown (next attack starts at Attack 1)
+        18. Spam Space (20 rapid calls) leaves player state valid; subsequent single dodge works
+    - `godot --headless --verbose --path . --quit-after 180` on `Main.tscn` — no ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
 
 ---
 
@@ -67,23 +100,11 @@ Next iteration: **M2.3 — Dodge and Combat Cancel Windows** (not started).
     - WASD camera-relative movement
     - mouse-controlled aim
     - combat feel direction
-  Still in progress: other systems (progression, loot, shadow mechanic, dungeon structure, UI, etc.) not yet defined.
+  Still in progress: progression, loot, shadow mechanic, dungeon structure, UI, etc.
 - Technical architecture definition — grows as systems land.
 - **M2 — Basic Combat** (In Progress). Remaining scope before M2 close:
-    - Player-side `HealthComponent` + `Hurtbox` + death state
-    - Combat cancel windows (dodge cancels recovery, etc.) — landing with **M2.3 — Dodge and Combat Cancel Windows**
-    - Playtest-tuning of combo timings and damages
-- Automated headless verification for M2.2 (`res://tests/combat/attack_test.tscn`) — 10/10 tests PASS:
-    1. Single click → Attack 1 dmg = 20
-    2. Two clicks → Attack 1 + Attack 2 = 45
-    3. Three clicks → full combo = 80
-    4. After Attack 3 next click starts Attack 1 (dmg 20)
-    5. Spam 10 rapid clicks → only 2 attacks land (dmg 45)
-    6. Two Attack 1s separated by > `combo_reset_time` → dmg 40 (combo restarted)
-    7. Single swing hits each target exactly once
-    8. Out-of-range attack deals 0 damage
-    9. Two dummies inside hitbox both take 20 dmg
-    10. After camera yaw = 90°, player yaw snaps to +π/2 at attack start
+    - Player death handling (`Player` reacts to its own `HealthComponent.died`)
+    - Playtest-tuning of combo timings, damages, dodge params, cancel windows
 
 ---
 
@@ -91,10 +112,9 @@ Next iteration: **M2.3 — Dodge and Combat Cancel Windows** (not started).
 
 - Complete `GAME_DESIGN.md` (systems beyond camera/movement/aim/combat feel)
 - Complete `ARCHITECTURE.md` (fill out as systems land)
-- Manual editor playtest of M1 + M2 combat feel (mouse aim, hit registration, dummy topple, combo cadence, spam-block feel, per-step debug feedback)
-- Playtest-tune M2 combo values (damages, timings, hitbox size/position, `combo_reset_time`)
-- **M2.3 — Dodge and Combat Cancel Windows** (next iteration inside M2)
-- Player-side `HealthComponent` + `Hurtbox` + death, then close M2
+- Manual editor playtest of M1 + M2 combat feel (mouse aim, hit reg, dummy topple, combo cadence, dodge feel, i-frame reliability, debug damage zone contact)
+- Playtest-tune M2 combo + dodge parameters
+- Player death state + close M2
 - Start M3 — Enemy Foundation
 
 ---

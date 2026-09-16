@@ -1,9 +1,11 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_camera"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="3_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/attack_step.gd" id="4_step"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="5_health"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="6_hurtbox"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 radius = 0.4
@@ -26,6 +28,10 @@ size = Vector3(1.4, 1.4, 1.6)
 transparency = 1
 albedo_color = Color(1, 0.3, 0.3, 0.35)
 
+[sub_resource type="CapsuleShape3D" id="player_hurtbox_shape"]
+radius = 0.5
+height = 1.9
+
 [sub_resource type="Resource" id="step_1"]
 script = ExtResource("4_step")
 damage = 20.0
@@ -34,6 +40,7 @@ active = 0.12
 recovery = 0.22
 debug_color = Color(1, 0.55, 0.35, 0.4)
 visual_tilt_degrees = 6.0
+dodge_cancel_recovery_fraction = 0.0
 
 [sub_resource type="Resource" id="step_2"]
 script = ExtResource("4_step")
@@ -43,6 +50,7 @@ active = 0.14
 recovery = 0.24
 debug_color = Color(1, 0.35, 0.35, 0.4)
 visual_tilt_degrees = 10.0
+dodge_cancel_recovery_fraction = 0.35
 
 [sub_resource type="Resource" id="step_3"]
 script = ExtResource("4_step")
@@ -52,6 +60,7 @@ active = 0.16
 recovery = 0.32
 debug_color = Color(0.65, 0.2, 0.9, 0.45)
 visual_tilt_degrees = 15.0
+dodge_cancel_recovery_fraction = 0.6
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_player")
@@ -85,6 +94,21 @@ shape = SubResource("hitbox_shape")
 mesh = SubResource("hitbox_mesh")
 material_override = SubResource("hitbox_mat")
 visible = false
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("5_health")
+max_health = 100.0
+
+[node name="Hurtbox" type="Area3D" parent="."]
+collision_layer = 64
+collision_mask = 0
+monitoring = false
+monitorable = true
+script = ExtResource("6_hurtbox")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+shape = SubResource("player_hurtbox_shape")
 
 [node name="CameraRig" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

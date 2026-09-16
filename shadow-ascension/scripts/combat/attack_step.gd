@@ -7,3 +7,4 @@ extends Resource
 @export var recovery: float = 0.25
 @export var debug_color: Color = Color(1, 0.3, 0.3, 0.35)
 @export var visual_tilt_degrees: float = 8.0
+@export var dodge_cancel_recovery_fraction: float = 0.0

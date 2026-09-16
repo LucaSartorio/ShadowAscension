@@ -12,17 +12,33 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @export var combo_steps: Array[AttackStep] = []
 @export var combo_reset_time: float = 0.8
 
+@export var dodge_duration: float = 0.35
+@export var dodge_speed: float = 11.5
+@export var invulnerability_start: float = 0.06
+@export var invulnerability_end: float = 0.24
+@export var dodge_cooldown: float = 0.15
+@export var dodge_visual_tilt_degrees: float = -15.0
+
 @onready var visual_root: Node3D = $VisualRoot
 @onready var camera_rig: CameraRig = $CameraRig
 @onready var attack_hitbox: Hitbox = $VisualRoot/AttackHitbox
+@onready var health_component: HealthComponent = $HealthComponent
+@onready var hurtbox: Hurtbox = $Hurtbox
 
 var _attack_state: AttackState = AttackState.IDLE
 var _attack_timer: float = 0.0
+var _recovery_elapsed: float = 0.0
 var _combo_index: int = 0
 var _idle_since_step_ended: float = 0.0
 var _queued_next: bool = false
 var _current_step: AttackStep = null
 var _visual_tween: Tween = null
+
+var _is_dodging: bool = false
+var _dodge_elapsed: float = 0.0
+var _dodge_cooldown_remaining: float = 0.0
+var _dodge_direction: Vector3 = Vector3.ZERO
+var _dodge_iframes_active: bool = false
 
 
 func _ready() -> void:
@@ -30,7 +46,19 @@ func _ready() -> void:
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("dodge"):
+		_on_dodge_pressed()
+
+
 func _physics_process(delta: float) -> void:
+	if _is_dodging:
+		_tick_dodge(delta)
+		return
+
+	if _dodge_cooldown_remaining > 0.0:
+		_dodge_cooldown_remaining = max(0.0, _dodge_cooldown_remaining - delta)
+
 	_update_attack(delta)
 
 	var input_vec: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
@@ -72,6 +100,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_attack_light_pressed() -> void:
+	if _is_dodging:
+		return
 	if combo_steps.is_empty():
 		return
 	if _attack_state == AttackState.IDLE:
@@ -89,8 +119,9 @@ func _fire_step(index: int) -> void:
 	_current_step = step
 	_combo_index = index + 1
 	_idle_since_step_ended = 0.0
+	_recovery_elapsed = 0.0
 	_face_aim_direction()
-	_do_visual_feedback(step)
+	_do_attack_visual_feedback(step)
 	_attack_state = AttackState.STARTUP
 	_attack_timer = step.startup
 
@@ -105,7 +136,7 @@ func _face_aim_direction() -> void:
 	visual_root.rotation.y = atan2(-forward.x, -forward.z)
 
 
-func _do_visual_feedback(step: AttackStep) -> void:
+func _do_attack_visual_feedback(step: AttackStep) -> void:
 	if _visual_tween != null and _visual_tween.is_running():
 		_visual_tween.kill()
 	var tilt: float = deg_to_rad(step.visual_tilt_degrees)
@@ -125,6 +156,8 @@ func _update_attack(delta: float) -> void:
 				_idle_since_step_ended = 0.0
 		return
 	_attack_timer -= delta
+	if _attack_state == AttackState.RECOVERY:
+		_recovery_elapsed += delta
 	if _attack_timer > 0.0:
 		return
 	match _attack_state:
@@ -138,9 +171,11 @@ func _update_attack(delta: float) -> void:
 			attack_hitbox.deactivate()
 			_attack_state = AttackState.RECOVERY
 			_attack_timer = _current_step.recovery
+			_recovery_elapsed = 0.0
 		AttackState.RECOVERY:
 			_attack_state = AttackState.IDLE
 			_attack_timer = 0.0
+			_recovery_elapsed = 0.0
 			if _combo_index >= combo_steps.size():
 				_combo_index = 0
 				_queued_next = false
@@ -150,3 +185,112 @@ func _update_attack(delta: float) -> void:
 				_fire_step(_combo_index)
 			else:
 				_idle_since_step_ended = 0.0
+
+
+func _on_dodge_pressed() -> void:
+	if _is_dodging:
+		return
+	if _dodge_cooldown_remaining > 0.0:
+		return
+	if _attack_state != AttackState.IDLE:
+		if not _in_cancel_window():
+			return
+		_cancel_current_attack()
+	var direction: Vector3 = _compute_dodge_direction()
+	_start_dodge(direction)
+
+
+func _in_cancel_window() -> bool:
+	if _attack_state != AttackState.RECOVERY:
+		return false
+	if _current_step == null:
+		return false
+	var threshold: float = _current_step.recovery * _current_step.dodge_cancel_recovery_fraction
+	return _recovery_elapsed >= threshold
+
+
+func _cancel_current_attack() -> void:
+	if attack_hitbox.is_active():
+		attack_hitbox.deactivate()
+	_attack_state = AttackState.IDLE
+	_attack_timer = 0.0
+	_recovery_elapsed = 0.0
+	_combo_index = 0
+	_queued_next = false
+	_idle_since_step_ended = 0.0
+	_current_step = null
+
+
+func _compute_dodge_direction() -> Vector3:
+	var input_vec: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	var cam_basis: Basis = camera_rig.global_transform.basis
+	var forward: Vector3 = -cam_basis.z
+	forward.y = 0.0
+	if forward.length() > 0.0001:
+		forward = forward.normalized()
+	var right: Vector3 = cam_basis.x
+	right.y = 0.0
+	if right.length() > 0.0001:
+		right = right.normalized()
+	var dir: Vector3 = forward * -input_vec.y + right * input_vec.x
+	if dir.length_squared() > 0.001:
+		if dir.length() > 1.0:
+			dir = dir.normalized()
+		return dir.normalized()
+	var facing_back: Vector3 = visual_root.global_transform.basis.z
+	facing_back.y = 0.0
+	if facing_back.length() < 0.0001:
+		facing_back = Vector3(0, 0, 1)
+	return facing_back.normalized()
+
+
+func _start_dodge(direction: Vector3) -> void:
+	_is_dodging = true
+	_dodge_elapsed = 0.0
+	_dodge_direction = direction
+	_dodge_iframes_active = false
+	_combo_index = 0
+	_queued_next = false
+	_idle_since_step_ended = 0.0
+	if hurtbox != null:
+		hurtbox.set_invulnerable(false)
+	_do_dodge_visual_feedback()
+
+
+func _do_dodge_visual_feedback() -> void:
+	if _visual_tween != null and _visual_tween.is_running():
+		_visual_tween.kill()
+	var tilt: float = deg_to_rad(dodge_visual_tilt_degrees)
+	var to_tilt_time: float = max(0.05, dodge_duration * 0.4)
+	var to_zero_time: float = max(0.05, dodge_duration * 0.6)
+	_visual_tween = create_tween()
+	_visual_tween.tween_property(visual_root, "rotation:x", tilt, to_tilt_time)
+	_visual_tween.tween_property(visual_root, "rotation:x", 0.0, to_zero_time)
+
+
+func _tick_dodge(delta: float) -> void:
+	_dodge_elapsed += delta
+	var should_be_invulnerable: bool = _dodge_elapsed >= invulnerability_start and _dodge_elapsed < invulnerability_end
+	if should_be_invulnerable != _dodge_iframes_active:
+		_dodge_iframes_active = should_be_invulnerable
+		if hurtbox != null:
+			hurtbox.set_invulnerable(should_be_invulnerable)
+	velocity.x = _dodge_direction.x * dodge_speed
+	velocity.z = _dodge_direction.z * dodge_speed
+	if is_on_floor():
+		if velocity.y < 0.0:
+			velocity.y = 0.0
+	else:
+		velocity.y -= gravity * delta
+	move_and_slide()
+	if _dodge_elapsed >= dodge_duration:
+		_end_dodge()
+
+
+func _end_dodge() -> void:
+	_is_dodging = false
+	_dodge_direction = Vector3.ZERO
+	_dodge_iframes_active = false
+	if hurtbox != null:
+		hurtbox.set_invulnerable(false)
+	_dodge_cooldown_remaining = dodge_cooldown
