@@ -6,9 +6,9 @@
 
 ## Current Milestone
 
-**M3 — Enemy Foundation** (Not started)
+**M3 — Enemy Foundation** (In Progress)
 
-M2 closed. Next scope per `docs/ROADMAP.md` M3: enemy base architecture, idle state, player detection, chase, basic attack, damage reception via existing pipeline, death with drop hook stub.
+First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (IDLE / CHASE / ATTACK / DEAD), player detection via distance + `player` group, chase via `NavigationAgent3D` with periodic target updates, telegraphed melee attack that flows through the existing `Hitbox` / `Hurtbox` / `HealthComponent` pipeline, hit-flash feedback, death state that disables body/hurtbox/hitbox and topples the visual. Test world updated with `NavigationRegion3D` + 3 concrete enemies + navigation-obstacle wall.
 
 ---
 
@@ -98,6 +98,42 @@ M2 closed. Next scope per `docs/ROADMAP.md` M3: enemy base architecture, idle st
 
 ## In Progress
 
+- **M3 — Enemy Foundation** (In Progress). Implemented:
+    - `scripts/enemies/basic_melee_enemy.gd` (`class_name BasicMeleeEnemy`) — local enum state machine `State { IDLE, CHASE, ATTACK, DEAD }` and `AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }`. No generic StateMachine framework; no `EnemyManager` / `AIManager` singleton.
+    - `scenes/enemies/basic_melee_enemy.tscn` — `CharacterBody3D` root + `CollisionShape3D` + `VisualRoot` (mesh + `AttackOrigin` + `Hitbox`) + `NavigationAgent3D` + `HealthComponent` + `Hurtbox`. All combat components reused from M2 (no duplication).
+    - Player detection: `distance_to(player.global_position) < detection_range`; Player added to group `player`; enemy caches the reference lazily via `get_tree().get_first_node_in_group("player")` — no per-frame tree scan.
+    - Hysteresis: separate `detection_range` (10) and `lose_target_range` (14) prevent oscillation at the edge.
+    - Navigation: `NavigationAgent3D` with `target_position` updated every 0.2s; `get_next_path_position()` drives velocity via `move_toward` + `move_and_slide`. `NavigationRegion3D` in test world bakes `NavigationMesh` from static colliders on `_ready`. Nav test confirms an enemy behind a wall from the player pathfinds sideways rather than stalling against geometry (2.23u sideways displacement over 3s, final z crossed the wall front).
+    - Chase rotation: `VisualRoot` yaws toward movement direction at `rotation_speed` rad/s — no snap.
+    - Attack: on entering `attack_range`, enemy snaps `VisualRoot` yaw once to face the player and enters `STARTUP`. Telegraph = short `VisualRoot.scale` tween up during startup. `Hitbox.activate()` only during `ACTIVE`. `Hitbox.deactivate()` on transition to `RECOVERY`. After recovery, `attack_cooldown` (0.4s) blocks re-entry to `ATTACK` and enemy returns to `CHASE`.
+    - Damage: enemy → player exclusively via `Hitbox` → `Hurtbox` → `HealthComponent`. No `player.take_damage()` shortcuts. Player's dodge i-frames automatically block damage through the existing `Hurtbox.is_invulnerable` gate.
+    - Hit feedback: enemy `mesh_instance.scale` pulses on `health_changed` when HP decreases. No stagger system, no interruption of movement/nav.
+    - Death: on `HealthComponent.died` → state `DEAD`, `velocity = 0`, hitbox deactivated, body collision + hurtbox collision + hurtbox monitorable all disabled via `call_deferred`, `VisualRoot` topples via short rotation tween. Dead enemy skips `_physics_process`. Verified no further attacks / no damage post-death.
+    - Player integration: Player added to `player` group in `_ready`; existing `HealthComponent` + `Hurtbox` from M2.3 reused unchanged; no HUD.
+    - Collision layers (documented):
+        - Layer 1: world + physical bodies (floor, walls, Player body, Enemy body, Dummy body)
+        - Layer 8: player-dealt hitbox (Player `AttackHitbox`, mask 16)
+        - Layer 16: enemy-receiving hurtboxes (Dummy `Hurtbox`, Enemy `Hurtbox`; mask 0)
+        - Layer 32: enemy-dealt hitbox + debug damage zone (Enemy `Hitbox`, DebugDamageZone; mask 64)
+        - Layer 64: player-receiving hurtbox (Player `Hurtbox`; mask 0)
+    - Test world (`scenes/core/test_world.tscn`) updated: `NavigationRegion3D` wraps floor + walls + big wall (`8x3x1` at z=10); 3 `BasicMeleeEnemy` instances at distinct positions; existing 2 `TrainingDummy` + `DebugDamageZone` preserved (dummy on layer 16 still hit by player attacks; debug zone on layer 32 targets layer 64 so it damages Player without affecting dummies). `scripts/core/test_world.gd` synchronously bakes the nav mesh in `_ready`.
+    - NavigationMesh tuning: `cell_size = 0.25`, `cell_height = 0.25`, `agent_radius = 0.5`, `agent_height = 2.0`, `agent_max_climb = 0.5`, `geometry_parsed_geometry_type = 1` (STATIC_COLLIDERS). Avoids the RenderingServer parse + agent-value rounding warnings that fired with defaults.
+    - Automated headless validation `res://tests/enemies/enemy_test.tscn` — **14/14 PASS**:
+        1. Enemy IDLE when player > `detection_range`
+        2. Enemy CHASE when player < `detection_range`
+        3. Enemy ATTACK when player < `attack_range`
+        4. Attack phase gating: hitbox off during STARTUP + telegraph visible; hitbox on during ACTIVE; hitbox off during RECOVERY
+        5. Enemy deals exactly 15 damage to Player (`100 → 85`)
+        6. Player dodge i-frame during ACTIVE avoids enemy damage
+        7. Attack cooldown: enemy returns to CHASE with cooldown active; re-attacks after cooldown expires
+        8. Player > `lose_target_range` → enemy back to IDLE
+        9. Player Attack 1 damages enemy 20
+        10. Player full combo damages enemy 80
+        11. Enemy dies (`state = DEAD`, hitbox off, body collision disabled, hurtbox not monitorable, `velocity == 0`)
+        12. Dead enemy in attack range deals no damage and stays DEAD
+        13. 3 concurrently spawned enemies all reach CHASE independently
+        14. Navigation around big wall (`2.23u` sideways, crosses wall Z from 13.6 to 4.28 over 3s)
+    - Regression: combo suite 10/10 PASS, dodge suite 18/18 PASS, `Main.tscn` 240 frames verbose scan zero ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR.
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
@@ -112,9 +148,11 @@ M2 closed. Next scope per `docs/ROADMAP.md` M3: enemy base architecture, idle st
 
 - Complete `GAME_DESIGN.md` (systems beyond camera/movement/aim/combat feel)
 - Complete `ARCHITECTURE.md` (fill out as systems land)
-- Manual editor playtest of M1 + M2 combat feel (tuning pass on numbers — not blocking)
+- Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
 - Player-side death reaction (input lockout, visual state) — polish, deferred
-- **Start M3 — Enemy Foundation**
+- Playtest-tune M3 enemy parameters (detection ranges, attack timings, damage, speed)
+- Optional M3 polish: enemy variants, more expressive telegraph, per-enemy drop hook stub
+- Close M3, then start M4 — Dungeon Foundation
 
 ---
 

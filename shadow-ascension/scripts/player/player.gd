@@ -42,6 +42,7 @@ var _dodge_iframes_active: bool = false
 
 
 func _ready() -> void:
+	add_to_group("player")
 	attack_hitbox.source = self
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
 
