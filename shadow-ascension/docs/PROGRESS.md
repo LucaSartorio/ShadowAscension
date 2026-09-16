@@ -6,14 +6,9 @@
 
 ## Current Milestone
 
-**M2 — Basic Combat** (In Progress)
+**M3 — Enemy Foundation** (Not started)
 
-Iterations delivered so far:
-- **M2.1 — Combat Foundation**: `HealthComponent`, `Hitbox`, `Hurtbox`, damage pipeline, single light attack, training dummy with death behavior.
-- **M2.2 — Light Attack Combo**: 3-step light combo, per-step `AttackStep` Resource, single-slot input buffer, `combo_reset_time`, per-step aim orientation and debug feedback.
-- **M2.3 — Dodge, i-Frames, Attack Cancel Windows**: directional/backstep dodge, invulnerability window on `Hurtbox`, per-step cancel windows on `AttackStep`, dodge cooldown, Player `HealthComponent` + `Hurtbox`, debug damage zone in `test_world` for manual i-frame verification.
-
-Next iteration: **M2 close** — Player death handling + playtest tuning. Then M3.
+M2 closed. Next scope per `docs/ROADMAP.md` M3: enemy base architecture, idle state, player detection, chase, basic attack, damage reception via existing pipeline, death with drop hook stub.
 
 ---
 
@@ -30,6 +25,14 @@ Next iteration: **M2 close** — Player death handling + playtest tuning. Then M
 - Documentation files created
 - **M0 — Project Foundation** (Completed)
 - **M1 — Player Controller** (Completed)
+- **M2 — Basic Combat** (Completed). Exit criteria verified:
+    - Attack registers on stationary dummy — combo test #1 (dmg = 20)
+    - Combo chains within window, resets outside — combo tests #2, #3, #6 (Attack 1+2 = 45, full combo = 80, two Attack 1s across `combo_reset_time` = 40)
+    - Hitboxes activate only during attack frames — dodge test #15 (post-cancel `active=false, monitoring=false`) + combo test #7 (single swing hits exactly once)
+    - Damage values match expected — combo tests #1–#4 (20 / 25 / 35 per step)
+    - Death transition clean, no orphan nodes / errors — dummy topple + collision disable on `died`; Player `HealthComponent.died` fires cleanly, no crash. Player-side death *reaction* (input lockout) deferred as polish, not blocking.
+    - Additional M2.3 deliverables also verified: dodge direction / diagonals normalized / backstep / direction latch / wall collision / cooldown; i-frame timing + damage gating; per-step attack cancel windows (0.0 / 0.35 / 0.6); hitbox cleanup on cancel; combo state reset by dodge; spam-Space state integrity.
+    - Automated validation: `attack_test.tscn` 10/10 PASS, `dodge_test.tscn` 18/18 PASS, Main.tscn 300 frames zero ERROR/WARNING/Failed/Parse Error/SCRIPT ERROR.
 - **M2 progress — Combat Foundation**:
     - `HealthComponent`, `Hitbox`, `Hurtbox` reusable components under `scripts/combat/`
     - Damage pipeline: `Hitbox.area_entered` → `Hurtbox.receive_hit` → `HealthComponent.receive_damage`
@@ -102,9 +105,6 @@ Next iteration: **M2 close** — Player death handling + playtest tuning. Then M
     - combat feel direction
   Still in progress: progression, loot, shadow mechanic, dungeon structure, UI, etc.
 - Technical architecture definition — grows as systems land.
-- **M2 — Basic Combat** (In Progress). Remaining scope before M2 close:
-    - Player death handling (`Player` reacts to its own `HealthComponent.died`)
-    - Playtest-tuning of combo timings, damages, dodge params, cancel windows
 
 ---
 
@@ -112,10 +112,9 @@ Next iteration: **M2 close** — Player death handling + playtest tuning. Then M
 
 - Complete `GAME_DESIGN.md` (systems beyond camera/movement/aim/combat feel)
 - Complete `ARCHITECTURE.md` (fill out as systems land)
-- Manual editor playtest of M1 + M2 combat feel (mouse aim, hit reg, dummy topple, combo cadence, dodge feel, i-frame reliability, debug damage zone contact)
-- Playtest-tune M2 combo + dodge parameters
-- Player death state + close M2
-- Start M3 — Enemy Foundation
+- Manual editor playtest of M1 + M2 combat feel (tuning pass on numbers — not blocking)
+- Player-side death reaction (input lockout, visual state) — polish, deferred
+- **Start M3 — Enemy Foundation**
 
 ---
 
