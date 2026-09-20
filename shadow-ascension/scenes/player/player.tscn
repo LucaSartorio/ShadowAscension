@@ -63,6 +63,8 @@ visual_tilt_degrees = 15.0
 dodge_cancel_recovery_fraction = 0.6
 
 [node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 5
 script = ExtResource("1_player")
 combo_steps = Array[Resource]([SubResource("step_1"), SubResource("step_2"), SubResource("step_3")])
 combo_reset_time = 0.8

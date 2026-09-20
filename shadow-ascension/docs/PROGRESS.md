@@ -22,6 +22,16 @@ M3.1 deliverable status (verified by the automated suite, not just written):
 - hit reaction (visual squash only, no stagger) — implemented
 - death — implemented
 
+M3.2 deliverable status (verified by `enemy_polish_test.tscn`, 17/17):
+
+- local avoidance — implemented (NavigationAgent3D RVO, no second navigation system)
+- enemy spacing — implemented (`preferred`/`minimum_combat_distance` + `enemy_spacing_radius`)
+- reposition — implemented (`REPOSITION` state with timeout + re-entry block)
+- facing refinement — implemented (per-state turn rates, `max_attack_facing_angle` gate)
+- attack telegraph refinement — implemented (per-phase scale + albedo, per-instance material)
+- aggro refinement — implemented (`lose_target_delay`)
+- multi-enemy combat polish — implemented (per-instance approach angle + attack desync)
+
 M3 remains **In Progress** — parameters are placeholders pending playtest, and M3 exit criteria are not formally closed.
 
 ---
@@ -156,6 +166,86 @@ M3 remains **In Progress** — parameters are placeholders pending playtest, and
     - Engine-level checks on `test_world.tscn`: baked `NavigationMesh` has 53 vertices / 50 polygons, navigation map active with 1 region; `NavigationServer3D.map_get_path()` from Enemy1 `(0, 16)` to Player `(0, 4)` returns a 7-point path routing around `BigWall` at `x = -4.5` (wall spans `x` -4..4) — confirmed detour, not a straight line through geometry.
     - Regression: combo suite 10/10 PASS, dodge suite 18/18 PASS, `Main.tscn` 300 frames verbose scan zero ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR, `--check-only` parse of every `.gd` under `scripts/` and `tests/` clean.
     - Validation engine note: this pass was executed on **Godot 4.5.stable** headless (no 4.7 binary available in the CI container). The project declares `config/features = ("4.7", "Forward Plus")`; it imported and ran without complaint, but 4.7-specific behavior is unverified.
+- **M3.2 — Enemy Combat Polish**. Refinement of M3.1, not a rewrite: the enum state
+  machine, the Hitbox/Hurtbox/HealthComponent pipeline and NavigationAgent3D pathfinding
+  are unchanged in kind.
+    - New state `REPOSITION` — enum is now `IDLE / CHASE / REPOSITION / ATTACK / DEAD`.
+      Entered from CHASE when the enemy is inside `minimum_combat_distance` or in range but
+      mis-facing. It paths to its combat slot, turns to face the player, and leaves for
+      ATTACK once distance + facing + line of sight + cooldown all pass. `reposition_timeout`
+      (1.5s) hands control back to CHASE and `reposition_cooldown` (0.6s) blocks immediate
+      re-entry, so the two states cannot ping-pong.
+    - Local avoidance via `NavigationAgent3D` RVO: `avoidance_enabled = true`, `radius` driven
+      by `enemy_spacing_radius` (0.8), `neighbor_distance` 4.0, `max_neighbors` 6,
+      `time_horizon_agents` 1.0, `time_horizon_obstacles` 0.5, `max_speed` = `movement_speed`,
+      `use_3d_avoidance` false. Desired velocity goes through `set_velocity()`; the move happens
+      in the `velocity_computed` callback. A 10-frame watchdog falls back to direct motion if the
+      agent never joins a navigation map, so an enemy can never freeze waiting for a callback.
+    - **Navigation fix:** the baked navmesh surface sits 0.5 above the walkable floor, so raw path
+      points came back 0.5 above the agent and waypoint advancement compared against that vertical
+      gap. `path_height_offset = 0.5` puts path points on the agent plane; `path_desired_distance`
+      0.4, `target_desired_distance` 0.25. Before this, a reposition target 0.7 away was reported
+      unreachable and the enemy stood still.
+    - Spacing: CHASE stops advancing once inside `preferred_combat_distance` (1.6) instead of
+      grinding into the player. `minimum_combat_distance` 1.15.
+    - Per-instance combat slots: `combat_angle_offset_degrees` biases each instance's approach
+      bearing, so instances converge on different points on the ring rather than one point.
+    - Facing per state — CHASE: toward movement direction at `rotation_speed`. REPOSITION: toward
+      the player at `rotation_speed`. ATTACK STARTUP: toward the player at
+      `rotation_speed * attack_startup_turn_fraction` (0.3). ATTACK ACTIVE and RECOVERY: no
+      rotation at all. `max_attack_facing_angle` (25 deg) gates attack entry. The M3.1 snap-to-player
+      on attack entry is gone.
+    - Telegraph per phase: STARTUP rears up (`scale` 0.88/1.22/0.88) and the body tints to
+      `telegraph_color`; ACTIVE squashes forward and tints to `active_color` with the hitbox debug
+      mesh visible; RECOVERY returns both to rest. The body material is duplicated per instance in
+      `_ready` — shared sub-resources would otherwise make every enemy telegraph in unison.
+    - Line of sight: a ray on `line_of_sight_mask` (world layer only) gates attack entry, so an
+      enemy cannot swing through a wall. Evaluated only after the cheap distance and cooldown
+      checks fail-fast, never unconditionally per frame.
+    - Aggro: `lose_target_delay` (1.0s) must elapse beyond `lose_target_range` before the target is
+      dropped, so a momentary distance spike no longer ends the fight.
+    - Attack desync: `initial_attack_delay` and `attack_cooldown_variation`, both per-instance and
+      deterministic (no RNG). Test world uses 0.0 / 0.3 / 0.6 and 0.0 / 0.15 / 0.3.
+    - Range coherence (asserted, not assumed): hitbox covers 0.4–2.0 in front of the enemy;
+      `attack_range` 1.8 <= 2.0 and `minimum_combat_distance` 1.15 >= 0.4, with
+      `preferred_combat_distance` inside the band.
+    - Collision layers split so physics intent is explicit — see the table below. The camera
+      SpringArm (mask 1) no longer collides with the player's own body, which it did when every
+      body shared layer 1.
+    - Death: `_physics_process` returns early, and `nav_agent.avoidance_enabled` is set false so a
+      corpse leaves the RVO simulation and stops steering the living. Telegraph is reset instantly.
+      The topple tween is death feedback, not AI facing.
+    - Collision layers after M3.2:
+        - Layer 1: world geometry (Floor, Wall1, Wall2, BigWall) — mask 1
+        - Layer 2: Player body — mask 5 (world + enemy bodies)
+        - Layer 4: Enemy + Dummy bodies — enemy mask 7 (world + player + enemies), dummy mask 1
+        - Layer 8: player-dealt hitbox (Player AttackHitbox, mask 16)
+        - Layer 16: enemy-receiving hurtboxes (Enemy + Dummy Hurtbox, mask 0)
+        - Layer 32: enemy-dealt hitbox + DebugDamageZone (mask 64)
+        - Layer 64: player-receiving hurtbox (Player Hurtbox, mask 0)
+    - Test world rebuilt for the five required scenarios, still one scene with no new node types:
+      `EnemySolo` (14, 4) single engagement; `EnemyTrio1/2/3` (-13, -2/1/4) two-then-three from a
+      similar direction with staggered delays; `EnemyBehindWall` (0, 16) behind `BigWall`;
+      `EnemyLateral` (9, 13) with a 70 deg approach bias. Dummies and DebugDamageZone preserved.
+    - Automated validation `res://tests/enemies/enemy_polish_test.tscn` — **17/17 PASS**: avoidance
+      configured; two enemies keep separate targets (gap 2.45) and bodies (2.26); three enemies
+      spread 165 deg with 1.96 min gap; too-close enemy repositions and backs off to 1.20; reposition
+      exits via timeout at 1.53s; attack gated at 140 deg then fires once aligned; startup correction
+      gradual (24 deg turned, 66 deg residual); zero yaw change during ACTIVE; player sidesteps the
+      swing unharmed; range/hitbox coherence incl. an edge-of-range connect; no attack through wall
+      (1.70 < 1.80, phase stayed NONE); enemy never enters the wall volume; three converging enemies
+      move the player 0.000; dead enemy leaves avoidance and drifts 0.000; enemies die independently;
+      first-ACTIVE times 0.42 / 0.72 / 1.00 with 0.28s min gap; aggro survives a sub-delay spike.
+    - Engine-level check of `test_world.tscn`: navmesh 53 verts / 50 polys, map active with 1 region;
+      after dropping the player next to the trio they settle at 1.84 / 1.57 / 1.76 from the player
+      with a 1.61 min pairwise gap and states `[CHASE, CHASE, ATTACK]` — spread out, not stacked, not
+      swinging in unison.
+    - M3.1 regression `enemy_test.tscn` **20/20 PASS** against the refactored enemy. Two assertions
+      were updated for deliberate behavior changes: the telegraph check is now shape-agnostic (the
+      startup pose rears up instead of scaling uniformly), and the aggro-drop check now waits out
+      `lose_target_delay` and additionally asserts the target is *held* during the grace period.
+    - Regression: combo 10/10, dodge 18/18, `Main.tscn` 360 frames zero ERROR / WARNING / Failed /
+      Parse Error / SCRIPT ERROR, `--check-only` clean across `scripts/` and `tests/`.
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement

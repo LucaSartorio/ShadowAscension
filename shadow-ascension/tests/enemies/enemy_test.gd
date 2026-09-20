@@ -93,6 +93,12 @@ func _reset_enemy(pos: Vector3) -> void:
 	_enemy._attack_phase = BasicMeleeEnemy.AttackPhase.NONE
 	_enemy._phase_timer = 0.0
 	_enemy._cooldown_timer = 0.0
+	_enemy._attack_delay_timer = 0.0
+	_enemy._lose_target_timer = 0.0
+	_enemy._reposition_timer = 0.0
+	_enemy._reposition_block_timer = 0.0
+	_enemy._desired_horizontal = Vector3.ZERO
+	_enemy._reset_telegraph_instantly()
 	if _enemy.hitbox != null and _enemy.hitbox.is_active():
 		_enemy.hitbox.deactivate()
 	if _enemy.health_component != null:
@@ -142,7 +148,7 @@ func _test_attack_phases_and_hitbox_gating() -> void:
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	await _wait(0.18)  # deep in STARTUP (0.35s)
 	var startup_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and not _enemy.hitbox.is_active()
-	var telegraph_ok: bool = _enemy.visual_root.scale.x > 1.02
+	var telegraph_ok: bool = _enemy.visual_root.scale.distance_to(Vector3.ONE) > 0.05
 	# wait into ACTIVE window
 	await _wait(0.25)
 	var active_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE and _enemy.hitbox.is_active()
@@ -199,9 +205,12 @@ func _test_return_to_idle_on_lose_target() -> void:
 	var chased: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
 	# move the PLAYER out of range and let the enemy drop the target by itself
 	_player.global_position = Vector3(0, 0.1, -30)
-	await _wait(0.2)
+	await _wait(0.3)
+	# lose_target_delay (1.0s) must still be holding the target here
+	var still_engaged: bool = _enemy._state != BasicMeleeEnemy.State.IDLE
+	await _wait(1.0)
 	var idle_ok: bool = _enemy._state == BasicMeleeEnemy.State.IDLE
-	_record(chased and idle_ok, "8) CHASE -> IDLE when player > lose_target_range (chased=%s idle=%s)" % [chased, idle_ok])
+	_record(chased and still_engaged and idle_ok, "8) CHASE -> IDLE after lose_target_delay (chased=%s held=%s idle=%s)" % [chased, still_engaged, idle_ok])
 	_reset_player()
 	await _wait(0.2)
 

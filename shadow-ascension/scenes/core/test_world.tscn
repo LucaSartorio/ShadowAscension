@@ -118,14 +118,32 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.1, -4)
 [node name="TrainingDummy2" parent="." instance=ExtResource("2_dummy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.1, -4)
 
-[node name="BasicMeleeEnemy1" parent="." instance=ExtResource("4_enemy")]
+[node name="EnemySolo" parent="." instance=ExtResource("4_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, 4)
+
+[node name="EnemyTrio1" parent="." instance=ExtResource("4_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 0.1, -2)
+
+[node name="EnemyTrio2" parent="." instance=ExtResource("4_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 0.1, 1)
+combat_angle_offset_degrees = 30.0
+initial_attack_delay = 0.3
+attack_cooldown_variation = 0.15
+
+[node name="EnemyTrio3" parent="." instance=ExtResource("4_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 0.1, 4)
+combat_angle_offset_degrees = -30.0
+initial_attack_delay = 0.6
+attack_cooldown_variation = 0.3
+
+[node name="EnemyBehindWall" parent="." instance=ExtResource("4_enemy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 16)
 
-[node name="BasicMeleeEnemy2" parent="." instance=ExtResource("4_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0.1, 8)
-
-[node name="BasicMeleeEnemy3" parent="." instance=ExtResource("4_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0.1, 8)
+[node name="EnemyLateral" parent="." instance=ExtResource("4_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.1, 13)
+combat_angle_offset_degrees = 70.0
+initial_attack_delay = 0.45
+attack_cooldown_variation = 0.2
 
 [node name="DebugDamageZone" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 1, -8)
