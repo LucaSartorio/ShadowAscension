@@ -120,11 +120,16 @@ func _ready() -> void:
 		_intro_timer = intro_duration
 
 
+## Answered from the stats asset rather than copied into the inherited field on
+## _ready(), so initialisation order never decides what a kill is worth.
+func get_xp_reward() -> int:
+	return stats.xp_reward if stats != null else xp_reward
+
+
 func _apply_stats() -> void:
 	if stats == null:
 		push_warning("%s has no BossStats assigned; falling back to script defaults." % name)
 		return
-	xp_reward = stats.xp_reward
 	max_health = stats.max_health
 	movement_speed = stats.movement_speed
 	acceleration = stats.acceleration

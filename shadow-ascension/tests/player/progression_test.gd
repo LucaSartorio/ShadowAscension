@@ -257,7 +257,7 @@ func _dungeon_reward_tests() -> void:
 	await _wait(0.6)
 	var boss: DungeonBoss = _dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
 	var before_boss: int = _total_xp()
-	_record(boss.xp_reward == 200, "22a) the boss declares %d XP" % boss.xp_reward)
+	_record(boss.get_xp_reward() == 200, "22a) the boss declares %d XP" % boss.get_xp_reward())
 
 	# 24) the phase transition must not pay out
 	_swing(boss)

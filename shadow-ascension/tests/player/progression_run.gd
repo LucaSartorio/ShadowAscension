@@ -53,12 +53,12 @@ func _initialize() -> void:
 		var room: RoomController = dungeon.get_rooms()[i]
 		print("[ROOM %d] %d enemies" % [i + 1, room.get_enemies().size()])
 		for enemy in room.get_enemies():
-			expected += enemy.xp_reward
+			expected += enemy.get_xp_reward()
 			var swings: int = await _kill(player, enemy)
 			await _pause(0.3)
 			_kills += 1
 			print("[KILL %d] %s worth %d  ->  level %d, %d/%d XP  (total %d, %d swings)" % [
-				_kills, enemy.name, enemy.xp_reward, prog.current_level, prog.current_xp,
+				_kills, enemy.name, enemy.get_xp_reward(), prog.current_level, prog.current_xp,
 				prog.get_xp_to_next_level(), _total(prog), swings])
 			_record(_total(prog) == expected,
 				"4.%d) after that kill the run total is %d XP" % [_kills, _total(prog)])
@@ -70,12 +70,12 @@ func _initialize() -> void:
 	await _pause(0.6)
 	var boss: DungeonBoss = dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
 	var before_boss: int = _total(prog)
-	expected += boss.xp_reward
+	expected += boss.get_xp_reward()
 	var boss_swings: int = await _kill(player, boss, 60.0)
 	await _pause(0.9)
 	_kills += 1
 	print("[KILL %d] %s worth %d  ->  level %d, %d/%d XP  (total %d, %d swings)" % [
-		_kills, boss.name, boss.xp_reward, prog.current_level, prog.current_xp,
+		_kills, boss.name, boss.get_xp_reward(), prog.current_level, prog.current_xp,
 		prog.get_xp_to_next_level(), _total(prog), boss_swings])
 	_record(boss.has_died() and _total(prog) - before_boss == 200,
 		"7) the boss paid 200 XP (+%d)" % [_total(prog) - before_boss])

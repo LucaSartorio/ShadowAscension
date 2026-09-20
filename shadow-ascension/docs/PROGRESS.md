@@ -25,8 +25,10 @@ M6.1 deliverable status (verified by `progression_test.tscn` 47/47 and a full re
 - level-up feedback — implemented
 
 `PlayerProgression` is a component on the player, not part of its controller. It is the active
-receiver: a combatant only *declares* what it is worth (`RoomCombatant.xp_reward`, seeded from its
-own stats Resource), and this node decides whether to take it. It learns which combatants exist by
+receiver: a combatant only *declares* what it is worth (`RoomCombatant.get_xp_reward()`, which the
+enemy and the boss override to answer from their own stats Resource), and this node decides whether
+to take it. The base asks rather than being written to, so no subclass assigns an inherited field
+while it is initialising and nothing about initialisation order can decide what a kill is worth. It learns which combatants exist by
 listening to the player's own attack hitbox — `Hitbox.hit_landed` already fired for every hit the
 player lands — so the only enemies it ever subscribes to are ones the player actually fought.
 Nothing searches the tree, no controller wires enemies to the player, and it works in the test world
