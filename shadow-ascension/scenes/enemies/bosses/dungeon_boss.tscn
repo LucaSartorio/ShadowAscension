@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/dungeon_boss.gd" id="1_boss"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
@@ -9,6 +9,9 @@
 [ext_resource type="Resource" path="res://resources/enemies/bosses/boss_wide_sweep.tres" id="7_sweep"]
 [ext_resource type="Resource" path="res://resources/enemies/bosses/boss_ground_slam.tres" id="8_slam"]
 [ext_resource type="Resource" path="res://resources/enemies/bosses/boss_double_strike.tres" id="9_double"]
+[ext_resource type="Script" path="res://scripts/items/loot_dropper.gd" id="21_loot"]
+[ext_resource type="Resource" path="res://resources/items/loot/dungeon_boss_loot.tres" id="22_table"]
+[ext_resource type="PackedScene" path="res://scenes/items/world_item.tscn" id="23_worlditem"]
 
 [sub_resource type="CapsuleShape3D" id="body_shape"]
 radius = 0.6
@@ -181,3 +184,9 @@ script = ExtResource("3_hurtbox")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
 shape = SubResource("hurtbox_shape")
+
+[node name="LootDropper" type="Node" parent="."]
+script = ExtResource("21_loot")
+loot_table = ExtResource("22_table")
+world_item_scene = ExtResource("23_worlditem")
+drop_seed = 771

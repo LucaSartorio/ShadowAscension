@@ -1,6 +1,10 @@
 class_name BasicMeleeEnemy
 extends RoomCombatant
 
+## Whether this enemy is currently fighting. The world-space health bar listens,
+## so it can stay out of the way while the enemy is idle and undamaged.
+signal engagement_changed(engaged: bool)
+
 enum State { IDLE, CHASE, REPOSITION, ATTACK, DEAD }
 enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 
@@ -68,6 +72,7 @@ var target_update_interval: float = 0.2
 @onready var hitbox: Hitbox = $VisualRoot/AttackOrigin/Hitbox
 
 var _state: State = State.IDLE
+var _engaged: bool = false
 var _attack_phase: AttackPhase = AttackPhase.NONE
 var _phase_timer: float = 0.0
 var _cooldown_timer: float = 0.0
@@ -193,6 +198,10 @@ func set_combat_enabled(enabled: bool) -> void:
 func _physics_process(delta: float) -> void:
 	if _state == State.DEAD:
 		return
+
+	# Cheap enough to check every frame, and the setter only emits on a real
+	# change — far less error-prone than a call at each of the state's exits.
+	_set_engaged(combat_enabled and _state != State.IDLE)
 
 	_moved_this_frame = false
 
@@ -566,7 +575,20 @@ func _hit_flash() -> void:
 	t.tween_property(mesh_instance, "scale", Vector3.ONE, 0.12)
 
 
+## Emits only on a change, so nothing downstream sees a per-frame stream.
+func _set_engaged(value: bool) -> void:
+	if _engaged == value:
+		return
+	_engaged = value
+	engagement_changed.emit(_engaged)
+
+
+func is_engaged() -> bool:
+	return _engaged
+
+
 func _on_died() -> void:
+	_set_engaged(false)
 	_state = State.DEAD
 	_attack_phase = AttackPhase.NONE
 	velocity = Vector3.ZERO

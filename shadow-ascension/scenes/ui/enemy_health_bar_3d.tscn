@@ -1,0 +1,50 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/enemy_health_bar_3d.gd" id="1_bar"]
+[ext_resource type="Script" path="res://scripts/ui/health_bar_pivot.gd" id="2_pivot"]
+
+[sub_resource type="QuadMesh" id="bar_quad"]
+size = Vector2(1.1, 0.13)
+
+[sub_resource type="StandardMaterial3D" id="bg_mat"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.05, 0.05, 0.07, 1)
+
+[sub_resource type="StandardMaterial3D" id="fill_mat"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.35, 0.82, 0.38, 1)
+
+[node name="EnemyHealthBar3D" type="Node3D"]
+script = ExtResource("1_bar")
+
+[node name="Pivot" type="Node3D" parent="."]
+script = ExtResource("2_pivot")
+
+[node name="Background" type="MeshInstance3D" parent="Pivot"]
+transform = Transform3D(1.08, 0, 0, 0, 1.45, 0, 0, 0, 1, 0, 0, -0.005)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("bar_quad")
+surface_material_override/0 = SubResource("bg_mat")
+
+[node name="FillPivot" type="Node3D" parent="Pivot"]
+
+[node name="Fill" type="MeshInstance3D" parent="Pivot/FillPivot"]
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("bar_quad")
+surface_material_override/0 = SubResource("fill_mat")
+
+[node name="Label" type="Label3D" parent="Pivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.17, 0)
+pixel_size = 0.0035
+billboard = 1
+shaded = false
+no_depth_test = true
+font_size = 44
+outline_size = 12
+modulate = Color(0.92, 0.94, 0.98, 1)
+outline_modulate = Color(0, 0, 0, 1)
+text = "100 / 100"

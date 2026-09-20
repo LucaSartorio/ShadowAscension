@@ -27,6 +27,7 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @onready var health_component: HealthComponent = $HealthComponent
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var progression: PlayerProgression = $PlayerProgression
+@onready var inventory: PlayerInventory = $PlayerInventory
 
 ## What the controller actually uses. Recomputed from the base values whenever
 ## the stats change — never from the previous effective value.

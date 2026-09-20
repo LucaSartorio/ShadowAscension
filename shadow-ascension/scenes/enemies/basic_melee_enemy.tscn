@@ -1,10 +1,14 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/basic_melee_enemy.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="4_health"]
 [ext_resource type="Resource" path="res://resources/enemies/basic_melee_enemy_stats.tres" id="5_stats"]
+[ext_resource type="PackedScene" path="res://scenes/ui/enemy_health_bar_3d.tscn" id="20_bar"]
+[ext_resource type="Script" path="res://scripts/items/loot_dropper.gd" id="21_loot"]
+[ext_resource type="Resource" path="res://resources/items/loot/basic_melee_enemy_loot.tres" id="22_table"]
+[ext_resource type="PackedScene" path="res://scenes/items/world_item.tscn" id="23_worlditem"]
 
 [sub_resource type="CapsuleShape3D" id="body_shape"]
 radius = 0.45
@@ -97,3 +101,10 @@ script = ExtResource("3_hurtbox")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
 shape = SubResource("hurtbox_shape")
+
+[node name="EnemyHealthBar3D" parent="." instance=ExtResource("20_bar")]
+
+[node name="LootDropper" type="Node" parent="."]
+script = ExtResource("21_loot")
+loot_table = ExtResource("22_table")
+world_item_scene = ExtResource("23_worlditem")

@@ -12,6 +12,8 @@ extends CanvasLayer
 ## paused, which is the whole point of pausing from here.
 
 const GROUP: StringName = &"player_stats_menu"
+## Every menu that pauses the game joins this, so each can shut the others.
+const PAUSE_MENU_GROUP: StringName = &"pause_menu"
 
 @onready var panel_root: Control = $Root
 @onready var hint: Control = $Hint
@@ -42,6 +44,7 @@ const STAT_ROWS: Array = [
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	add_to_group(PAUSE_MENU_GROUP)
 	panel_root.visible = false
 	var player: Player = get_tree().get_first_node_in_group("player") as Player
 	if player == null or player.progression == null:
@@ -114,6 +117,7 @@ func toggle() -> void:
 func open() -> void:
 	if _open or _progression == null:
 		return
+	_close_other_menus()
 	_open = true
 	_refresh()
 	panel_root.visible = true
@@ -130,6 +134,14 @@ func close() -> void:
 	hint.visible = true
 	get_tree().paused = false
 	_request_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+
+## Whichever pause menu opens last wins, so pressing I with the sheet up swaps
+## to the inventory rather than stacking on top of it.
+func _close_other_menus() -> void:
+	for node in get_tree().get_nodes_in_group(PAUSE_MENU_GROUP):
+		if node != self and node.has_method("close"):
+			node.close()
 
 
 func _request_mouse_mode(mode: int) -> void:

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LootTable" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/loot_table.gd" id="1_table"]
+[ext_resource type="Resource" path="res://resources/items/loot/entry_boss_essence.tres" id="2_a"]
+[ext_resource type="Resource" path="res://resources/items/loot/entry_boss_iron.tres" id="3_b"]
+[ext_resource type="Resource" path="res://resources/items/loot/entry_boss_jacket.tres" id="4_c"]
+
+[resource]
+script = ExtResource("1_table")
+entries = Array[Resource]([ExtResource("2_a"), ExtResource("3_b"), ExtResource("4_c")])
+guarantee_at_least_one = true

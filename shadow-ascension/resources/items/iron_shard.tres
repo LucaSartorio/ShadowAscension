@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"iron_shard"
+display_name = "Iron Shard"
+description = "Frammento di ferro annerito. Resiste dove il resto si consuma."
+rarity = 1
+item_type = 0
+stackable = true
+max_stack = 99

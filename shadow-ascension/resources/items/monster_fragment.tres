@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"monster_fragment"
+display_name = "Monster Fragment"
+description = "Scaglia d'ombra lasciata da una creatura caduta. Materiale grezzo."
+rarity = 0
+item_type = 0
+stackable = true
+max_stack = 99

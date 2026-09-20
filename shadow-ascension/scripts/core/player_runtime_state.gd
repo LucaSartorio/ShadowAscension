@@ -40,6 +40,12 @@ var intelligence: int = DEFAULT_STAT
 ## is both the fresh-session state and what a death leaves behind.
 var current_health: float = -1.0
 
+## What the player is carrying: id -> { "item": ItemData, "quantity": int }.
+## Stored, never interpreted — stacking, caps and ordering all belong to
+## PlayerInventory. The ItemData references are held directly because this is
+## runtime only; nothing here is serialised.
+var inventory: Dictionary = {}
+
 
 ## Called by the first player of the session, with the values its own resources
 ## gave it. Later players restore instead. Health is deliberately not a parameter:
@@ -74,6 +80,22 @@ func sync_health(value: float) -> void:
 	current_health = value
 
 
+func sync_inventory(stacks: Dictionary) -> void:
+	inventory = _copy_stacks(stacks)
+
+
+## A copy, so the live inventory and the stored one cannot alias each other.
+func get_inventory_copy() -> Dictionary:
+	return _copy_stacks(inventory)
+
+
+func _copy_stacks(source: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for id in source:
+		out[id] = {"item": source[id]["item"], "quantity": source[id]["quantity"]}
+	return out
+
+
 ## Death is the one case that restores health without touching progress: the run
 ## restarts, the character does not.
 func reset_health_to_max() -> void:
@@ -98,4 +120,5 @@ func reset_runtime_state() -> void:
 	vitality = DEFAULT_STAT
 	intelligence = DEFAULT_STAT
 	current_health = -1.0
+	inventory.clear()
 	runtime_state_reset.emit()

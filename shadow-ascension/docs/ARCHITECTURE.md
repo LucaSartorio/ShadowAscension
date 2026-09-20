@@ -266,3 +266,41 @@ itself reports health, through `HealthComponent.health_changed`.
 
 **Not persisted**, on purpose: position, camera rotation, combat and combo state, dodge state,
 cooldowns, the current room, dungeon progress, enemy and boss state, and transient UI.
+
+---
+
+## Items and loot
+
+**`ItemData`** (`scripts/items/item_data.gd`, instances in `resources/items/`) — one item
+definition: id, display name, description, rarity, type, and whether it stacks. Pure data. Rarity
+and type are enums with presentation helpers (`rarity_color`, `rarity_label`, `type_label`) so the
+world drop, the inventory row and the detail pane cannot disagree about what "Rare" looks like.
+Rarity carries no mechanical effect: it is displayed, not applied. `WEAPON` and `ARMOR` exist as
+types but nothing equips them yet.
+
+**`LootTable`** / **`LootTableEntry`** (`scripts/items/`) — what a combatant can drop, as data. Each
+entry rolls independently, so overall odds come from the entries rather than a hidden rule. No enemy
+script ever branches on its own type to decide loot. `guarantee_at_least_one` grants the rarest
+entry when everything misses, which is how the boss is never worth nothing.
+
+**`LootDropper`** (`scripts/items/loot_dropper.gd`) — a component on a combatant that rolls its
+table once on death and scatters the results around the corpse. It hangs off
+`RoomCombatant.enemy_died`, which fires exactly once however the death was reached, and latches as
+well, so a duplicated signal, a boss phase transition, a room clearing or a dungeon completing
+cannot roll again. Its seed is mixed with its own scene path: one shared seed would make an entire
+room drop identically.
+
+**`WorldItem`** (`scripts/items/world_item.gd`, `scenes/items/world_item.tscn`) — a dropped stack on
+the floor. It reuses the existing `InteractionPrompt` rather than adding a second interaction
+system, and takes only what the inventory accepts, leaving any remainder on the ground.
+
+**`PlayerInventory`** (`scripts/player/player_inventory.gd`) — a component on the player, like
+`PlayerProgression`. One stack per item, `id -> quantity`, no capacity limit on the inventory
+itself; a stackable item caps at its own `max_stack`, and anything else accumulates a count, since
+M7.1 has no per-instance stats to keep apart. `add_item()` returns what it actually took. Contents
+survive a scene change through `PlayerRuntimeState`, which stores them and interprets nothing —
+every rule stays in the inventory. Items already collected persist; items left lying on a floor do
+not, which is intended for this milestone.
+
+**Pause menus** — the character sheet and the inventory both join the `pause_menu` group, and
+opening one closes the others. Only one is ever up, so C and I always do what they say.

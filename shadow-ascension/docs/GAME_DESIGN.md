@@ -125,6 +125,26 @@ what ability power will eventually scale.
 
 ---
 
+## Items and rarity
+
+Confirmed in M7.1. Only what is listed here is decided.
+
+**Rarity**, five tiers, ordered: Common, Uncommon, Rare, Epic, Legendary. Rarity is **data**. It
+colours an item in the world and in the inventory and orders the inventory list, and it does
+nothing else — no tier grants stats by itself. An item only has an effect if its own definition
+says so.
+
+**Item types**: Material, Consumable, Weapon, Armor. Weapon and Armor exist as types but are not
+equippable yet; equipping arrives in M7.2.
+
+**Stacking**: an item declares whether it stacks and its maximum stack. In M7.1 the inventory holds
+one stack per item and has no capacity limit of its own.
+
+**Not decided**: what each rarity tier is worth mechanically, drop rates beyond placeholders,
+durability, affixes, inventory capacity, and whether consumables are used from the inventory.
+
+---
+
 ## Future Combat Features
 
 The following features are **future direction, not yet defined or implemented**. They are listed here so architecture and data schemas can leave room for them, but no numeric values, timing windows, or interactions are committed.

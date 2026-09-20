@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_data.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = &"training_sword"
+display_name = "Training Sword"
+description = "Lama da addestramento, smussata ma onesta. Non ancora equipaggiabile."
+rarity = 0
+item_type = 2
+stackable = false
+max_stack = 1

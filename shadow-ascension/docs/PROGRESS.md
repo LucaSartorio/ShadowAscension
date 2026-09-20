@@ -6,21 +6,59 @@
 
 ## Current Milestone
 
-**M7 — Loot and Equipment** (Not Started)
+**M7 — Loot and Equipment** (In Progress)
 
-Next per the roadmap. M6 leaves two hooks ready for it: `RoomCombatant.enemy_died` is already the
-drop point that XP subscribes to, and `PlayerRuntimeState` is where equipped items would live for a
-session.
+M7.1 delivered: enemy health bars, item data, loot tables, world drops, an inventory and its UI,
+all of it surviving a scene change. No equipping and no stat modifiers — those are M7.2.
 
-Carried into M7, non-blocking:
+M7.1 deliverable status (verified by `loot_test.tscn` 51/51 and `loot_run.gd` 21/21, the latter with
+real scene changes and real combat):
 
-- Progression persists for a session only. Closing the game starts over — `PlayerRuntimeState` is
-  explicitly not a save system, and permanent saving is its own milestone.
-- Ability power (INT) is computed and displayed but nothing consumes it; the abilities it is meant
-  for do not exist yet.
-- Stat allocation is one-way. No respec, no decrement, and no final stat caps.
-- Boss balance is untuned, the dungeon layout is a grey-box, and a run returns the player to the
-  test world's default spawn rather than the gate.
+- Enemy health bars — implemented
+- ItemData — implemented
+- rarity foundation — implemented
+- loot tables — implemented
+- world loot — implemented
+- item interaction — implemented
+- PlayerInventory — implemented
+- Inventory UI — implemented
+- runtime inventory persistence — implemented
+
+`EnemyHealthBar3D` is two unshaded quads and a small label turned to face the camera — no
+CanvasLayer and no viewport per enemy. It redraws on `health_changed` and never reads health per
+frame; the only per-frame work is facing the camera, and that stops whenever the bar hides. It is
+hidden at full health out of combat, shown once the enemy engages or takes a hit, and gone the
+moment it dies. The boss deliberately does not get one: it already has its own bar, and a second
+would only compete with it. Engagement is a new `BasicMeleeEnemy.engagement_changed` signal that
+emits only on a real change.
+
+Loot is data all the way down. A `LootDropper` component rolls its table once on death — the roll
+is guarded both by `report_death()` firing once and by the dropper's own latch, so a duplicated
+signal, a phase transition, a room clearing and a dungeon completing were each tested and roll
+nothing. The basic enemy's table comes to a 45% chance of at least one drop; the boss's guarantees
+one and its best is Rare or better in practice.
+
+`PlayerInventory` is a component on the player, and `PlayerRuntimeState` stores its contents without
+interpreting them. Measured across the full loop — gate, both combat rooms, boss, exit, second gate,
+death — `{shadow_essence: 2, iron_shard: 5, training_sword: 1}` held unchanged through every
+transition, and dying cost nothing. Items left on a floor do not follow a scene change, which is
+intended here.
+
+Two bugs were found and fixed while building. Every `LootDropper` shared one exported seed, so an
+entire room rolled identically — deterministic in the degenerate sense rather than the useful one;
+the seed is now mixed with the dropper's own scene path. And the health bar's background material is
+a shared sub-resource, so without isolating it a whole room's bars would have faded and recoloured
+as one; the pivot now gives every mesh under it its own copy, in `_ready()`, which runs before the
+bar above reads the fill material.
+
+Documented limit: the inventory holds one stack per item with no capacity cap. A stackable item is
+capped at its own `max_stack` and the overflow is reported back rather than swallowed, so a drop
+leaves its remainder on the floor. Multi-slot stacks, durability and affixes are out of scope.
+
+UX: the character sheet and the inventory both join a `pause_menu` group and opening one closes the
+other, so C and I always do what they say instead of stacking panels.
+
+Next iteration: **M7.2 — Equipment and Item Stat Modifiers**.
 
 ---
 

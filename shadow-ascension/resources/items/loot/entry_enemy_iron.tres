@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="LootTableEntry" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/loot_table_entry.gd" id="1_entry"]
+[ext_resource type="Resource" path="res://resources/items/iron_shard.tres" id="2_item"]
+
+[resource]
+script = ExtResource("1_entry")
+item = ExtResource("2_item")
+drop_chance = 0.12
+min_quantity = 1
+max_quantity = 1
