@@ -31,6 +31,12 @@ func _run_tests() -> void:
 	await _test_enemy_dies_and_disables_everything()
 	await _test_multi_enemy_operates_concurrently()
 	await _test_navigation_around_obstacle()
+	await _test_dodge_mistimed_takes_damage()
+	await _test_player_avoids_by_moving_during_startup()
+	await _test_recovery_commitment()
+	await _test_returns_to_chase_when_player_leaves_range()
+	await _test_single_hit_per_player_swing()
+	await _test_hit_feedback()
 	print("[SUMMARY] passed=%d failed=%d" % [_pass, _fail])
 	get_tree().quit()
 
@@ -111,10 +117,14 @@ func _test_idle_when_far() -> void:
 
 func _test_chase_on_detection() -> void:
 	_reset_player()
-	_reset_enemy(Vector3(0, 0.1, 5))  # < detection_range
+	_reset_enemy(Vector3(0, 0.1, 6))  # < detection_range
 	await _wait(0.1)
 	var ok: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
-	_record(ok, "2) enemy CHASE when player in detection range (state=%d)" % _enemy._state)
+	var dist_start: float = _enemy.global_position.distance_to(_player.global_position)
+	await _wait(0.6)
+	var dist_end: float = _enemy.global_position.distance_to(_player.global_position)
+	var closed_in: bool = dist_start - dist_end > 0.5
+	_record(ok and closed_in, "2) enemy CHASE and closes distance (state=%d %.2f -> %.2f)" % [_enemy._state, dist_start, dist_end])
 
 
 func _test_attack_at_range() -> void:
@@ -184,15 +194,16 @@ func _test_attack_cooldown() -> void:
 
 func _test_return_to_idle_on_lose_target() -> void:
 	_reset_player()
-	_reset_enemy(Vector3(0, 0.1, 5))  # detection range
+	_reset_enemy(Vector3(0, 0.1, 6))  # inside detection_range
 	await _wait(0.1)
 	var chased: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
-	# move enemy far from player (simulate player escape)
-	_reset_enemy(Vector3(0, 0.1, 20))  # > lose_target_range=14
-	# state stays IDLE after reset; verify it doesn't re-enter CHASE
-	await _wait(0.1)
+	# move the PLAYER out of range and let the enemy drop the target by itself
+	_player.global_position = Vector3(0, 0.1, -30)
+	await _wait(0.2)
 	var idle_ok: bool = _enemy._state == BasicMeleeEnemy.State.IDLE
-	_record(chased and idle_ok, "8) enemy re-enters IDLE when player > lose_target_range (chased=%s idle=%s)" % [chased, idle_ok])
+	_record(chased and idle_ok, "8) CHASE -> IDLE when player > lose_target_range (chased=%s idle=%s)" % [chased, idle_ok])
+	_reset_player()
+	await _wait(0.2)
 
 
 func _test_player_attack_damages_enemy() -> void:
@@ -292,3 +303,102 @@ func _test_navigation_around_obstacle() -> void:
 	_enemy.detection_range = saved_detection
 	_enemy.lose_target_range = saved_lose
 	_record(not_stuck_against_wall and moved, "14) enemy navigates around wall: sideways=%.2f z=%.2f start_z=%.2f moved=%s" % [sideways, end_pos.z, start_pos.z, moved])
+
+
+func _test_dodge_mistimed_takes_damage() -> void:
+	# A dodge started too early or too late must NOT save the player.
+	# dodge_speed is zeroed so this measures the i-frame window only, not displacement.
+	var saved_speed: float = _player.dodge_speed
+	_player.dodge_speed = 0.0
+
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 1.5))
+	var early_before: float = _player.health_component.current_health
+	await _wait(0.02)
+	_player._on_dodge_pressed()  # i-frames [0.06, 0.24], enemy ACTIVE lands at ~0.36
+	await _wait(0.75)
+	var early_delta: float = early_before - _player.health_component.current_health
+	await _wait(0.9)
+
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 1.5))
+	var late_before: float = _player.health_component.current_health
+	await _wait(0.45)  # ACTIVE already connected at ~0.36
+	_player._on_dodge_pressed()
+	await _wait(0.4)
+	var late_delta: float = late_before - _player.health_component.current_health
+
+	_player.dodge_speed = saved_speed
+	_record(early_delta == 15.0 and late_delta == 15.0, "15) mistimed dodge still takes damage (early=%.0f late=%.0f expect 15/15)" % [early_delta, late_delta])
+	await _wait(0.9)
+
+
+func _test_player_avoids_by_moving_during_startup() -> void:
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 1.5))
+	await _wait(0.15)  # inside STARTUP (0.35s)
+	var startup_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP
+	_player.global_position = Vector3(0, 0.1, -8.0)  # step out of the telegraphed swing
+	var hp_before: float = _player.health_component.current_health
+	await _wait(0.6)  # through the whole ACTIVE window
+	var hp_after: float = _player.health_component.current_health
+	_record(startup_ok and hp_before == hp_after, "16) player escaping during startup takes no damage (startup=%s hp %.0f -> %.0f)" % [startup_ok, hp_before, hp_after])
+	await _wait(0.8)
+	_reset_player()
+
+
+func _test_recovery_commitment() -> void:
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 1.5))
+	# startup 0.35 + active 0.15 -> RECOVERY spans ~[0.50, 1.15]
+	await _wait(0.60)
+	var early_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
+	await _wait(0.45)  # still inside recovery (~1.05)
+	var late_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
+	await _wait(0.25)  # recovery finished (~1.30)
+	var ended_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.NONE
+	_record(early_ok and late_ok and ended_ok, "17) enemy stays committed for full recovery (early=%s late=%s ended=%s)" % [early_ok, late_ok, ended_ok])
+	await _wait(1.3)
+
+
+func _test_returns_to_chase_when_player_leaves_range() -> void:
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 1.5))
+	await _wait(0.15)
+	var attacking: bool = _enemy._state == BasicMeleeEnemy.State.ATTACK
+	_player.global_position = Vector3(0, 0.1, -6.0)  # out of attack_range, still inside detection_range
+	await _wait(1.25)  # full attack cycle (1.15s) elapsed
+	var chase_ok: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
+	_record(attacking and chase_ok, "18) enemy returns to CHASE when player leaves attack range (attacked=%s chase=%s)" % [attacking, chase_ok])
+	_reset_player()
+	await _wait(0.2)
+
+
+func _test_single_hit_per_player_swing() -> void:
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, -1.5))
+	var hits: Array[float] = []
+	var counter: Callable = func(current: float, _maximum: float) -> void:
+		hits.append(current)
+	_enemy.health_component.health_changed.connect(counter)
+	var before: float = _enemy.health_component.current_health
+	_player.camera_rig.attack_light_pressed.emit()
+	await _wait(0.7)
+	_enemy.health_component.health_changed.disconnect(counter)
+	var delta: float = before - _enemy.health_component.current_health
+	_record(hits.size() == 1 and delta == 20.0, "19) enemy takes exactly one hit per player swing (hits=%d dmg=%.0f)" % [hits.size(), delta])
+	await _wait(0.5)
+
+
+func _test_hit_feedback() -> void:
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, -1.5))
+	_enemy.mesh_instance.scale = Vector3.ONE
+	_enemy.hurtbox.receive_hit(10.0, self)
+	await _wait(0.04)  # inside the 0.05s squash tween
+	var squashed: bool = _enemy.mesh_instance.scale.y < 0.98
+	var squash_y: float = _enemy.mesh_instance.scale.y
+	await _wait(0.35)  # tween returns to rest
+	var restored: bool = absf(_enemy.mesh_instance.scale.y - 1.0) < 0.02
+	_record(squashed and restored, "20) hit feedback plays and settles (squash_y=%.3f restored=%s)" % [squash_y, restored])
+	await _wait(0.3)
