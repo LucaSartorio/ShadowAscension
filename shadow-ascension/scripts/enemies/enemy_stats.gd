@@ -8,6 +8,10 @@ extends Resource
 ## its own fields on `_ready()`, so per-instance changes (debug tweaks, future
 ## buffs) never write back into the shared asset.
 
+@export_group("Rewards")
+## XP granted for killing one of these.
+@export var xp_reward: int = 25
+
 @export_group("Health")
 @export var max_health: float = 100.0
 

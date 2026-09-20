@@ -74,6 +74,38 @@ Design target statement:
 
 ---
 
+## Progression
+
+Confirmed in M6.1. Only what is listed here is decided; everything else about progression is open.
+
+**Base stats** — four, no more:
+
+| Stat | |
+|---|---|
+| STR | strength |
+| AGI | agility |
+| VIT | vitality |
+| INT | intelligence |
+
+Each starts at **10**. In M6.1 they are data only: nothing reads them yet. What each one actually
+does to combat is decided in M6.2, and no derived stat is committed here.
+
+**Levelling** — a level grants **5 stat points**. Spending them is M6.2; M6.1 only accumulates them.
+
+**XP curve** — computed, never a per-level table:
+
+```
+xp_required(level) = round(100 * 1.25 ^ (level - 1))
+```
+
+so 100 XP for the first level, 125 for the second, 156 for the third. Both constants are tuning
+values on a Resource, not design commitments.
+
+**Not decided**: the real maximum level (the current 100 is a technical bound on the level-up loop,
+nothing more), respec, XP modifiers, prestige, and whether stat allocation stays manual.
+
+---
+
 ## Future Combat Features
 
 The following features are **future direction, not yet defined or implemented**. They are listed here so architecture and data schemas can leave room for them, but no numeric values, timing windows, or interactions are committed.

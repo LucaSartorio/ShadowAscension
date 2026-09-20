@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_controller.gd" id="1_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/boss_health_bar.tscn" id="9_bossui"]
 [ext_resource type="PackedScene" path="res://scenes/ui/interaction_prompt.tscn" id="10_prompt"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dungeon_objective_ui.tscn" id="11_obj"]
+[ext_resource type="PackedScene" path="res://scenes/ui/progression_hud.tscn" id="90_proghud"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -233,3 +234,5 @@ theme_override_font_sizes/font_size = 40
 text = "DUNGEON COMPLETE"
 
 [editable path="Rooms/CombatRoom2"]
+
+[node name="ProgressionHUD" parent="." instance=ExtResource("90_proghud")]

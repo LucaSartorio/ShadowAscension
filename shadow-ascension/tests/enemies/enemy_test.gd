@@ -107,6 +107,11 @@ func _reset_enemy(pos: Vector3) -> void:
 		_enemy.health_component.current_health = _enemy.health_component.max_health
 		_enemy.health_component.is_dead = false
 		_enemy._last_health = _enemy.health_component.max_health
+	# This helper revives one instance, which nothing in the game ever does: a
+	# real run rebuilds the scene. RoomCombatant latches "died once" and "XP
+	# claimed once" for exactly that reason, so a revival has to clear them too.
+	_enemy._died = false
+	_enemy._xp_claimed = false
 	if _enemy.hurtbox != null:
 		_enemy.hurtbox.monitorable = true
 	if _enemy.hurtbox_collision != null:

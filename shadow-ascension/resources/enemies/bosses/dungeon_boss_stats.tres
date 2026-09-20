@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_stats")
+xp_reward = 200
 max_health = 600.0
 movement_speed = 3.2
 acceleration = 10.0

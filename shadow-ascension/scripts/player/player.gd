@@ -24,6 +24,7 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @onready var attack_hitbox: Hitbox = $VisualRoot/AttackHitbox
 @onready var health_component: HealthComponent = $HealthComponent
 @onready var hurtbox: Hurtbox = $Hurtbox
+@onready var progression: PlayerProgression = $PlayerProgression
 
 var _attack_state: AttackState = AttackState.IDLE
 var _attack_timer: float = 0.0

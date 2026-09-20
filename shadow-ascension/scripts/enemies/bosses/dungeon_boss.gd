@@ -124,6 +124,7 @@ func _apply_stats() -> void:
 	if stats == null:
 		push_warning("%s has no BossStats assigned; falling back to script defaults." % name)
 		return
+	xp_reward = stats.xp_reward
 	max_health = stats.max_health
 	movement_speed = stats.movement_speed
 	acceleration = stats.acceleration
@@ -750,4 +751,4 @@ func _on_died() -> void:
 	t.tween_property(visual_root, "rotation:x", deg_to_rad(90.0), death_topple_duration)
 
 	# The room counts this; nothing here knows about rooms or the dungeon.
-	enemy_died.emit(self)
+	report_death()

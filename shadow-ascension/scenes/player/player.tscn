@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_camera"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://scripts/combat/attack_step.gd" id="4_step"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="5_health"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="6_hurtbox"]
+[ext_resource type="Script" path="res://scripts/player/player_progression.gd" id="9_prog"]
+[ext_resource type="Resource" path="res://resources/characters/player_progression.tres" id="10_progstats"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 radius = 0.4
@@ -111,6 +113,10 @@ script = ExtResource("6_hurtbox")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
 shape = SubResource("player_hurtbox_shape")
+
+[node name="PlayerProgression" type="Node" parent="."]
+script = ExtResource("9_prog")
+stats = ExtResource("10_progstats")
 
 [node name="CameraRig" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

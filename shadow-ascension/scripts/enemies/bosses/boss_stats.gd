@@ -8,6 +8,10 @@ extends Resource
 ## A definition, not runtime state: the boss copies these into its own fields on
 ## _ready(), so the shared asset is never written to.
 
+@export_group("Rewards")
+## XP granted for killing the boss.
+@export var xp_reward: int = 200
+
 @export_group("Health")
 @export var max_health: float = 600.0
 

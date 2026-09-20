@@ -6,21 +6,55 @@
 
 ## Current Milestone
 
-**M6 — Player Progression** (Not Started)
+**M6 — Player Progression** (In Progress)
 
-Next per the roadmap: XP from enemies and the boss, a level curve, a baseline stat set (HP, attack,
-defense), manual point allocation driven by Resource-defined rules, and progression data split
-between Resource definitions and in-memory runtime state. Persistence comes later.
+M6.1 delivered: XP, levels, a computed curve, stat points that accumulate, base stats as data, XP
+rewards declared by enemies and the boss, a progression HUD and a level-up callout. No allocation,
+no stat screen, no effects — those are M6.2.
 
-M5's `enemy_died` drop hook is already the subscription point for XP — neither the boss nor the
-enemies need changing to feed it.
+M6.1 deliverable status (verified by `progression_test.tscn` 47/47 and a full real run 17/17):
 
-Carried into M6, non-blocking:
+- XP foundation — implemented
+- level system — implemented
+- XP curve — implemented
+- stat points — implemented
+- base stats — implemented (data only)
+- enemy XP rewards — implemented
+- boss XP reward — implemented
+- progression HUD — implemented
+- level-up feedback — implemented
 
-- Boss balance is untuned. 600 HP against a 20/25/35 combo is 23 swings, with the phase transition
-  landing on the fifteenth. It is a foundation, not a tuned encounter.
-- The dungeon layout is a functional grey-box, and the return from a run lands the player at the
-  test world's default spawn rather than back at the gate. Both wait on a real hub.
+`PlayerProgression` is a component on the player, not part of its controller. It is the active
+receiver: a combatant only *declares* what it is worth (`RoomCombatant.xp_reward`, seeded from its
+own stats Resource), and this node decides whether to take it. It learns which combatants exist by
+listening to the player's own attack hitbox — `Hitbox.hit_landed` already fired for every hit the
+player lands — so the only enemies it ever subscribes to are ones the player actually fought.
+Nothing searches the tree, no controller wires enemies to the player, and it works in the test world
+and the dungeon alike with no extra plumbing.
+
+Paying twice is guarded at the source rather than at each call site: `RoomCombatant.claim_xp()`
+hands its reward out once and returns 0 forever after, and `report_death()` makes the death hook
+fire once however the death was reached. A duplicated signal, a room clearing, a boss phase
+transition and a dungeon completing were each tested and add nothing.
+
+A full run — test world, gate, both combat rooms, boss, completion — with real player combos awards
+**325 XP**: two enemies at 25, three at 25, and the boss at 200, over six kills and 23 boss swings.
+That takes the player to **level 3 with 100/156 XP and 10 unspent stat points**, through two
+level-ups.
+
+**Progression does not survive a scene reload.** Dying in a dungeon reloads the scene and builds a
+fresh player, which starts at level 1 again. Persisting progression across scene changes needs a
+save or session layer; introducing an autoload solely for that was explicitly out of scope here, so
+it is deferred to its own milestone. The limitation is recorded in `player_progression.gd` as well.
+
+Bug found and fixed while building: `PlayerProgression` is a child of the player, so its `_ready()`
+runs *before* the player's — `player.attack_hitbox` was still null and the subscription was never
+made, leaving every kill worth nothing. It now resolves the hitbox itself, the way `Hurtbox` already
+resolves its siblings. One existing assertion was corrected alongside it: `enemy_test` revives a
+single enemy instance between sub-tests, which nothing in the game does, so its reset now clears the
+new death and XP latches too.
+
+Next iteration: **M6.2 — Stat Allocation and Derived Stats**.
 
 ---
 

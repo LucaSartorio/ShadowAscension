@@ -107,6 +107,7 @@ func _apply_stats() -> void:
 	if stats == null:
 		push_warning("%s has no EnemyStats assigned; falling back to script defaults." % name)
 		return
+	xp_reward = stats.xp_reward
 	max_health = stats.max_health
 
 	movement_speed = stats.movement_speed
@@ -579,4 +580,4 @@ func _on_died() -> void:
 	var t: Tween = create_tween()
 	t.tween_property(visual_root, "rotation:x", deg_to_rad(90.0), 0.4)
 
-	enemy_died.emit(self)
+	report_death()
