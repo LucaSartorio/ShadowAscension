@@ -21,7 +21,7 @@ enum RoomState { IDLE, ACTIVE, CLEARED }
 @onready var navigation_region: NavigationRegion3D = $NavigationRegion3D
 
 var _state: RoomState = RoomState.IDLE
-var _enemies: Array[BasicMeleeEnemy] = []
+var _enemies: Array[RoomCombatant] = []
 var _alive: int = 0
 
 
@@ -48,9 +48,9 @@ func _collect_enemies() -> void:
 	if enemy_container == null:
 		return
 	for child in enemy_container.get_children():
-		var enemy: BasicMeleeEnemy = child as BasicMeleeEnemy
-		if enemy != null:
-			_enemies.append(enemy)
+		var combatant: RoomCombatant = child as RoomCombatant
+		if combatant != null:
+			_enemies.append(combatant)
 
 
 func get_state() -> RoomState:
@@ -61,7 +61,7 @@ func is_cleared() -> bool:
 	return _state == RoomState.CLEARED
 
 
-func get_enemies() -> Array[BasicMeleeEnemy]:
+func get_enemies() -> Array[RoomCombatant]:
 	return _enemies
 
 
@@ -93,7 +93,7 @@ func _start() -> void:
 		_clear()
 
 
-func _on_enemy_died(_enemy: BasicMeleeEnemy) -> void:
+func _on_enemy_died(_combatant: RoomCombatant) -> void:
 	_alive = maxi(0, _alive - 1)
 	if _state != RoomState.ACTIVE:
 		return

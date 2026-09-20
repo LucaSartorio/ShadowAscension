@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BossAttack" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/boss_attack.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+attack_name = "Ground Slam"
+hitbox_name = &"SlamHitbox"
+damage = 40.0
+startup = 0.85
+active = 0.2
+recovery = 1.0
+cooldown = 3.5
+min_range = 0.0
+max_range = 4.2
+telegraph = 2
+telegraph_color = Color(1, 0.25, 0.2, 1)
+facing_correction_fraction = 0.0

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room"]
 [ext_resource type="PackedScene" path="res://scenes/dungeons/components/dungeon_door.tscn" id="2_door"]
-[ext_resource type="PackedScene" path="res://scenes/enemies/basic_melee_enemy.tscn" id="3_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/bosses/dungeon_boss.tscn" id="3_boss"]
 
 [sub_resource type="NavigationMesh" id="navmesh"]
 cell_size = 0.25
@@ -122,18 +122,8 @@ shape = SubResource("side_wall_shape")
 
 [node name="Enemies" type="Node3D" parent="."]
 
-[node name="PlaceholderBossEnemy" parent="Enemies" instance=ExtResource("3_enemy")]
+[node name="DungeonBoss" parent="Enemies" instance=ExtResource("3_boss")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -3)
-
-[node name="PlaceholderLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, -3)
-billboard = 1
-no_depth_test = true
-fixed_size = true
-pixel_size = 0.012
-modulate = Color(1, 0.6, 0.2, 1)
-text = "BOSS PLACEHOLDER
-(BasicMeleeEnemy — real boss lands in M5)"
 
 [node name="EntryTrigger" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 6)

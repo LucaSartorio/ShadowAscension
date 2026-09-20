@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BossAttack" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/boss_attack.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+attack_name = "Wide Sweep"
+hitbox_name = &"SweepHitbox"
+damage = 30.0
+startup = 0.5
+active = 0.2
+recovery = 0.7
+cooldown = 2.0
+min_range = 0.0
+max_range = 3.4
+telegraph = 1
+telegraph_color = Color(1, 0.5, 0.15, 1)
+facing_correction_fraction = 0.15

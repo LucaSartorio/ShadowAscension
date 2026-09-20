@@ -6,41 +6,26 @@
 
 ## Current Milestone
 
-**M4 — Dungeon Foundation** (In Progress)
+**M5 — First Boss** (In Progress)
 
-M4.1 delivered: a static, deterministic dungeon that runs end to end — Gate in the test world,
-start room, two combat rooms gated by locking doors, a boss-room placeholder, and dungeon
-completion. No procedural generation, no real boss, no loot/XP/shadow systems.
+M5.1 delivered: `DungeonBoss` replaces the boss-room placeholder — its own state logic, three
+distinct attacks with a decision layer, per-attack cooldowns, a temporary health bar, and death
+that feeds the existing room/dungeon completion flow. No phase 2, no cutscene, no loot.
 
-M4.1 deliverable status (verified by `dungeon_test_suite.tscn`, 31/31):
+M5.1 deliverable status (verified by `boss_test.tscn` 33/33 and the real-scene-change flow 32/32):
 
-- dungeon gate — implemented
-- dungeon scene — implemented
-- start room — implemented
-- room controller — implemented
-- combat rooms — implemented
-- door locking — implemented
-- room clearing — implemented
-- sequential progression — implemented
-- boss room placeholder — implemented
-- dungeon completion foundation — implemented
+- boss base scene — implemented
+- boss state foundation — implemented
+- boss decision logic — implemented
+- Quick Strike — implemented
+- Wide Sweep — implemented
+- Ground Slam — implemented
+- boss cooldowns — implemented
+- boss UI prototype — implemented
+- boss room integration — implemented
+- boss death/completion integration — implemented
 
-M4.2 delivered: the loop closes. Fade transitions both ways, an exit portal that only wakes on
-completion, the return trip to the test world, and a minimal death/restart.
-
-M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real-scene-change run
-`dungeon_flow_run.gd` 16/16):
-
-- dungeon completion — implemented
-- exit portal — implemented
-- return transition — implemented
-- reusable gate target — implemented
-- scene fade transition — implemented
-- dungeon death/restart flow — implemented
-- full dungeon loop — implemented
-
-M4 stays **In Progress**: the layout is still a grey-box, and the return lands the player at the
-test world's default spawn rather than back at the gate — both deferred until a real hub exists.
+Next iteration: **M5.2 — Boss Phase 2 and Encounter Polish**.
 
 ---
 
@@ -280,34 +265,60 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
       `lose_target_delay` and additionally asserts the target is *held* during the grace period.
     - Regression: combo 10/10, dodge 18/18, `Main.tscn` 360 frames zero ERROR / WARNING / Failed /
       Parse Error / SCRIPT ERROR, `--check-only` clean across `scripts/` and `tests/`.
-- Automated headless validation:
-    - **Combo test** `res://tests/combat/attack_test.tscn` — 10/10 PASS (single click, chained combo, spam bounding, reset time, per-swing dedup, out-of-range, multi-target, orientation)
-    - **Dodge test** `res://tests/combat/dodge_test.tscn` — 18/18 PASS:
-        1. W+Space → forward dodge direction
-        2. W+D diagonal → normalized dodge direction
-        3. Space with no input → backstep along `+VisualRoot.z`
-        4. Direction latched mid-dodge (changing input mid-dodge has no effect)
-        5. Dodge blocked by wall (`move_and_slide` collision honored)
-        6. Second dodge during current dodge is blocked (direction unchanged)
-        7. Cooldown: mid-cooldown blocked, past-cooldown allowed
-        8. i-frame timing: false before 0.06, true in [0.06, 0.24), false after
-        9. Damage ignored during i-frames
-        10. Damage applied outside i-frames (25 damage → 100 → 75)
-        11. Attack 1 not cancelable during Startup / Active
-        12. Attack 1 cancelable during Recovery (fraction 0.0)
-        13. Attack 2 cancel window (blocked early, allowed after 35% of recovery)
-        14. Attack 3 cancel window (blocked early, allowed after 60% of recovery)
-        15. `attack_hitbox.is_active()` and `.monitoring` both false after cancel
-        16. `_queued_next` cleared and `_combo_index` reset to 0 on dodge cancel
-        17. `_combo_index == 0` after dodge + cooldown (next attack starts at Attack 1)
-        18. Spam Space (20 rapid calls) leaves player state valid; subsequent single dodge works
-    - `godot --headless --verbose --path . --quit-after 180` on `Main.tscn` — no ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
+- **M4 — Dungeon Foundation** (Completed). Exit criteria verified:
+    - *Interacting with a Gate loads the dungeon scene* — proven with real `change_scene_to_file`
+      calls, twice in a row, by `dungeon_flow_run.gd`.
+    - *Player traverses start → combat rooms → boss room* — both full runs walked start room,
+      Combat 1, Combat 2 and the boss placeholder in order, clearing each.
+    - *Room transitions do not leak nodes, signals or physics bodies* — two identical loops ending
+      in the same scene finished with an **identical node count (127 vs 127, delta +0) and zero
+      orphan nodes**. An earlier leak (a coroutine stranded by an awaited `SceneTreeTimer`) was
+      found and fixed during M4.2; the node-count assertion now guards against regressions.
+    - *Combat rooms gate progression until cleared* — each room locks its exit on arming and only
+      opens when its last enemy dies; the M4.1 suite proves the locked door physically blocks the
+      player with a `test_move()` collision probe, and that killing one of two leaves it shut.
+    - Deliverables: gate entry, dungeon scene container, start room, combat rooms populated from M3
+      enemies, boss room placeholder, room transitions via trigger volumes and doors. Plus M4.2's
+      exit portal, fade transitions, reusable gate target and death/restart.
+    - Final validation: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite
+      31/31, loop 34/34, real two-run flow 24/24 — **156/156**. `--check-only` clean across
+      `scripts/` and `tests/`; `Main.tscn` and `dungeon_test.tscn` each 600 verbose frames with zero
+      ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR and no leaked instances.
+    - Carried into M5, non-blocking: the layout is a functional grey-box, not shaped for play, and
+      the return lands the player at the test world's default spawn rather than back at the gate —
+      both waiting on a real hub.
 
----
+M4.1 delivered: a static, deterministic dungeon that runs end to end — Gate in the test world,
+start room, two combat rooms gated by locking doors, a boss-room placeholder, and dungeon
+completion. No procedural generation, no real boss, no loot/XP/shadow systems.
 
-## In Progress
+M4.1 deliverable status (verified by `dungeon_test_suite.tscn`, 31/31):
 
-- **M4.1 — Dungeon Foundation**:
+- dungeon gate — implemented
+- dungeon scene — implemented
+- start room — implemented
+- room controller — implemented
+- combat rooms — implemented
+- door locking — implemented
+- room clearing — implemented
+- sequential progression — implemented
+- boss room placeholder — implemented
+- dungeon completion foundation — implemented
+
+M4.2 delivered: the loop closes. Fade transitions both ways, an exit portal that only wakes on
+completion, the return trip to the test world, and a minimal death/restart.
+
+M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real-scene-change run
+`dungeon_flow_run.gd` 16/16):
+
+- dungeon completion — implemented
+- exit portal — implemented
+- return transition — implemented
+- reusable gate target — implemented
+- scene fade transition — implemented
+- dungeon death/restart flow — implemented
+- full dungeon loop — implemented
+- **M4 progress — M4.1 Dungeon Foundation**:
     - `scripts/dungeon/dungeon_controller.gd` (`DungeonController`) — dungeon state
       `NOT_STARTED / IN_PROGRESS / COMPLETED`, room order taken from tree order under its `Rooms`
       container, completion when the last room reports cleared. No combat, AI, health or door
@@ -408,6 +419,88 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
       loop 34/34, real flow 16/16 — **148/148**. `--check-only` clean; `Main.tscn` and
       `dungeon_test.tscn` each 480 verbose frames with zero ERROR / WARNING / Failed / Parse Error /
       SCRIPT ERROR and no leaked instances.
+- Automated headless validation:
+    - **Combo test** `res://tests/combat/attack_test.tscn` — 10/10 PASS (single click, chained combo, spam bounding, reset time, per-swing dedup, out-of-range, multi-target, orientation)
+    - **Dodge test** `res://tests/combat/dodge_test.tscn` — 18/18 PASS:
+        1. W+Space → forward dodge direction
+        2. W+D diagonal → normalized dodge direction
+        3. Space with no input → backstep along `+VisualRoot.z`
+        4. Direction latched mid-dodge (changing input mid-dodge has no effect)
+        5. Dodge blocked by wall (`move_and_slide` collision honored)
+        6. Second dodge during current dodge is blocked (direction unchanged)
+        7. Cooldown: mid-cooldown blocked, past-cooldown allowed
+        8. i-frame timing: false before 0.06, true in [0.06, 0.24), false after
+        9. Damage ignored during i-frames
+        10. Damage applied outside i-frames (25 damage → 100 → 75)
+        11. Attack 1 not cancelable during Startup / Active
+        12. Attack 1 cancelable during Recovery (fraction 0.0)
+        13. Attack 2 cancel window (blocked early, allowed after 35% of recovery)
+        14. Attack 3 cancel window (blocked early, allowed after 60% of recovery)
+        15. `attack_hitbox.is_active()` and `.monitoring` both false after cancel
+        16. `_queued_next` cleared and `_combo_index` reset to 0 on dodge cancel
+        17. `_combo_index == 0` after dodge + cooldown (next attack starts at Attack 1)
+        18. Spam Space (20 rapid calls) leaves player state valid; subsequent single dodge works
+    - `godot --headless --verbose --path . --quit-after 180` on `Main.tscn` — no ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
+
+---
+
+## In Progress
+
+- **M5.1 — First Boss Foundation**:
+    - `scripts/enemies/room_combatant.gd` (`RoomCombatant`) — a behaviourless base holding only what
+      a `RoomController` drives: the `enemy_died` drop hook and `set_combat_enabled()`. It exists so
+      a room can hold an enemy or a boss without either inheriting the other's AI. `BasicMeleeEnemy`
+      now implements it (two lines changed, no behavior touched) and `RoomController` is typed to it.
+    - `scripts/enemies/bosses/dungeon_boss.gd` (`DungeonBoss`) — its own state logic,
+      `INTRO / DECIDE / CHASE / REPOSITION / ATTACK / RECOVERY / DEAD`, sharing only the common
+      components: `HealthComponent`, `Hurtbox`, `Hitbox`, `NavigationAgent3D`. No boss state machine
+      framework, no manager.
+    - Data-driven per `CLAUDE.md` §7: `BossStats` (`resources/enemies/bosses/dungeon_boss_stats.tres`)
+      holds the body tuning, and `BossAttack` holds one attack each —
+      `boss_quick_strike.tres`, `boss_wide_sweep.tres`, `boss_ground_slam.tres`. The boss copies
+      stats into its own fields on `_ready()`, so the shared assets are never written to.
+    - Decision layer: from DECIDE it filters the attack set by cooldown, by the attack's own range
+      band, and by how many times that attack has already run back to back (`max_consecutive_repeats`
+      = 2), then picks among what survives with a **seeded** RNG so a run is reproducible. Too far →
+      CHASE. Too close, or aimed outside the 30° cone → REPOSITION. Measured over a 22-second free
+      fight: 16 attacks, all three used, longest identical run 1.
+    - Attacks — Quick Strike 20 dmg, 0.25/0.12/0.45, cd 1.0, reach ≤ 2.6; Wide Sweep 30 dmg,
+      0.50/0.20/0.70, cd 2.0, reach ≤ 3.4 over a 4.4-wide box; Ground Slam 40 dmg, 0.85/0.20/1.00,
+      cd 3.5, a 3.2-radius cylinder centred on the boss. Each drives its own real `Hitbox` on layer
+      32 / mask 64 — there is no distance check anywhere in the damage path, proven by blinding the
+      player's hurtbox and watching the same attack at the same range deal nothing.
+    - Commitment: STARTUP may correct facing, and only by its own fraction of `rotation_speed`
+      (0.35 / 0.15 / 0.00); ACTIVE and RECOVERY do not turn at all. The player can walk out of a
+      wind-up, and dodge i-frames stop a boss attack with no boss-side logic.
+    - Telegraphs animate a `MeshRoot` **below** the facing node, so a wind-up can lean, spin or
+      compress the body without moving the hitboxes or changing where the boss aims. The three read
+      apart — measured as lean / spin / compress on their dominant channel.
+    - Hit feedback is a brief albedo pulse with no displacement: a boss should not read as flinching.
+      No stagger.
+    - `scripts/ui/boss_health_bar.gd` + `scenes/ui/boss_health_bar.tscn` — a temporary CanvasLayer
+      readout. It finds the boss through the `boss` group and listens to `encounter_started` and
+      `enemy_died`, so the boss knows nothing about any UI. Explicitly not a HUD framework; M5.2
+      replaces it.
+    - Death emits the inherited `enemy_died`, which the room already counts — the boss never
+      references `DungeonController`. The M4 completion flow continues untouched: room clears, exit
+      portal wakes, banner shows, return trip works.
+    - **Bug found and fixed during the build:** all three attacks have `min_range = 0`, so the
+      decision layer considered attacking valid even standing inside the player, and the boss never
+      unglued itself. DECIDE now sends it to REPOSITION below `minimum_combat_distance`. Verified:
+      dropped at 0.9 from the player it backs off to 1.78.
+    - Automated validation `res://tests/bosses/boss_test.tscn` — **33/33 PASS**, covering dormancy
+      before entry, activation and door lock, health bar appearing full, chase and reposition, each
+      attack's exact damage, hitbox gating, the no-distance-damage proof, distinct wind-ups, ACTIVE
+      facing lock, escaping a wind-up, dodge i-frames, the repeat ceiling and all-three usage,
+      per-attack cooldowns, player combo damage and one-hit-per-swing, hit feedback without recoil,
+      bar tracking, death, and the room/dungeon/exit-portal chain.
+    - The real-scene-change flow `dungeon_flow_run.gd` now **fights the boss** rather than one-shotting
+      it: 30 hits of 20 to fell 600 HP, twice in a row, with the bar tracked throughout — and the
+      node count across two loops is still identical (127 vs 127, 0 orphans).
+    - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
+      loop 34/34, boss 33/33, real flow 32/32 — **197/197**. `--check-only` clean; `Main.tscn` and
+      `dungeon_test.tscn` each 600 verbose frames with zero ERROR / WARNING / Failed / Parse Error /
+      SCRIPT ERROR and no leaked instances.
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
@@ -425,6 +518,10 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
 - Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
 - Player-side death reaction (input lockout, visual state) — polish, deferred
 - Playtest-tune M3 enemy parameters — now edited in `resources/enemies/basic_melee_enemy_stats.tres`, not in code
+- M5.2 — Boss Phase 2 and Encounter Polish (HP-threshold phase swap, real boss health UI,
+  encounter pacing, telegraph polish)
+- Boss balance is untuned: 600 HP against 20/25/35 combo damage is 30+ swings, deliberately not
+  adjusted yet
 - Dungeon layout pass: the grey-box is functional, not shaped for play
 - Return the player to the gate rather than the test world's default spawn — needs a real hub
 - Optional M3 polish, non-blocking: additional enemy archetypes as new `EnemyStats` assets,

@@ -1,22 +1,14 @@
 class_name BasicMeleeEnemy
-extends CharacterBody3D
+extends RoomCombatant
 
 enum State { IDLE, CHASE, REPOSITION, ATTACK, DEAD }
 enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
-
-## Emitted once when this enemy dies. Drop hook: loot (M7), XP (M6) and shadow
-## extraction (M8) subscribe here. Nothing listens yet.
-signal enemy_died(enemy: BasicMeleeEnemy)
 
 ## Archetype tuning. Copied into the runtime fields below on _ready(); this
 ## Resource is never written to at runtime.
 @export var stats: EnemyStats
 
 @export_group("Per-Instance")
-## While false the enemy does not perceive, chase, attack or navigate — only
-## gravity is applied. Rooms use this to hold their enemies until the fight
-## starts. Toggle it with set_combat_enabled().
-@export var combat_enabled: bool = true
 ## Bias of the approach bearing. Non-zero values make instances converge on
 ## different points around the player instead of the same one.
 @export_range(-180.0, 180.0) var combat_angle_offset_degrees: float = 0.0
@@ -177,7 +169,7 @@ func _setup_material() -> void:
 func set_combat_enabled(enabled: bool) -> void:
 	if _state == State.DEAD:
 		return
-	combat_enabled = enabled
+	super.set_combat_enabled(enabled)
 	nav_agent.avoidance_enabled = enabled
 	if enabled:
 		return

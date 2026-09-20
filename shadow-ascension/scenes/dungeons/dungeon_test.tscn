@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_controller.gd" id="1_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/basic_melee_enemy.tscn" id="6_enemy"]
 [ext_resource type="PackedScene" path="res://scenes/ui/scene_transition.tscn" id="7_trans"]
 [ext_resource type="PackedScene" path="res://scenes/dungeons/components/dungeon_exit.tscn" id="8_exit"]
+[ext_resource type="PackedScene" path="res://scenes/ui/boss_health_bar.tscn" id="9_bossui"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -210,6 +211,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 2)
 [node name="DungeonExit" parent="." instance=ExtResource("8_exit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -65)
 
+[node name="BossHealthBar" parent="." instance=ExtResource("9_bossui")]
+
 [node name="SceneTransition" parent="." instance=ExtResource("7_trans")]
 
 [node name="DungeonUI" type="CanvasLayer" parent="."]
@@ -220,7 +223,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 40
 text = "DUNGEON COMPLETE"
 
 [editable path="Rooms/CombatRoom2"]

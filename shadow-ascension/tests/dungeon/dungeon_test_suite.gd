@@ -123,7 +123,7 @@ func _dungeon_tests() -> void:
 	_record(all_parked, "7) every room's enemies start dormant")
 
 	# 26) dormant enemies really do nothing: park the player right next to one
-	var r1_enemy: BasicMeleeEnemy = _room1.get_enemies()[0]
+	var r1_enemy: BasicMeleeEnemy = _room1.get_enemies()[0] as BasicMeleeEnemy
 	var enemy_pos: Vector3 = r1_enemy.global_position
 	_player.global_position = enemy_pos + Vector3(1.2, 0, 0)
 	var hp_before: float = _player.health_component.current_health
@@ -166,7 +166,7 @@ func _dungeon_tests() -> void:
 	_record(later_parked, "27) rooms 2 and boss stay dormant while room 1 fights")
 
 	# 11/30) player combat inside the dungeon
-	var target: BasicMeleeEnemy = _room1.get_enemies()[0]
+	var target: BasicMeleeEnemy = _room1.get_enemies()[0] as BasicMeleeEnemy
 	_player.global_position = target.global_position + Vector3(0, 0, 1.4)
 	_player.camera_rig.rotation.y = 0.0
 	_player.visual_root.rotation.y = 0.0
@@ -227,7 +227,7 @@ func _dungeon_tests() -> void:
 	_record(_room2.get_script() == _room1.get_script(), "17) room 2 runs the same RoomController script")
 	_player.global_position = ROOM2_TRIGGER
 	await _wait(0.4)
-	var r2_enemies: Array[BasicMeleeEnemy] = _room2.get_enemies()
+	var r2_enemies: Array[RoomCombatant] = _room2.get_enemies()
 	var r2_live: bool = r2_enemies.size() == 3
 	for enemy in r2_enemies:
 		if not enemy.combat_enabled:
@@ -261,10 +261,10 @@ func _dungeon_tests() -> void:
 	_record(boss_active and boss_enemy_live, "21) boss room activates (state=%d enemy_live=%s)" % [
 		_boss.get_state(), boss_enemy_live])
 
-	var boss_enemy: BasicMeleeEnemy = _boss.get_enemies()[0]
+	var boss_enemy: RoomCombatant = _boss.get_enemies()[0]
 	boss_enemy.hurtbox.receive_hit(1000.0, null)
 	await _wait(0.5)
-	_record(boss_enemy._state == BasicMeleeEnemy.State.DEAD, "22) placeholder boss enemy can be killed")
+	_record(boss_enemy.health_component.is_dead, "22) the boss-room occupant can be killed")
 	_record(_boss.is_cleared() and not _boss.exit_door.is_locked(), "23) boss room clears and opens")
 	_record(_dungeon.get_state() == DungeonController.DungeonState.COMPLETED and _completed_count == 1,
 		"24) dungeon reaches COMPLETED exactly once (state=%d signals=%d)" % [
