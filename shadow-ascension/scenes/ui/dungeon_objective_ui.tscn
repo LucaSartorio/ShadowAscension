@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dungeon_objective_ui.gd" id="1_obj"]
+
+[node name="DungeonObjectiveUI" type="CanvasLayer"]
+layer = 55
+script = ExtResource("1_obj")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="ObjectiveLabel" type="Label" parent="Root"]
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 520.0
+offset_bottom = 48.0
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 20
+text = "Avanza nel dungeon"

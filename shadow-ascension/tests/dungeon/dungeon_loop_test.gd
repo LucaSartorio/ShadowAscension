@@ -155,8 +155,9 @@ func _full_dungeon_loop() -> void:
 	# 17) prompt on entry
 	player.global_position = EXIT_POS
 	await _wait(0.4)
-	_record(exit_portal.is_player_in_range() and exit_portal.prompt.visible,
-		"17) standing in the live exit shows the prompt")
+	var ui: InteractionPrompt = dungeon.get_node("InteractionPrompt")
+	_record(exit_portal.is_player_in_range() and ui.is_showing() and ui.get_text() == exit_portal.prompt_text,
+		"17) standing in the live exit shows the prompt ('%s')" % ui.get_text())
 
 	# 18) one transition only, spam-safe
 	var first_exit: bool = exit_portal.activate()
@@ -209,16 +210,21 @@ func _fresh_run_state() -> void:
 	var enemies: int = 0
 	var rooms_idle: bool = true
 	var doors_locked: bool = true
-	for room in dungeon.get_rooms():
+	var rooms: Array[RoomController] = dungeon.get_rooms()
+	for i in rooms.size():
+		var room: RoomController = rooms[i]
 		enemies += room.get_enemies().size()
 		if room.get_state() != RoomController.RoomState.IDLE:
 			rooms_idle = false
-		if not room.exit_door.is_locked():
+		# The last room's door sits in its entrance, so it starts open and seals
+		# behind the player instead.
+		var should_be_locked: bool = i < rooms.size() - 1
+		if room.exit_door.is_locked() != should_be_locked:
 			doors_locked = false
 	_record(enemies == 6, "24) every enemy is back in the new run (%d)" % enemies)
 	_record(rooms_idle, "25) every room is back to IDLE")
 	_record(doors_locked and not dungeon.exit_portal.is_enabled(),
-		"26) combat doors start locked and the exit starts dead")
+		"26) combat doors start locked, the boss entrance starts open, the exit starts dead")
 	await _clear_scene(dungeon)
 
 

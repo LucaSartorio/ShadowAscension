@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_door.gd" id="1_door"]
 
@@ -10,6 +10,15 @@ size = Vector3(4, 3, 0.5)
 
 [sub_resource type="StandardMaterial3D" id="door_mat"]
 albedo_color = Color(0.75, 0.2, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="marker_mesh"]
+size = Vector3(0.7, 0.7, 0.7)
+
+[sub_resource type="StandardMaterial3D" id="marker_mat"]
+albedo_color = Color(0.35, 1, 0.6, 1)
+emission_enabled = true
+emission = Color(0.3, 1, 0.55, 1)
+emission_energy_multiplier = 2.5
 
 [node name="DungeonDoor" type="Node3D"]
 script = ExtResource("1_door")
@@ -28,3 +37,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 [node name="MeshInstance3D" type="MeshInstance3D" parent="VisualRoot"]
 mesh = SubResource("door_mesh")
 surface_material_override/0 = SubResource("door_mat")
+
+[node name="OpenMarker" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0.7071, 0, -0.7071, 0.7071, 0, 0, 0, 1, 0, 3.9, 0)
+mesh = SubResource("marker_mesh")
+material_override = SubResource("marker_mat")
+visible = false

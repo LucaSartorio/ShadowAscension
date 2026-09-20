@@ -137,3 +137,4 @@ shape = SubResource("trigger_shape")
 
 [node name="ExitDoor" parent="." instance=ExtResource("2_door")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 9)
+start_locked = false

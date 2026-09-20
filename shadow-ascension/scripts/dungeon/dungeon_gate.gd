@@ -10,7 +10,8 @@ extends Area3D
 signal gate_activated(target_scene: String)
 
 @export_file("*.tscn") var target_scene: String = "res://scenes/dungeons/dungeon_test.tscn"
-@export var prompt_text: String = "Press E to enter Gate"
+@export var prompt_text: String = "Entra nel Gate"
+@export var interact_key_label: String = "E"
 ## When false the gate only announces itself through gate_activated and leaves
 ## the scene change to whoever is listening.
 @export var change_scene_on_activate: bool = true
@@ -38,16 +39,14 @@ func _on_body_entered(body: Node3D) -> void:
 	if _used or not body.is_in_group("player"):
 		return
 	_player_in_range = true
-	if prompt != null:
-		prompt.visible = true
+	InteractionPrompt.raise(self, interact_key_label, prompt_text, prompt)
 
 
 func _on_body_exited(body: Node3D) -> void:
 	if not body.is_in_group("player"):
 		return
 	_player_in_range = false
-	if prompt != null:
-		prompt.visible = false
+	InteractionPrompt.clear(self, prompt)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -66,8 +65,7 @@ func activate() -> bool:
 	if transition != null and transition.is_busy():
 		return false
 	_used = true
-	if prompt != null:
-		prompt.visible = false
+	InteractionPrompt.clear(self, prompt)
 	gate_activated.emit(target_scene)
 	if not change_scene_on_activate:
 		return true

@@ -16,10 +16,14 @@ signal lock_state_changed(is_locked: bool)
 @onready var blocker_collision: CollisionShape3D = $Blocker/CollisionShape3D
 @onready var visual_root: Node3D = $VisualRoot
 @onready var mesh_instance: MeshInstance3D = $VisualRoot/MeshInstance3D
+## Sits above the doorway, outside the slab that rises, so an opened door reads
+## as "go here" from across the room.
+@onready var open_marker: MeshInstance3D = $OpenMarker
 
 var _locked: bool = true
 var _closed_y: float = 0.0
 var _tween: Tween = null
+var _marker_tween: Tween = null
 var _material: StandardMaterial3D = null
 
 
@@ -52,6 +56,10 @@ func _apply_state(locked: bool, instant: bool) -> void:
 	blocker_collision.set_deferred("disabled", not locked)
 	if _material != null:
 		_material.albedo_color = locked_color if locked else unlocked_color
+		# An open door glows, so the way on is visible from a distance.
+		_material.emission_enabled = not locked
+		_material.emission = unlocked_color
+	_apply_marker(locked, instant)
 
 	var target_y: float = _closed_y if locked else _closed_y + open_height
 	if _tween != null and _tween.is_running():
@@ -63,3 +71,20 @@ func _apply_state(locked: bool, instant: bool) -> void:
 		_tween.tween_property(visual_root, "position:y", target_y, move_duration)
 
 	lock_state_changed.emit(_locked)
+
+
+func _apply_marker(locked: bool, instant: bool) -> void:
+	if open_marker == null:
+		return
+	if _marker_tween != null and _marker_tween.is_running():
+		_marker_tween.kill()
+	open_marker.visible = not locked
+	if locked:
+		return
+	open_marker.scale = Vector3.ONE
+	if instant:
+		return
+	# A slow bob, so the eye catches it without it being noisy.
+	_marker_tween = create_tween().set_loops()
+	_marker_tween.tween_property(open_marker, "position:y", 4.25, 0.9)
+	_marker_tween.tween_property(open_marker, "position:y", 3.9, 0.9)

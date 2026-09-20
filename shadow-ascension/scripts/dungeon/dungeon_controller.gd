@@ -9,6 +9,8 @@ extends Node3D
 signal dungeon_started
 signal dungeon_completed
 signal run_failed
+## Current objective text. The controller owns the wording; the UI only shows it.
+signal objective_changed(text: String)
 
 enum DungeonState { NOT_STARTED, IN_PROGRESS, COMPLETED, FAILED }
 
@@ -17,6 +19,16 @@ enum DungeonState { NOT_STARTED, IN_PROGRESS, COMPLETED, FAILED }
 ## How long the completion banner stays up. The exit portal stays live after it.
 @export var completion_message_duration: float = 1.8
 @export var death_restart_delay: float = 1.2
+
+@export_group("Objective text")
+@export var objective_advance: String = "Avanza nel dungeon"
+@export var objective_enemies_plural: String = "Elimina i nemici: %d rimasti"
+@export var objective_enemies_single: String = "Elimina i nemici: 1 rimasto"
+@export var objective_room_cleared: String = "Camera completata - Procedi"
+@export var objective_reach_boss: String = "Camera completata - Raggiungi la Boss Room"
+@export var objective_boss: String = "Sconfiggi il Boss"
+@export var objective_complete: String = "Dungeon completato"
+@export var objective_failed: String = "Sei morto"
 
 @onready var rooms_container: Node3D = $Rooms
 @onready var status_label: Label = $DungeonUI/StatusLabel
@@ -32,6 +44,7 @@ var _player: Player = null
 var _transition: SceneTransition = null
 var _status_tween: Tween = null
 var _restart_tween: Tween = null
+var _objective: String = ""
 
 
 func _ready() -> void:
@@ -39,11 +52,13 @@ func _ready() -> void:
 	for room in _rooms:
 		room.room_started.connect(_on_room_started)
 		room.room_cleared.connect(_on_room_cleared)
+		room.remaining_enemies_changed.connect(_on_remaining_enemies_changed)
 	if status_label != null:
 		status_label.visible = false
 	if exit_portal != null:
 		exit_portal.set_enabled(false)
 	_connect_player()
+	_set_objective(objective_advance)
 
 
 ## Room order is tree order under Rooms — no NodePath wiring to keep in sync.
@@ -90,14 +105,34 @@ func _on_room_started(room: RoomController) -> void:
 		dungeon_started.emit()
 
 
+func _on_remaining_enemies_changed(room: RoomController, remaining: int) -> void:
+	if _run_ended or room != _rooms[_current_index]:
+		return
+	if remaining <= 0:
+		return
+	# The last room is the boss: its count is not the useful thing to say.
+	if room == _rooms.back():
+		_set_objective(objective_boss)
+	elif remaining == 1:
+		_set_objective(objective_enemies_single)
+	else:
+		_set_objective(objective_enemies_plural % remaining)
+
+
 func _on_room_cleared(room: RoomController) -> void:
-	if _run_ended or room != _rooms.back():
+	if _run_ended:
+		return
+	if room != _rooms.back():
+		# Name the boss room explicitly once it is the next thing along.
+		var index: int = _rooms.find(room)
+		_set_objective(objective_reach_boss if index == _rooms.size() - 2 else objective_room_cleared)
 		return
 	_run_ended = true
 	_state = DungeonState.COMPLETED
 	if exit_portal != null:
 		exit_portal.set_enabled(true)
 	print("[Dungeon] " + completion_message)
+	_set_objective(objective_complete)
 	dungeon_completed.emit()
 	_show_status(completion_message, completion_message_duration)
 
@@ -114,6 +149,7 @@ func _on_player_died() -> void:
 	if exit_portal != null:
 		exit_portal.set_enabled(false)
 	print("[Dungeon] " + death_message)
+	_set_objective(objective_failed)
 	run_failed.emit()
 	_show_status(death_message, 0.0)
 	_restart_after_delay()
@@ -156,6 +192,17 @@ func _show_status(message: String, hold: float) -> void:
 func _hide_status() -> void:
 	if status_label != null:
 		status_label.visible = false
+
+
+func get_objective() -> String:
+	return _objective
+
+
+func _set_objective(text: String) -> void:
+	if _objective == text:
+		return
+	_objective = text
+	objective_changed.emit(text)
 
 
 func _get_transition() -> SceneTransition:

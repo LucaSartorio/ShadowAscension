@@ -9,6 +9,8 @@ extends Node3D
 
 signal room_started(room: RoomController)
 signal room_cleared(room: RoomController)
+## Fired on arming and on every death, so the UI never has to poll.
+signal remaining_enemies_changed(room: RoomController, remaining: int)
 
 enum RoomState { IDLE, ACTIVE, CLEARED }
 
@@ -39,7 +41,9 @@ func _ready() -> void:
 		enemy.set_combat_enabled(false)
 		enemy.enemy_died.connect(_on_enemy_died)
 	_alive = _enemies.size()
-	exit_door.lock()
+	# The door keeps whatever start_locked says. A room whose door sits in its
+	# entrance (the boss room) must start open, or nobody can walk in; it still
+	# locks on _start(), sealing behind the player.
 	entry_trigger.body_entered.connect(_on_entry_body_entered)
 
 
@@ -63,6 +67,10 @@ func is_cleared() -> bool:
 
 func get_enemies() -> Array[RoomCombatant]:
 	return _enemies
+
+
+func get_remaining_enemies() -> int:
+	return _alive
 
 
 ## Halts the room for good: it can no longer arm, and nothing in it stays awake.
@@ -89,6 +97,7 @@ func _start() -> void:
 	for enemy in _enemies:
 		enemy.set_combat_enabled(true)
 	room_started.emit(self)
+	remaining_enemies_changed.emit(self, _alive)
 	if _alive == 0:
 		_clear()
 
@@ -97,6 +106,7 @@ func _on_enemy_died(_combatant: RoomCombatant) -> void:
 	_alive = maxi(0, _alive - 1)
 	if _state != RoomState.ACTIVE:
 		return
+	remaining_enemies_changed.emit(self, _alive)
 	if _alive == 0:
 		_clear()
 

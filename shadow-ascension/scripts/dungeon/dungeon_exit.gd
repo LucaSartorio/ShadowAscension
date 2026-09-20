@@ -7,7 +7,8 @@ extends Area3D
 signal exit_activated(target_scene: String)
 
 @export_file("*.tscn") var target_scene: String = "res://scenes/core/test_world.tscn"
-@export var prompt_text: String = "Press E to leave Dungeon"
+@export var prompt_text: String = "Esci dal Dungeon"
+@export var interact_key_label: String = "E"
 @export var disabled_color: Color = Color(0.2, 0.22, 0.25)
 @export var enabled_color: Color = Color(0.3, 0.9, 0.55)
 @export var enable_tween_duration: float = 0.5
@@ -57,9 +58,9 @@ func _apply_enabled(value: bool, instant: bool) -> void:
 	monitoring = value
 	collision.set_deferred("disabled", not value)
 	if not value:
+		# A dead portal must never leave a prompt on screen.
 		_player_in_range = false
-		if prompt != null:
-			prompt.visible = false
+		InteractionPrompt.clear(self, prompt)
 	if _material != null:
 		_material.albedo_color = enabled_color if value else disabled_color
 		_material.emission_enabled = value
@@ -76,16 +77,14 @@ func _on_body_entered(body: Node3D) -> void:
 	if not _enabled or not body.is_in_group("player"):
 		return
 	_player_in_range = true
-	if prompt != null:
-		prompt.visible = true
+	InteractionPrompt.raise(self, interact_key_label, prompt_text, prompt)
 
 
 func _on_body_exited(body: Node3D) -> void:
 	if not body.is_in_group("player"):
 		return
 	_player_in_range = false
-	if prompt != null:
-		prompt.visible = false
+	InteractionPrompt.clear(self, prompt)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -104,8 +103,7 @@ func activate() -> bool:
 	if transition != null and transition.is_busy():
 		return false
 	_used = true
-	if prompt != null:
-		prompt.visible = false
+	InteractionPrompt.clear(self, prompt)
 	exit_activated.emit(target_scene)
 	if transition != null:
 		transition.transition_to_scene(target_scene)

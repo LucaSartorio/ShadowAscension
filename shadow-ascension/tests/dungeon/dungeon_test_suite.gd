@@ -65,7 +65,8 @@ func _gate_tests() -> void:
 	gate.gate_activated.connect(func(target: String) -> void: activations.append(target))
 
 	_record(player != null and gate != null, "1) test_world instantiates with player and gate")
-	_record(gate.visible and gate.prompt != null and not gate.prompt.visible,
+	var ui_idle: InteractionPrompt = get_tree().get_first_node_in_group(InteractionPrompt.GROUP) as InteractionPrompt
+	_record(gate.visible and ui_idle != null and not ui_idle.is_showing(),
 		"2) gate is visible, prompt hidden until the player is close")
 
 	# far away: interacting must do nothing
@@ -79,8 +80,10 @@ func _gate_tests() -> void:
 	player.global_position = gate.global_position + Vector3(0, 0.1, 0)
 	await _wait(0.3)
 	var in_range: bool = gate.is_player_in_range()
-	var prompt_shown: bool = gate.prompt.visible
-	_record(in_range and prompt_shown, "4) player inside the gate area (in_range=%s prompt=%s)" % [in_range, prompt_shown])
+	var ui: InteractionPrompt = get_tree().get_first_node_in_group(InteractionPrompt.GROUP) as InteractionPrompt
+	var prompt_shown: bool = ui != null and ui.is_showing() and ui.get_text() == gate.prompt_text
+	_record(in_range and prompt_shown, "4) player inside the gate area shows the prompt (in_range=%s prompt='%s')" % [
+		in_range, ui.get_text() if ui != null else "<no ui>"])
 
 	var near_result: bool = gate.activate()
 	var target_ok: bool = activations.size() == 1 and activations[0] == "res://scenes/dungeons/dungeon_test.tscn"

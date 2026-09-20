@@ -27,6 +27,10 @@ M5.1 deliverable status (verified by `boss_test.tscn` 33/33 and the real-scene-c
 
 Next iteration: **M5.2 — Boss Phase 2 and Encounter Polish**.
 
+A fix + UX pass landed between M5.1 and M5.2, before any further boss work: the boss room was
+physically unreachable, and the dungeon gave the player no contextual guidance. Both are fixed —
+see the entry under In Progress.
+
 ---
 
 ## Done
@@ -501,6 +505,47 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
       loop 34/34, boss 33/33, real flow 32/32 — **197/197**. `--check-only` clean; `Main.tscn` and
       `dungeon_test.tscn` each 600 verbose frames with zero ERROR / WARNING / Failed / Parse Error /
       SCRIPT ERROR and no leaked instances.
+- **Dungeon fix + UX polish** (between M5.1 and M5.2):
+    - **Blocking bug: the boss room was sealed shut.** `RoomController._ready()` called
+      `exit_door.lock()` unconditionally, and the boss room's door sits in its *entrance* — placed
+      there in M4.1 so it would seal behind the player. It sealed at load instead, walling the room
+      off before the player could arrive. Reproduced by physically walking the body down the
+      dungeon: it stopped at `z = -49.35`, blocked by `ExitDoor/Blocker` at `z = -49.75`, with both
+      combat rooms cleared and their doors open behind it.
+    - Why no test caught it: every dungeon test *teleported* the player to the boss trigger at
+      `z = -53`, past the doorway. State transitions were all correct; nobody had ever walked the
+      floor. Fixed by letting each door's own `start_locked` decide its initial state (the boss
+      room's now starts open) and adding `dungeon_traversal_test.tscn`, which drives the body with
+      `move_and_slide` end to end instead of teleporting.
+    - `InteractionPrompt` (`scripts/ui/interaction_prompt.gd`) — bottom-centre contextual strip,
+      `[E]` keycap tinted apart from the label. One per scene, found through a group, so it dies
+      with the scene and cannot leave a stale prompt after a transition. Prompts are owned: only the
+      node that raised one may clear it, so two overlapping interactables cannot blank each other.
+      `DungeonGate` and `DungeonExit` use it; their world `Label3D` remains as a fallback for a
+      scene without the UI. The static `raise()`/`clear()` helpers keep that fallback rule in one
+      place rather than duplicated in each interactable.
+    - `DungeonObjectiveUI` (`scripts/ui/dungeon_objective_ui.gd`) — top-left objective line. It is
+      pure display: `DungeonController` owns the wording and emits `objective_changed`. Not a quest
+      system. Text runs "Avanza nel dungeon" → "Elimina i nemici: N rimasti" (singular at 1) →
+      "Camera completata - Procedi" → "Camera completata - Raggiungi la Boss Room" → "Sconfiggi il
+      Boss" → "Dungeon completato", with "Sei morto" on a failed run.
+    - `RoomController.remaining_enemies_changed(room, remaining)` — emitted on arming and on each
+      death, so the UI never polls. No manager was introduced.
+    - Door feedback: an unlocked door now also glows and raises a bobbing marker above the doorway,
+      so the way on is readable across a room. Locked doors are unchanged — closed, red, collider
+      live. Doors that open automatically on a room clear still do so; nothing became a manual
+      interaction.
+    - Automated validation `res://tests/dungeon/dungeon_traversal_test.tscn` — **36/36 PASS**:
+      the gate prompt appearing, hiding and clearing on use; prompt ownership; walking the start
+      room, both combat rooms and the corridors on foot; the enemy counter and every objective
+      string; each door's collider actually going away; the corridor to the boss room being clear;
+      the boss room arming on arrival; backtracking through cleared rooms without re-arming them;
+      the boss room's seal holding mid-fight; and the exit prompt once the run is done.
+    - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
+      loop 34/34, traversal 36/36, boss 33/33, real two-run flow 32/32 — **233/233**. Three
+      pre-existing assertions were updated to the new intended behavior: the gate and exit prompts
+      now assert the on-screen UI rather than the world label, and the boss room's door is expected
+      to start open.
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
