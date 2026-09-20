@@ -37,6 +37,8 @@ func _run_tests() -> void:
 	await _test_returns_to_chase_when_player_leaves_range()
 	await _test_single_hit_per_player_swing()
 	await _test_hit_feedback()
+	await _test_enemy_is_resource_driven()
+	await _test_death_drop_hook()
 	print("[SUMMARY] passed=%d failed=%d" % [_pass, _fail])
 	get_tree().quit()
 
@@ -411,3 +413,41 @@ func _test_hit_feedback() -> void:
 	var restored: bool = absf(_enemy.mesh_instance.scale.y - 1.0) < 0.02
 	_record(squashed and restored, "20) hit feedback plays and settles (squash_y=%.3f restored=%s)" % [squash_y, restored])
 	await _wait(0.3)
+
+
+func _test_enemy_is_resource_driven() -> void:
+	# M3 exit criterion: the concrete variant is instantiated from a Resource asset,
+	# not from values hardcoded on the node.
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 20))
+	var st: EnemyStats = _enemy.stats
+	var has_resource: bool = st != null
+	var from_asset: bool = has_resource and st.resource_path.begins_with("res://resources/enemies/")
+	var seeded: bool = has_resource and is_equal_approx(_enemy.attack_damage, st.attack_damage) \
+		and is_equal_approx(_enemy.detection_range, st.detection_range) \
+		and is_equal_approx(_enemy.attack_range, st.attack_range) \
+		and is_equal_approx(_enemy.health_component.max_health, st.max_health)
+	# instance fields must not write back into the shared definition
+	var before: float = st.detection_range if has_resource else 0.0
+	_enemy.detection_range = 99.0
+	var isolated: bool = has_resource and is_equal_approx(st.detection_range, before)
+	_enemy.detection_range = before
+	_record(has_resource and from_asset and seeded and isolated, "21) enemy is driven by an EnemyStats asset (path=%s seeded=%s isolated=%s)" % [
+		st.resource_path if has_resource else "<none>", seeded, isolated])
+
+
+func _test_death_drop_hook() -> void:
+	# Drop hook stub: loot / XP / shadow extraction will subscribe here later.
+	_reset_player()
+	_reset_enemy(Vector3(0, 0.1, 20))
+	var payloads: Array[Node] = []
+	var listener: Callable = func(enemy: BasicMeleeEnemy) -> void:
+		payloads.append(enemy)
+	_enemy.enemy_died.connect(listener)
+	_enemy.hurtbox.receive_hit(1000.0, self)
+	await _wait(0.2)
+	_enemy.enemy_died.disconnect(listener)
+	var once: bool = payloads.size() == 1
+	var correct_payload: bool = once and payloads[0] == _enemy
+	_record(once and correct_payload, "22) death emits the drop hook once with itself (emissions=%d payload_ok=%s)" % [
+		payloads.size(), correct_payload])

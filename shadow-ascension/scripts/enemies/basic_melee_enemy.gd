@@ -4,63 +4,62 @@ extends CharacterBody3D
 enum State { IDLE, CHASE, REPOSITION, ATTACK, DEAD }
 enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 
-@export var max_health: float = 100.0
+## Emitted once when this enemy dies. Drop hook: loot (M7), XP (M6) and shadow
+## extraction (M8) subscribe here. Nothing listens yet.
+signal enemy_died(enemy: BasicMeleeEnemy)
 
-@export_group("Movement")
-@export var movement_speed: float = 3.8
-@export var acceleration: float = 12.0
-@export var rotation_speed: float = 7.0
-@export var gravity: float = 20.0
+## Archetype tuning. Copied into the runtime fields below on _ready(); this
+## Resource is never written to at runtime.
+@export var stats: EnemyStats
 
-@export_group("Perception")
-@export var detection_range: float = 10.0
-@export var lose_target_range: float = 14.0
-## Grace period before a target outside lose_target_range is dropped, so a
-## momentary distance spike does not end the fight.
-@export var lose_target_delay: float = 1.0
-@export var eye_height: float = 1.2
-## Physics layers that block line of sight (world geometry only).
-@export_flags_3d_physics var line_of_sight_mask: int = 1
-
-@export_group("Combat Spacing")
-@export var attack_range: float = 1.8
-@export var preferred_combat_distance: float = 1.6
-@export var minimum_combat_distance: float = 1.15
-## Drives NavigationAgent3D.radius — the personal space honored by avoidance.
-@export var enemy_spacing_radius: float = 0.8
-## Per-instance bias of the approach bearing. Non-zero values make instances
-## converge on different points around the player instead of the same one.
+@export_group("Per-Instance")
+## Bias of the approach bearing. Non-zero values make instances converge on
+## different points around the player instead of the same one.
 @export_range(-180.0, 180.0) var combat_angle_offset_degrees: float = 0.0
-
-@export_group("Attack")
-@export var attack_damage: float = 15.0
-@export var attack_startup: float = 0.35
-@export var attack_active: float = 0.15
-@export var attack_recovery: float = 0.65
-@export var attack_cooldown: float = 0.4
 ## Deterministic per-instance desync so a group does not swing in unison.
 @export var initial_attack_delay: float = 0.0
 @export var attack_cooldown_variation: float = 0.0
-## An attack cannot start while the player is outside this cone.
-@export var max_attack_facing_angle: float = 25.0
-## Fraction of rotation_speed usable during STARTUP. Below 1.0 the swing can be
-## sidestepped instead of tracking the player perfectly.
-@export_range(0.0, 1.0) var attack_startup_turn_fraction: float = 0.3
 
-@export_group("Reposition")
-@export var reposition_timeout: float = 1.5
-## Blocks re-entry to REPOSITION after a timeout, preventing CHASE/REPOSITION ping-pong.
-@export var reposition_cooldown: float = 0.6
-@export var reposition_speed_fraction: float = 0.8
-@export var reposition_arrive_tolerance: float = 0.35
+# Runtime tuning, seeded from `stats` in _apply_stats(). These are instance
+# state: change them freely and the shared Resource stays untouched. The
+# literals are only the fallback for an enemy with no stats assigned.
+var max_health: float = 100.0
 
-@export_group("Telegraph")
-@export var telegraph_color: Color = Color(1.0, 0.85, 0.2)
-@export var active_color: Color = Color(1.0, 0.25, 0.15)
-@export var startup_scale: Vector3 = Vector3(0.88, 1.22, 0.88)
-@export var active_scale: Vector3 = Vector3(1.18, 0.9, 1.18)
+var movement_speed: float = 3.8
+var acceleration: float = 12.0
+var rotation_speed: float = 7.0
+var gravity: float = 20.0
 
-@export var target_update_interval: float = 0.2
+var detection_range: float = 10.0
+var lose_target_range: float = 14.0
+var lose_target_delay: float = 1.0
+var eye_height: float = 1.2
+var line_of_sight_mask: int = 1
+
+var attack_range: float = 1.8
+var preferred_combat_distance: float = 1.6
+var minimum_combat_distance: float = 1.15
+var enemy_spacing_radius: float = 0.8
+
+var attack_damage: float = 15.0
+var attack_startup: float = 0.35
+var attack_active: float = 0.15
+var attack_recovery: float = 0.65
+var attack_cooldown: float = 0.4
+var max_attack_facing_angle: float = 25.0
+var attack_startup_turn_fraction: float = 0.3
+
+var reposition_timeout: float = 1.5
+var reposition_cooldown: float = 0.6
+var reposition_speed_fraction: float = 0.8
+var reposition_arrive_tolerance: float = 0.35
+
+var telegraph_color: Color = Color(1.0, 0.85, 0.2)
+var active_color: Color = Color(1.0, 0.25, 0.15)
+var startup_scale: Vector3 = Vector3(0.88, 1.22, 0.88)
+var active_scale: Vector3 = Vector3(1.18, 0.9, 1.18)
+
+var target_update_interval: float = 0.2
 
 @onready var visual_root: Node3D = $VisualRoot
 @onready var mesh_instance: MeshInstance3D = $VisualRoot/MeshInstance3D
@@ -97,6 +96,7 @@ const AVOIDANCE_FALLBACK_FRAMES: int = 10
 
 
 func _ready() -> void:
+	_apply_stats()
 	health_component.max_health = max_health
 	_last_health = max_health
 	hitbox.damage = attack_damage
@@ -105,6 +105,49 @@ func _ready() -> void:
 	health_component.died.connect(_on_died)
 	_setup_navigation()
 	_setup_material()
+
+
+func _apply_stats() -> void:
+	if stats == null:
+		push_warning("%s has no EnemyStats assigned; falling back to script defaults." % name)
+		return
+	max_health = stats.max_health
+
+	movement_speed = stats.movement_speed
+	acceleration = stats.acceleration
+	rotation_speed = stats.rotation_speed
+	gravity = stats.gravity
+
+	detection_range = stats.detection_range
+	lose_target_range = stats.lose_target_range
+	lose_target_delay = stats.lose_target_delay
+	eye_height = stats.eye_height
+	line_of_sight_mask = stats.line_of_sight_mask
+
+	attack_range = stats.attack_range
+	preferred_combat_distance = stats.preferred_combat_distance
+	minimum_combat_distance = stats.minimum_combat_distance
+	enemy_spacing_radius = stats.enemy_spacing_radius
+
+	attack_damage = stats.attack_damage
+	attack_startup = stats.attack_startup
+	attack_active = stats.attack_active
+	attack_recovery = stats.attack_recovery
+	attack_cooldown = stats.attack_cooldown
+	max_attack_facing_angle = stats.max_attack_facing_angle
+	attack_startup_turn_fraction = stats.attack_startup_turn_fraction
+
+	reposition_timeout = stats.reposition_timeout
+	reposition_cooldown = stats.reposition_cooldown
+	reposition_speed_fraction = stats.reposition_speed_fraction
+	reposition_arrive_tolerance = stats.reposition_arrive_tolerance
+
+	telegraph_color = stats.telegraph_color
+	active_color = stats.active_color
+	startup_scale = stats.startup_scale
+	active_scale = stats.active_scale
+
+	target_update_interval = stats.target_update_interval
 
 
 func _setup_navigation() -> void:
@@ -512,3 +555,5 @@ func _on_died() -> void:
 	_reset_telegraph_instantly()
 	var t: Tween = create_tween()
 	t.tween_property(visual_root, "rotation:x", deg_to_rad(90.0), 0.4)
+
+	enemy_died.emit(self)

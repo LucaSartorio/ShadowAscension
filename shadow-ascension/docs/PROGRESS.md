@@ -6,81 +6,10 @@
 
 ## Current Milestone
 
-**M3 — Enemy Foundation** (In Progress)
+**M4 — Dungeon Foundation** (Not Started)
 
-First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (IDLE / CHASE / ATTACK / DEAD), player detection via distance + `player` group, chase via `NavigationAgent3D` with periodic target updates, telegraphed melee attack that flows through the existing `Hitbox` / `Hurtbox` / `HealthComponent` pipeline, hit-flash feedback, death state that disables body/hurtbox/hitbox and topples the visual. Test world updated with `NavigationRegion3D` + 3 concrete enemies + navigation-obstacle wall.
-
-M3.1 deliverable status (verified by the automated suite, not just written):
-
-- enemy base scene — implemented
-- basic state logic (IDLE / CHASE / ATTACK / DEAD enum) — implemented
-- detection (with `detection_range` / `lose_target_range` hysteresis) — implemented
-- navigation (`NavigationAgent3D` + baked `NavigationMesh`, obstacle detour confirmed) — implemented
-- chase — implemented
-- melee attack (STARTUP / ACTIVE / RECOVERY + cooldown) — implemented
-- player damage (via Hitbox -> Hurtbox -> HealthComponent) — implemented
-- hit reaction (visual squash only, no stagger) — implemented
-- death — implemented
-
-M3.2 deliverable status (verified by `enemy_polish_test.tscn`, 17/17):
-
-- local avoidance — implemented (NavigationAgent3D RVO, no second navigation system)
-- enemy spacing — implemented (`preferred`/`minimum_combat_distance` + `enemy_spacing_radius`)
-- reposition — implemented (`REPOSITION` state with timeout + re-entry block)
-- facing refinement — implemented (per-state turn rates, `max_attack_facing_angle` gate)
-- attack telegraph refinement — implemented (per-phase scale + albedo, per-instance material)
-- aggro refinement — implemented (`lose_target_delay`)
-- multi-enemy combat polish — implemented (per-instance approach angle + attack desync)
-
-### M3 final review (this pass)
-
-Behavior, stability and the M3.1 + M3.2 feature list all check out — see the verification list
-below. M3 is **NOT** closed, because one ROADMAP exit criterion and two deliverables are not met:
-
-| ROADMAP item | Status |
-|---|---|
-| Enemy base architecture, data-driven via `EnemyStats` Resource | **Missing** |
-| Idle / detection / chase / basic attack / damage reception | Met |
-| Death (drop hook stub only) | Death met, **drop hook stub missing** |
-| *Exit:* one enemy variant instantiated **from a Resource**, end to end | **Not met** |
-| *Exit:* Idle -> Detect -> Chase -> Attack -> Damaged -> Dead runs cleanly | Met |
-| *Exit:* multiple instances coexist without cross-talk or shared state | Met |
-| *Exit:* zero runtime errors in a 3+ enemy encounter | Met |
-
-The project currently contains **no `.tres` files at all**. `BasicMeleeEnemy` carries ~25 `@export`
-tuning values on the node instead. That also contradicts `CLAUDE.md` §7 ("Custom Resources under
-`resources/<domain>/` as `.tres`"; "No hardcoded stats in scripts once a value becomes configurable")
-and `ARCHITECTURE.md` §5. `AttackStep` exists as a Resource *script* but its instances are inline
-sub-resources inside `player.tscn`, not assets under `resources/`.
-
-Closing M3 therefore needs an `EnemyStats` Resource (`scripts/enemies/enemy_stats.gd` +
-`resources/enemies/*.tres`) that `BasicMeleeEnemy` reads its tuning from, and a no-op drop hook on
-death. Neither was implemented in this review pass, which was scoped to verification and bug fixes.
-
-M3 remains **In Progress** — parameters are also still playtest placeholders.
-
-**Verified in this review** (Godot 4.5.stable headless):
-- Parser: `--check-only` clean across every `.gd` in `scripts/` and `tests/`
-- Suites: combo 10/10, dodge 18/18, enemy 20/20, enemy polish 17/17 — **65/65**
-- `Main.tscn` 600 frames verbose: zero ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
-- 18s scripted encounter in `test_world` with the trio engaged, player attacking and dodging:
-  zero engine errors; states visited across instances covered CHASE, REPOSITION, ATTACK, DEAD;
-  player took enemy damage; all three died independently and settled
-- Cross-talk probes: per-instance body materials and `HealthComponent`s are distinct objects;
-  damaging one enemy left the other two at full health (65 / 100 / 100)
-- Dead enemy: `avoidance_enabled` false, hitbox inactive, body collision disabled
-- NavigationMesh: 53 verts / 50 polys, map active, 1 region; `EnemyBehindWall` -> Player resolves
-  to a 7-point path reaching |x| = 4.50 around a wall spanning x -4..4 (real detour)
-- Collision layers/masks re-read at runtime; 6 `BasicMeleeEnemy` instances in `test_world`
-
-**Known non-blocking observations** (not fixed, no profiling evidence to justify churn):
-- `_has_line_of_sight()` allocates a `PhysicsRayQueryParameters3D` and an exclude array per call.
-  It is reached only when an enemy is inside `attack_range`, correctly facing, off cooldown *and*
-  blocked, so it is not a hot path today; it would become per-frame in a fight fought through a
-  thin wall. Cache or throttle it if that ever shows up in a profile.
-- `_hit_flash()` starts a new tween per damage event, so a fast combo runs overlapping tweens on
-  `mesh_instance.scale`. Visual only; it settles correctly.
-- `Orphan StringName: servers` at shutdown is vanilla Godot engine noise, not project state.
+Next per `ROADMAP.md`: gate entry, dungeon scene container, start room, combat rooms populated
+from M3 enemies, boss room placeholder, room transitions. Nothing implemented yet.
 
 ---
 
@@ -143,34 +72,57 @@ M3 remains **In Progress** — parameters are also still playtest placeholders.
         - Player AttackHitbox: layer 8, mask 16. Dummy Hurtbox: layer 16, mask 0. Player Hurtbox: layer 64, mask 0. Debug damage zone: layer 32, mask 64.
     - Debug damage zone in `test_world.tscn` — Area3D + `tests/combat/debug_damage_zone.gd`, ticks damage every 0.5s on overlapping Hurtboxes, layer 32 mask 64, clearly marked as prototype/test object; only damages Player (not dummies)
     - `_unhandled_input` on Player consumes the `dodge` action and calls `_on_dodge_pressed`
-- Automated headless validation:
-    - **Combo test** `res://tests/combat/attack_test.tscn` — 10/10 PASS (single click, chained combo, spam bounding, reset time, per-swing dedup, out-of-range, multi-target, orientation)
-    - **Dodge test** `res://tests/combat/dodge_test.tscn` — 18/18 PASS:
-        1. W+Space → forward dodge direction
-        2. W+D diagonal → normalized dodge direction
-        3. Space with no input → backstep along `+VisualRoot.z`
-        4. Direction latched mid-dodge (changing input mid-dodge has no effect)
-        5. Dodge blocked by wall (`move_and_slide` collision honored)
-        6. Second dodge during current dodge is blocked (direction unchanged)
-        7. Cooldown: mid-cooldown blocked, past-cooldown allowed
-        8. i-frame timing: false before 0.06, true in [0.06, 0.24), false after
-        9. Damage ignored during i-frames
-        10. Damage applied outside i-frames (25 damage → 100 → 75)
-        11. Attack 1 not cancelable during Startup / Active
-        12. Attack 1 cancelable during Recovery (fraction 0.0)
-        13. Attack 2 cancel window (blocked early, allowed after 35% of recovery)
-        14. Attack 3 cancel window (blocked early, allowed after 60% of recovery)
-        15. `attack_hitbox.is_active()` and `.monitoring` both false after cancel
-        16. `_queued_next` cleared and `_combo_index` reset to 0 on dodge cancel
-        17. `_combo_index == 0` after dodge + cooldown (next attack starts at Attack 1)
-        18. Spam Space (20 rapid calls) leaves player state valid; subsequent single dodge works
-    - `godot --headless --verbose --path . --quit-after 180` on `Main.tscn` — no ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
+- **M3 — Enemy Foundation** (Completed). Exit criteria verified:
+    - *One concrete enemy variant instantiated from a Resource works end-to-end* — `BasicMeleeEnemy`
+      reads its tuning from `resources/enemies/basic_melee_enemy_stats.tres` (`EnemyStats`, defined in
+      `scripts/enemies/enemy_stats.gd`). Enemy test #21 asserts the asset is wired, that the runtime
+      fields are seeded from it, and that writing an instance field does not mutate the shared
+      definition.
+    - *Transitions Idle → Detect → Chase → Attack → (Damaged) → Dead run cleanly* — enemy suite 22/22
+      plus an 18s scripted encounter that covered CHASE, REPOSITION, ATTACK and DEAD across instances.
+    - *Multiple enemy instances coexist without cross-talk or shared-state bugs* — per-instance body
+      materials and `HealthComponent`s confirmed distinct objects; damaging one enemy left the other
+      two at full health (65 / 100 / 100).
+    - *Zero runtime errors during a combat encounter with 3+ enemies* — 18s encounter with three
+      engaged enemies, zero engine errors; `Main.tscn` 600 frames clean.
+    - Deliverables: enemy base architecture data-driven via `EnemyStats`; idle; player detection;
+      chase; basic attack; damage reception through the M2 pipeline; death with a drop hook stub
+      (`enemy_died` signal carrying the enemy — nothing subscribes yet, loot lands in M7).
+    - Architecture: the Resource is a definition, never runtime state. The enemy copies its values
+      into its own fields on `_ready()`, so debug tweaks and future buffs mutate the instance and the
+      shared `.tres` stays untouched. Only genuinely per-instance values stay `@export` on the node:
+      `combat_angle_offset_degrees`, `initial_attack_delay`, `attack_cooldown_variation`.
+    - Final validation: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17 — **67/67**;
+      `--check-only` clean across `scripts/` and `tests/`; `Main.tscn` 600 frames zero ERROR /
+      WARNING / Failed / Parse Error / SCRIPT ERROR.
+    - Known non-blocking observations, left unfixed for want of profiling evidence:
+      `_has_line_of_sight()` allocates per call on the paths that reach it (only when an enemy is in
+      range, facing, off cooldown *and* blocked); `_hit_flash()` tweens overlap during a fast combo,
+      visual only. `Orphan StringName: servers` at shutdown is vanilla engine noise.
+First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (IDLE / CHASE / ATTACK / DEAD), player detection via distance + `player` group, chase via `NavigationAgent3D` with periodic target updates, telegraphed melee attack that flows through the existing `Hitbox` / `Hurtbox` / `HealthComponent` pipeline, hit-flash feedback, death state that disables body/hurtbox/hitbox and topples the visual. Test world updated with `NavigationRegion3D` + 3 concrete enemies + navigation-obstacle wall.
 
----
+    M3.1 deliverable status:
 
-## In Progress
+- enemy base scene — implemented
+- basic state logic (IDLE / CHASE / ATTACK / DEAD enum) — implemented
+- detection (with `detection_range` / `lose_target_range` hysteresis) — implemented
+- navigation (`NavigationAgent3D` + baked `NavigationMesh`, obstacle detour confirmed) — implemented
+- chase — implemented
+- melee attack (STARTUP / ACTIVE / RECOVERY + cooldown) — implemented
+- player damage (via Hitbox -> Hurtbox -> HealthComponent) — implemented
+- hit reaction (visual squash only, no stagger) — implemented
+- death — implemented
 
-- **M3 — Enemy Foundation** (In Progress). Implemented:
+    M3.2 deliverable status (verified by `enemy_polish_test.tscn`, 17/17):
+
+- local avoidance — implemented (NavigationAgent3D RVO, no second navigation system)
+- enemy spacing — implemented (`preferred`/`minimum_combat_distance` + `enemy_spacing_radius`)
+- reposition — implemented (`REPOSITION` state with timeout + re-entry block)
+- facing refinement — implemented (per-state turn rates, `max_attack_facing_angle` gate)
+- attack telegraph refinement — implemented (per-phase scale + albedo, per-instance material)
+- aggro refinement — implemented (`lose_target_delay`)
+- multi-enemy combat polish — implemented (per-instance approach angle + attack desync)
+- **M3 progress — Enemy Foundation, M3.1 Basic Melee Enemy**:
     - `scripts/enemies/basic_melee_enemy.gd` (`class_name BasicMeleeEnemy`) — local enum state machine `State { IDLE, CHASE, ATTACK, DEAD }` and `AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }`. No generic StateMachine framework; no `EnemyManager` / `AIManager` singleton.
     - `scenes/enemies/basic_melee_enemy.tscn` — `CharacterBody3D` root + `CollisionShape3D` + `VisualRoot` (mesh + `AttackOrigin` + `Hitbox`) + `NavigationAgent3D` + `HealthComponent` + `Hurtbox`. All combat components reused from M2 (no duplication).
     - Player detection: `distance_to(player.global_position) < detection_range`; Player added to group `player`; enemy caches the reference lazily via `get_tree().get_first_node_in_group("player")` — no per-frame tree scan.
@@ -297,6 +249,33 @@ M3 remains **In Progress** — parameters are also still playtest placeholders.
       `lose_target_delay` and additionally asserts the target is *held* during the grace period.
     - Regression: combo 10/10, dodge 18/18, `Main.tscn` 360 frames zero ERROR / WARNING / Failed /
       Parse Error / SCRIPT ERROR, `--check-only` clean across `scripts/` and `tests/`.
+- Automated headless validation:
+    - **Combo test** `res://tests/combat/attack_test.tscn` — 10/10 PASS (single click, chained combo, spam bounding, reset time, per-swing dedup, out-of-range, multi-target, orientation)
+    - **Dodge test** `res://tests/combat/dodge_test.tscn` — 18/18 PASS:
+        1. W+Space → forward dodge direction
+        2. W+D diagonal → normalized dodge direction
+        3. Space with no input → backstep along `+VisualRoot.z`
+        4. Direction latched mid-dodge (changing input mid-dodge has no effect)
+        5. Dodge blocked by wall (`move_and_slide` collision honored)
+        6. Second dodge during current dodge is blocked (direction unchanged)
+        7. Cooldown: mid-cooldown blocked, past-cooldown allowed
+        8. i-frame timing: false before 0.06, true in [0.06, 0.24), false after
+        9. Damage ignored during i-frames
+        10. Damage applied outside i-frames (25 damage → 100 → 75)
+        11. Attack 1 not cancelable during Startup / Active
+        12. Attack 1 cancelable during Recovery (fraction 0.0)
+        13. Attack 2 cancel window (blocked early, allowed after 35% of recovery)
+        14. Attack 3 cancel window (blocked early, allowed after 60% of recovery)
+        15. `attack_hitbox.is_active()` and `.monitoring` both false after cancel
+        16. `_queued_next` cleared and `_combo_index` reset to 0 on dodge cancel
+        17. `_combo_index == 0` after dodge + cooldown (next attack starts at Attack 1)
+        18. Spam Space (20 rapid calls) leaves player state valid; subsequent single dodge works
+    - `godot --headless --verbose --path . --quit-after 180` on `Main.tscn` — no ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
+
+---
+
+## In Progress
+
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
@@ -313,13 +292,10 @@ M3 remains **In Progress** — parameters are also still playtest placeholders.
 - Complete `ARCHITECTURE.md` (fill out as systems land)
 - Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
 - Player-side death reaction (input lockout, visual state) — polish, deferred
-- Playtest-tune M3 enemy parameters (detection ranges, attack timings, damage, speed)
-- **Blocking M3 closure:** `EnemyStats` Resource (`scripts/enemies/enemy_stats.gd` +
-  `resources/enemies/*.tres`) driving `BasicMeleeEnemy` tuning, replacing the ~25 node-level
-  `@export`s — required by the M3 exit criteria, `CLAUDE.md` §7 and `ARCHITECTURE.md` §5
-- **Blocking M3 closure:** no-op drop hook on enemy death (stub only, no loot)
-- Optional M3 polish: enemy variants, more expressive telegraph
-- Close M3, then start M4 — Dungeon Foundation
+- Playtest-tune M3 enemy parameters — now edited in `resources/enemies/basic_melee_enemy_stats.tres`, not in code
+- Start M4 — Dungeon Foundation (gate entry, dungeon container, rooms, transitions)
+- Optional M3 polish, non-blocking: additional enemy archetypes as new `EnemyStats` assets,
+  more expressive telegraph
 
 ---
 

@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="EnemyStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_stats.gd" id="1_stats"]
+
+[resource]
+script = ExtResource("1_stats")
+max_health = 100.0
+movement_speed = 3.8
+acceleration = 12.0
+rotation_speed = 7.0
+gravity = 20.0
+detection_range = 10.0
+lose_target_range = 14.0
+lose_target_delay = 1.0
+eye_height = 1.2
+line_of_sight_mask = 1
+attack_range = 1.8
+preferred_combat_distance = 1.6
+minimum_combat_distance = 1.15
+enemy_spacing_radius = 0.8
+attack_damage = 15.0
+attack_startup = 0.35
+attack_active = 0.15
+attack_recovery = 0.65
+attack_cooldown = 0.4
+max_attack_facing_angle = 25.0
+attack_startup_turn_fraction = 0.3
+reposition_timeout = 1.5
+reposition_cooldown = 0.6
+reposition_speed_fraction = 0.8
+reposition_arrive_tolerance = 0.35
+telegraph_color = Color(1, 0.85, 0.2, 1)
+active_color = Color(1, 0.25, 0.15, 1)
+startup_scale = Vector3(0.88, 1.22, 0.88)
+active_scale = Vector3(1.18, 0.9, 1.18)
+target_update_interval = 0.2
