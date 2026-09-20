@@ -109,8 +109,8 @@ func _reset_boss_to_decide() -> void:
 
 func _activation_tests() -> void:
 	_record(_boss != null and _boss is DungeonBoss, "2) the boss room holds a DungeonBoss")
-	_record(not _boss.combat_enabled and _boss.get_state() == DungeonBoss.State.INTRO,
-		"3) boss is dormant before the player arrives (combat=%s state=%d)" % [
+	_record(not _boss.combat_enabled and _boss.get_state() == DungeonBoss.State.INACTIVE,
+		"3) boss is INACTIVE before the player arrives (combat=%s state=%d)" % [
 			_boss.combat_enabled, _boss.get_state()])
 	_record(not _bar.is_showing(), "6a) boss health bar hidden before the encounter")
 
@@ -135,6 +135,12 @@ func _activation_tests() -> void:
 	await _wait(0.4)
 	_record(_boss.combat_enabled and _boss_room.get_state() == RoomController.RoomState.ACTIVE,
 		"4) entering the boss room wakes the boss")
+	_record(_boss.get_state() == DungeonBoss.State.INTRO,
+		"4b) the wake goes INACTIVE -> INTRO (state=%d)" % _boss.get_state())
+	await _wait(_boss.intro_duration + 0.2)
+	_record(_boss.get_state() != DungeonBoss.State.INACTIVE
+			and _boss.get_state() != DungeonBoss.State.INTRO,
+		"4c) INTRO ends on its own and the encounter runs (state=%d)" % _boss.get_state())
 	_record(_boss_room.exit_door.is_locked(), "5) boss room door locks on entry")
 	_record(_bar.is_showing() and is_equal_approx(_bar.get_ratio(), 1.0),
 		"6) boss health bar appears full (ratio=%.2f)" % _bar.get_ratio())
@@ -142,13 +148,27 @@ func _activation_tests() -> void:
 	# 7) chase: from across the room the boss should close in
 	_player.global_position = _boss.global_position + Vector3(0, 0, 7.0)
 	var start_dist: float = _boss.global_position.distance_to(_player.global_position)
-	await _wait(1.6)
+	var saw_chase: bool = false
+	var chase_elapsed: float = 0.0
+	while chase_elapsed < 1.6:
+		if _boss.get_state() == DungeonBoss.State.CHASE:
+			saw_chase = true
+		await get_tree().physics_frame
+		chase_elapsed += get_physics_process_delta_time()
 	var end_dist: float = _boss.global_position.distance_to(_player.global_position)
 	_record(start_dist - end_dist > 1.0, "7) boss closes distance (%.2f -> %.2f)" % [start_dist, end_dist])
+	_record(saw_chase, "7b) it does it in CHASE, not by drifting")
 
 	# 8) reposition: standing on top of it, the boss should back off, not stay glued
 	_player.global_position = _boss.global_position + Vector3(0, 0, 0.9)
-	await _wait(1.8)
+	var saw_reposition: bool = false
+	var rep_elapsed: float = 0.0
+	while rep_elapsed < 1.8:
+		if _boss.get_state() == DungeonBoss.State.REPOSITION:
+			saw_reposition = true
+		await get_tree().physics_frame
+		rep_elapsed += get_physics_process_delta_time()
+	_record(saw_reposition, "8b) it enters REPOSITION to do it")
 	var gap: float = _boss.global_position.distance_to(_player.global_position)
 	_record(gap >= _boss.minimum_combat_distance,
 		"8) boss repositions out of the player's lap (gap=%.2f >= %.2f)" % [gap, _boss.minimum_combat_distance])

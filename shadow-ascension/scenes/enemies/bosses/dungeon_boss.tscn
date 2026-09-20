@@ -96,7 +96,7 @@ mesh = SubResource("quick_mesh")
 material_override = SubResource("quick_mat")
 visible = false
 
-[node name="SweepHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
+[node name="WideSweepHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -1.2)
 collision_layer = 32
 collision_mask = 64
@@ -105,15 +105,15 @@ monitorable = true
 script = ExtResource("2_hitbox")
 damage = 30.0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigins/SweepHitbox"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigins/WideSweepHitbox"]
 shape = SubResource("sweep_shape")
 
-[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackOrigins/SweepHitbox"]
+[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackOrigins/WideSweepHitbox"]
 mesh = SubResource("sweep_mesh")
 material_override = SubResource("sweep_mat")
 visible = false
 
-[node name="SlamHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
+[node name="GroundSlamHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
 collision_layer = 32
 collision_mask = 64
@@ -122,10 +122,10 @@ monitorable = true
 script = ExtResource("2_hitbox")
 damage = 40.0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigins/SlamHitbox"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigins/GroundSlamHitbox"]
 shape = SubResource("slam_shape")
 
-[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackOrigins/SlamHitbox"]
+[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackOrigins/GroundSlamHitbox"]
 mesh = SubResource("slam_mesh")
 material_override = SubResource("slam_mat")
 visible = false

@@ -8,7 +8,7 @@ extends RoomCombatant
 ## Carries what a health bar needs without the boss knowing a UI exists.
 signal encounter_started(display_name: String, health: HealthComponent)
 
-enum State { INTRO, DECIDE, CHASE, REPOSITION, ATTACK, RECOVERY, DEAD }
+enum State { INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, RECOVERY, DEAD }
 enum AttackPhase { NONE, STARTUP, ACTIVE }
 
 const GROUP: StringName = &"boss"
@@ -52,7 +52,7 @@ var death_topple_duration: float = 1.2
 @onready var hurtbox_collision: CollisionShape3D = $Hurtbox/CollisionShape3D
 @onready var body_collision: CollisionShape3D = $CollisionShape3D
 
-var _state: State = State.INTRO
+var _state: State = State.INACTIVE
 var _attack_phase: AttackPhase = AttackPhase.NONE
 var _phase_timer: float = 0.0
 var _intro_timer: float = 0.0
@@ -88,6 +88,11 @@ func _ready() -> void:
 	_setup_material()
 	health_component.health_changed.connect(_on_health_changed)
 	health_component.died.connect(_on_died)
+	# A room parks the boss right after this, flipping it to INACTIVE. Without a
+	# room — a test bench, a sandbox scene — it starts its own encounter.
+	if combat_enabled:
+		_state = State.INTRO
+		_intro_timer = intro_duration
 
 
 func _apply_stats() -> void:
@@ -154,7 +159,7 @@ func set_combat_enabled(enabled: bool) -> void:
 	var was_enabled: bool = combat_enabled
 	super.set_combat_enabled(enabled)
 	if not enabled:
-		_state = State.INTRO
+		_state = State.INACTIVE
 		_attack_phase = AttackPhase.NONE
 		_deactivate_all_hitboxes()
 		_reset_telegraph_instantly()
@@ -192,7 +197,8 @@ func get_attack_phase() -> AttackPhase:
 func _physics_process(delta: float) -> void:
 	if _state == State.DEAD:
 		return
-	if not combat_enabled:
+	if not combat_enabled or _state == State.INACTIVE:
+		# Dormant: gravity only. No perception, no navigation, no decisions.
 		_apply_motion(Vector3.ZERO, delta)
 		return
 

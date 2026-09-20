@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_attack")
 attack_name = "Wide Sweep"
-hitbox_name = &"SweepHitbox"
+hitbox_name = &"WideSweepHitbox"
 damage = 30.0
 startup = 0.5
 active = 0.2

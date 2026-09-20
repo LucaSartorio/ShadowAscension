@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_attack")
 attack_name = "Ground Slam"
-hitbox_name = &"SlamHitbox"
+hitbox_name = &"GroundSlamHitbox"
 damage = 40.0
 startup = 0.85
 active = 0.2

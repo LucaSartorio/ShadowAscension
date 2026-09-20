@@ -12,7 +12,7 @@ M5.1 delivered: `DungeonBoss` replaces the boss-room placeholder — its own sta
 distinct attacks with a decision layer, per-attack cooldowns, a temporary health bar, and death
 that feeds the existing room/dungeon completion flow. No phase 2, no cutscene, no loot.
 
-M5.1 deliverable status (verified by `boss_test.tscn` 33/33 and the real-scene-change flow 32/32):
+M5.1 deliverable status (verified by `boss_test.tscn` 37/37 and the real-scene-change flow 32/32):
 
 - boss base scene — implemented
 - boss state foundation — implemented
@@ -24,6 +24,14 @@ M5.1 deliverable status (verified by `boss_test.tscn` 33/33 and the real-scene-c
 - boss UI prototype — implemented
 - boss room integration — implemented
 - boss death/completion integration — implemented
+
+A later conformance pass added the explicit `INACTIVE` state. The boss was already dormant before
+the player arrived — the room parks it and `combat_enabled` gated every system — but it reported
+`INTRO` while parked, so "dormant" and "winding up" were the same value to anything reading the
+state. They are now distinct: a parked boss is `INACTIVE`, the wake goes `INACTIVE -> INTRO ->
+DECIDE`, and a boss placed in a scene with no room still starts its own encounter from `_ready()`.
+The hitbox nodes `SweepHitbox` and `SlamHitbox` were renamed to `WideSweepHitbox` and
+`GroundSlamHitbox`, so every node name matches its attack's name.
 
 Next iteration: **M5.2 — Boss Phase 2 and Encounter Polish**.
 
