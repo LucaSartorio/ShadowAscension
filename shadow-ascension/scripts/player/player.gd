@@ -28,6 +28,7 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var progression: PlayerProgression = $PlayerProgression
 @onready var inventory: PlayerInventory = $PlayerInventory
+@onready var equipment: PlayerEquipment = $PlayerEquipment
 
 ## What the controller actually uses. Recomputed from the base values whenever
 ## the stats change — never from the previous effective value.
@@ -59,7 +60,12 @@ func _ready() -> void:
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
 	base_max_health = health_component.max_health
 	if progression != null:
+		progression.equipment = equipment
 		progression.stats_changed.connect(_apply_stat_effects)
+	if equipment != null:
+		# Taking a piece off changes max health, movement and damage, so the same
+		# recompute runs for equipment as for a spent stat point.
+		equipment.equipment_changed.connect(_apply_stat_effects)
 	_apply_stat_effects()
 	_restore_health()
 	health_component.health_changed.connect(_on_health_changed)

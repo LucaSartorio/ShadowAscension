@@ -33,6 +33,10 @@ enum Stat { STRENGTH, AGILITY, VITALITY, INTELLIGENCE }
 ## The hitbox whose landed hits introduce combatants to this component. Left
 ## unset it is resolved from the player on _ready().
 @export var attack_hitbox: Hitbox
+## Set by the player. This node stays the stats layer: it owns every formula and
+## combines the allocated stats with whatever equipment contributes, rather than
+## letting each consumer add the two up itself.
+var equipment: PlayerEquipment = null
 
 @export_group("DEBUG")
 ## DEBUG ONLY. Off by default; the game never needs it. While true, pressing
@@ -52,8 +56,9 @@ var current_level: int = 1
 var current_xp: int = 0
 var available_stat_points: int = 0
 
-## The single source of truth for the player's stats. Nothing else stores a copy;
-## other systems read the derived getters below or react to `stats_changed`.
+## The single source of truth for the player's ALLOCATED stats. Equipment adds
+## on top when an effective value is asked for; these are never written to, so
+## taking a piece off can never leave a stat inflated.
 var strength: int = 10
 var agility: int = 10
 var vitality: int = 10
@@ -222,6 +227,47 @@ func _runtime_state() -> Node:
 
 # --- stats and derived values -------------------------------------------------
 
+## Allocated plus whatever is worn. Every derived value below uses these, never
+## the allocated numbers on their own.
+func get_effective_strength() -> int:
+	return strength + (equipment.get_bonus_strength() if equipment != null else 0)
+
+
+func get_effective_agility() -> int:
+	return agility + (equipment.get_bonus_agility() if equipment != null else 0)
+
+
+func get_effective_vitality() -> int:
+	return vitality + (equipment.get_bonus_vitality() if equipment != null else 0)
+
+
+func get_effective_intelligence() -> int:
+	return intelligence + (equipment.get_bonus_intelligence() if equipment != null else 0)
+
+
+func get_effective_stat(stat: Stat) -> int:
+	match stat:
+		Stat.STRENGTH:
+			return get_effective_strength()
+		Stat.AGILITY:
+			return get_effective_agility()
+		Stat.VITALITY:
+			return get_effective_vitality()
+		Stat.INTELLIGENCE:
+			return get_effective_intelligence()
+	return 0
+
+
+## What equipment alone contributes, for a UI that wants to show the split.
+func get_equipment_bonus(stat: Stat) -> int:
+	return get_effective_stat(stat) - get_stat(stat)
+
+
+## Flat damage the main hand adds before the STR multiplier. 0 unarmed.
+func get_melee_attack_power() -> float:
+	return equipment.get_melee_attack_power() if equipment != null else 0.0
+
+
 func get_stat(stat: Stat) -> int:
 	match stat:
 		Stat.STRENGTH:
@@ -265,33 +311,35 @@ func _points_above_neutral(value: int) -> int:
 
 
 func get_melee_damage_multiplier() -> float:
-	return 1.0 + _points_above_neutral(strength) * melee_damage_per_point
+	return 1.0 + _points_above_neutral(get_effective_strength()) * melee_damage_per_point
 
 
 func get_movement_speed_multiplier() -> float:
-	return 1.0 + _points_above_neutral(agility) * movement_speed_per_point
+	return 1.0 + _points_above_neutral(get_effective_agility()) * movement_speed_per_point
 
 
 func get_dodge_speed_multiplier() -> float:
-	return 1.0 + _points_above_neutral(agility) * dodge_speed_per_point
+	return 1.0 + _points_above_neutral(get_effective_agility()) * dodge_speed_per_point
 
 
 ## Flat health added on top of the player's own base maximum.
 func get_bonus_max_health() -> float:
-	return _points_above_neutral(vitality) * health_per_vitality_point
+	return _points_above_neutral(get_effective_vitality()) * health_per_vitality_point
 
 
 ## Computed and shown, but nothing consumes it yet — the abilities it is meant
 ## for do not exist. It is here so the stat reads as doing something real rather
 ## than being invented later.
 func get_ability_power_multiplier() -> float:
-	return 1.0 + _points_above_neutral(intelligence) * ability_power_per_point
+	return 1.0 + _points_above_neutral(get_effective_intelligence()) * ability_power_per_point
 
 
 ## Applied when a swing is prepared, never written back into the combo step, so
-## the multiplier cannot stack across attacks.
+## neither the weapon nor the multiplier can stack across attacks.
+##
+##     round((base + weapon attack power) * STR multiplier)
 func get_effective_damage(base_damage: float) -> float:
-	return roundf(base_damage * get_melee_damage_multiplier())
+	return roundf((base_damage + get_melee_attack_power()) * get_melee_damage_multiplier())
 
 
 # --- receiving from combat ----------------------------------------------------

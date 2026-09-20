@@ -140,8 +140,25 @@ equippable yet; equipping arrives in M7.2.
 **Stacking**: an item declares whether it stacks and its maximum stack. In M7.1 the inventory holds
 one stack per item and has no capacity limit of its own.
 
+**Equipment slots**, confirmed in M7.2: **Main Hand** and **Chest**. A weapon goes in the main hand,
+a piece of armour in the chest; materials and consumables are not worn. No other slot exists.
+
+An equippable item declares flat bonuses to STR, AGI, VIT and INT, and a weapon also declares
+**melee attack power**. Those bonuses are added on top of the player's allocated stats when an
+effective value is asked for — they are never written into the allocated stats, so removing a piece
+can never leave a stat inflated.
+
+```
+effective_<stat> = allocated_<stat> + sum(equipment bonuses)
+final_melee_damage = round((base_attack_damage + melee_attack_power) * melee_damage_multiplier)
+```
+
+The existing M6.2 formulas are unchanged; they simply read the effective stat instead of the
+allocated one. An empty main hand contributes 0 attack power and combat works unarmed.
+
 **Not decided**: what each rarity tier is worth mechanically, drop rates beyond placeholders,
-durability, affixes, inventory capacity, and whether consumables are used from the inventory.
+durability, affixes, sockets, set bonuses, item level, dual wield, shields, further slots,
+inventory capacity, and whether consumables are used from the inventory.
 
 ---
 

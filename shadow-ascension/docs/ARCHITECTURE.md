@@ -302,5 +302,29 @@ survive a scene change through `PlayerRuntimeState`, which stores them and inter
 every rule stays in the inventory. Items already collected persist; items left lying on a floor do
 not, which is intended for this milestone.
 
+**`PlayerEquipment`** (`scripts/player/player_equipment.gd`) — what the player is wearing, in two
+slots: `MAIN_HAND` and `CHEST`. A component on the player, beside the inventory and the progression.
+Items *move* rather than being copied: equipping takes one out of the inventory, unequipping puts it
+back, and a swap does both, so the same item is never in a slot and in the bag at once. The order is
+deliberate — the item is only placed after the inventory has actually given it up, and a displaced
+piece goes straight back — so no path loses one.
+
+**Effective stats.** Two sources of truth, never merged:
+
+- `PlayerProgression` owns the **allocated** stats. They are never written to by equipment.
+- `PlayerEquipment` owns the **equipment bonuses**.
+
+`PlayerProgression` remains the stats layer and holds every formula: it asks equipment for its
+bonuses and exposes `get_effective_strength()` and friends, which is what all the derived values
+use. Taking a piece off therefore cannot leave a stat inflated — there is nothing to subtract,
+because nothing was ever added. Max health follows the same route, so equipping vitality raises the
+ceiling without healing and unequipping it lowers the ceiling and clamps current health down.
+
+**Melee damage** is `round((base + main-hand attack power) * STR multiplier)`, computed when a swing
+is prepared. The `AttackStep` keeps its base damage and the weapon is never written into it, so
+neither the weapon nor the multiplier can stack across attacks. An empty main hand contributes 0 and
+combat works unarmed.
+
 **Pause menus** — the character sheet and the inventory both join the `pause_menu` group, and
-opening one closes the others. Only one is ever up, so C and I always do what they say.
+opening one closes the others. Only one is ever up, so C and I always do what they say. The
+inventory panel also hosts the equipment slots, so equipping is one screen rather than two.

@@ -33,6 +33,7 @@ var last_mouse_mode_request: int = Input.MOUSE_MODE_CAPTURED
 ## Button per stat, so enabling and disabling never walks the tree.
 var _buttons: Dictionary = {}
 var _values: Dictionary = {}
+var _splits: Dictionary = {}
 
 const STAT_ROWS: Array = [
 	{"key": "STR", "stat": PlayerProgression.Stat.STRENGTH},
@@ -53,6 +54,8 @@ func _ready() -> void:
 	_progression = player.progression
 	_build_rows()
 	_progression.stats_changed.connect(_refresh)
+	if player.equipment != null:
+		player.equipment.equipment_changed.connect(_refresh)
 	_progression.stat_points_changed.connect(func(_points: int) -> void: _refresh())
 	_progression.level_changed.connect(func(_level: int) -> void: _refresh())
 	_refresh()
@@ -76,6 +79,10 @@ func get_level_text() -> String:
 
 func get_stat_value_text(key: String) -> String:
 	return (_values[key] as Label).text if _values.has(key) else ""
+
+
+func get_stat_split_text(key: String) -> String:
+	return (_splits[key] as Label).text if _splits.has(key) else ""
 
 
 func is_button_disabled(key: String) -> bool:
@@ -176,6 +183,14 @@ func _build_rows() -> void:
 		value.add_theme_font_size_override("font_size", 16)
 		line.add_child(value)
 
+		# The split sits beside the total, so a player can tell what they earned
+		# from what they are wearing.
+		var split: Label = Label.new()
+		split.custom_minimum_size = Vector2(96, 0)
+		split.add_theme_font_size_override("font_size", 11)
+		split.add_theme_color_override("font_color", Color(0.62, 0.78, 0.95))
+		line.add_child(split)
+
 		var spacer: Control = Control.new()
 		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		line.add_child(spacer)
@@ -190,6 +205,7 @@ func _build_rows() -> void:
 
 		rows.add_child(line)
 		_values[key] = value
+		_splits[key] = split
 		_buttons[key] = button
 
 
@@ -209,7 +225,11 @@ func _refresh() -> void:
 	var spendable: bool = _progression.available_stat_points > 0
 	for row in STAT_ROWS:
 		var key: String = row["key"]
-		(_values[key] as Label).text = str(_progression.get_stat(row["stat"]))
+		var stat: PlayerProgression.Stat = row["stat"]
+		var allocated: int = _progression.get_stat(stat)
+		var bonus: int = _progression.get_equipment_bonus(stat)
+		(_values[key] as Label).text = str(allocated + bonus)
+		(_splits[key] as Label).text = "" if bonus == 0 else "%d +%d Equip." % [allocated, bonus]
 		(_buttons[key] as Button).disabled = not spendable
 	derived_label.text = _derived_text()
 
@@ -222,6 +242,7 @@ func _derived_text() -> String:
 	var dodge: float = player.effective_dodge_speed if player != null else 0.0
 	var hp: float = player.health_component.max_health if player != null else 0.0
 	return "\n".join([
+		"Melee Attack Power  +%d" % roundi(_progression.get_melee_attack_power()),
 		"Danno melee        x%.2f" % _progression.get_melee_damage_multiplier(),
 		"Velocità           %.2f" % move,
 		"Dodge Speed        %.2f" % dodge,

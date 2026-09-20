@@ -46,6 +46,11 @@ var current_health: float = -1.0
 ## runtime only; nothing here is serialised.
 var inventory: Dictionary = {}
 
+## EquipmentSlot -> ItemData for whatever is worn. Bonuses and effective stats
+## are deliberately absent: they are recomputed from this on every load, so the
+## two can never drift apart.
+var equipment: Dictionary = {}
+
 
 ## Called by the first player of the session, with the values its own resources
 ## gave it. Later players restore instead. Health is deliberately not a parameter:
@@ -89,6 +94,14 @@ func get_inventory_copy() -> Dictionary:
 	return _copy_stacks(inventory)
 
 
+func sync_equipment(slots: Dictionary) -> void:
+	equipment = slots.duplicate()
+
+
+func get_equipment_copy() -> Dictionary:
+	return equipment.duplicate()
+
+
 func _copy_stacks(source: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for id in source:
@@ -121,4 +134,5 @@ func reset_runtime_state() -> void:
 	intelligence = DEFAULT_STAT
 	current_health = -1.0
 	inventory.clear()
+	equipment.clear()
 	runtime_state_reset.emit()

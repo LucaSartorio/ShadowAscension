@@ -4,9 +4,10 @@ extends CanvasLayer
 ## What the player is carrying, listed. Opening it pauses the game, exactly like
 ## the character sheet.
 ##
-## Display only: the rows come from PlayerInventory and are rebuilt on
-## `inventory_changed`, never polled. No Equip button — equipping arrives in
-## M7.2 and there is nothing here to press until then.
+## Display and two actions: the rows come from PlayerInventory and the worn
+## items from PlayerEquipment, both rebuilt on their own signals and never
+## polled. Equipping and unequipping are the components' decisions; this panel
+## only asks.
 ##
 ## Only one pause menu is ever open. Opening this one closes the other, so C and
 ## I always do what they say instead of stacking panels.
@@ -20,13 +21,21 @@ const PAUSE_MENU_GROUP: StringName = &"pause_menu"
 @onready var rows: VBoxContainer = $Root/Panel/Content/Rows
 @onready var empty_label: Label = $Root/Panel/Content/EmptyLabel
 @onready var detail_label: Label = $Root/Panel/Content/Detail
+@onready var equip_button: Button = $Root/Panel/Content/Actions/EquipButton
+@onready var unequip_button: Button = $Root/Panel/Content/Actions/UnequipButton
+@onready var equipment_rows: VBoxContainer = $Root/Panel/Content/EquipmentRows
 
 @export var empty_text: String = "Inventario vuoto"
 @export var detail_placeholder: String = "Seleziona un oggetto per i dettagli."
 
 var _inventory: PlayerInventory = null
+var _equipment: PlayerEquipment = null
 var _open: bool = false
 var _selected_id: StringName = &""
+## Which equipment slot the panel is focused on, or NONE. Selecting a bag row
+## clears it and vice versa: one selection at a time, so the two buttons can
+## never both be live.
+var _selected_slot: ItemData.EquipmentSlot = ItemData.EquipmentSlot.NONE
 var last_mouse_mode_request: int = Input.MOUSE_MODE_CAPTURED
 
 
@@ -39,7 +48,12 @@ func _ready() -> void:
 		hint.visible = false
 		return
 	_inventory = player.inventory
+	_equipment = player.equipment
 	_inventory.inventory_changed.connect(_refresh)
+	if _equipment != null:
+		_equipment.equipment_changed.connect(_refresh)
+	equip_button.pressed.connect(_on_equip_pressed)
+	unequip_button.pressed.connect(_on_unequip_pressed)
 	_refresh()
 
 
@@ -63,6 +77,35 @@ func get_row_text(index: int) -> String:
 
 func get_detail_text() -> String:
 	return detail_label.text
+
+
+func is_equip_button_visible() -> bool:
+	return equip_button.visible
+
+
+func is_unequip_button_visible() -> bool:
+	return unequip_button.visible
+
+
+func get_equipment_row_text(slot: ItemData.EquipmentSlot) -> String:
+	for row in equipment_rows.get_children():
+		var button: Button = row as Button
+		if button != null and button.text.begins_with(ItemData.slot_label(slot)):
+			return button.text
+	return ""
+
+
+## Public so a test can focus a slot without faking a click.
+func select_slot(slot: ItemData.EquipmentSlot) -> void:
+	_select_slot(slot)
+
+
+func press_equip() -> bool:
+	return _on_equip_pressed()
+
+
+func press_unequip() -> bool:
+	return _on_unequip_pressed()
 
 
 ## Public so a test can select without faking a click.
@@ -149,9 +192,11 @@ func _refresh() -> void:
 	rows.visible = not entries.is_empty()
 	if entries.is_empty():
 		_selected_id = &""
-		detail_label.text = detail_placeholder
+		_refresh_equipment()
+		_update_detail()
 		return
 
+	_refresh_equipment()
 	var still_selected: bool = false
 	for entry in entries:
 		var item: ItemData = entry["item"]
@@ -174,19 +219,96 @@ func _refresh() -> void:
 
 func _select(id: StringName) -> void:
 	_selected_id = id
+	_selected_slot = ItemData.EquipmentSlot.NONE
 	_update_detail()
 
 
+func _select_slot(slot: ItemData.EquipmentSlot) -> void:
+	_selected_slot = slot
+	_selected_id = &""
+	_update_detail()
+
+
+## The bag row is the thing being equipped, so the item has to come from there.
+func _on_equip_pressed() -> bool:
+	if _equipment == null or _selected_id == &"":
+		return false
+	var item: ItemData = _inventory.get_item(_selected_id)
+	if item == null or not item.is_equippable():
+		return false
+	var equipped: bool = _equipment.equip(item)
+	if equipped:
+		# It has left the bag; focus the slot it went into instead of a row that
+		# may no longer exist.
+		_select_slot(item.equipment_slot)
+	return equipped
+
+
+func _on_unequip_pressed() -> bool:
+	if _equipment == null or _selected_slot == ItemData.EquipmentSlot.NONE:
+		return false
+	return _equipment.unequip_slot(_selected_slot)
+
+
+## One row per slot, occupied or not, so an empty slot is still something the
+## player can look at and understand.
+func _refresh_equipment() -> void:
+	for child in equipment_rows.get_children():
+		child.queue_free()
+		equipment_rows.remove_child(child)
+	if _equipment == null:
+		return
+	for slot in [ItemData.EquipmentSlot.MAIN_HAND, ItemData.EquipmentSlot.CHEST]:
+		var worn: ItemData = _equipment.get_equipped_item(slot)
+		var button: Button = Button.new()
+		button.text = "%-12s %s" % [
+			ItemData.slot_label(slot), worn.display_name if worn != null else "Vuoto"]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.focus_mode = Control.FOCUS_NONE
+		if worn != null:
+			button.add_theme_color_override("font_color", worn.get_rarity_color())
+		var captured: ItemData.EquipmentSlot = slot
+		button.pressed.connect(func() -> void: _select_slot(captured))
+		equipment_rows.add_child(button)
+
+
 func _update_detail() -> void:
+	if _selected_slot != ItemData.EquipmentSlot.NONE:
+		_show_slot_detail()
+		return
 	if _selected_id == &"" or not _inventory.has_item(_selected_id):
 		detail_label.text = detail_placeholder
+		equip_button.visible = false
+		unequip_button.visible = false
 		return
 	var item: ItemData = _inventory.get_item(_selected_id)
-	detail_label.text = "\n".join([
+	detail_label.text = _describe(item, _inventory.get_quantity(_selected_id))
+	# Only something that can actually be worn offers the button.
+	equip_button.visible = item.is_equippable()
+	unequip_button.visible = false
+
+
+func _show_slot_detail() -> void:
+	var worn: ItemData = _equipment.get_equipped_item(_selected_slot)
+	equip_button.visible = false
+	unequip_button.visible = worn != null
+	if worn == null:
+		detail_label.text = "%s\n\nVuoto." % ItemData.slot_label(_selected_slot)
+		return
+	detail_label.text = _describe(worn, 1)
+
+
+func _describe(item: ItemData, quantity: int) -> String:
+	var lines: Array[String] = [
 		item.display_name,
-		"%s · %s · x%d" % [
-			item.get_rarity_label(), item.get_type_label(),
-			_inventory.get_quantity(_selected_id)],
-		"",
-		item.description,
-	])
+		"%s · %s · x%d" % [item.get_rarity_label(), item.get_type_label(), quantity],
+	]
+	if item.is_equippable():
+		lines.append(item.get_slot_label())
+	var bonuses: Array[String] = item.get_bonus_lines()
+	if not bonuses.is_empty():
+		lines.append("")
+		lines.append_array(bonuses)
+	lines.append("")
+	lines.append(item.description)
+	return "\n".join(lines)

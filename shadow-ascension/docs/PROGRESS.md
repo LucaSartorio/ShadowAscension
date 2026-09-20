@@ -58,7 +58,51 @@ leaves its remainder on the floor. Multi-slot stacks, durability and affixes are
 UX: the character sheet and the inventory both join a `pause_menu` group and opening one closes the
 other, so C and I always do what they say instead of stacking panels.
 
-Next iteration: **M7.2 — Equipment and Item Stat Modifiers**.
+M7.2 delivered: two equipment slots, items that change what the player is worth, and a panel to
+drive it. No durability, affixes, sockets, set bonuses or further slots.
+
+M7.2 deliverable status (verified by `equipment_test.tscn` 56/56 and `equipment_run.gd` 22/22, the
+latter with real scene changes):
+
+- Equipment foundation — implemented
+- Main Hand — implemented
+- Chest — implemented
+- Equip — implemented
+- Unequip — implemented
+- Swap — implemented
+- Equipment modifiers — implemented
+- Effective stats — implemented
+- Weapon Attack Power — implemented
+- Equipment UI — implemented
+- Runtime equipment persistence — implemented
+
+The split that matters: `PlayerProgression` keeps the **allocated** stats and `PlayerEquipment`
+keeps the **bonuses**, and the two are never merged. Progression stays the stats layer and holds
+every formula — it asks equipment for its contribution and exposes `get_effective_strength()` and
+friends, which is what every derived value now reads. Because nothing is ever added to an allocated
+stat, taking a piece off cannot leave one inflated; there is nothing to subtract.
+
+Items move rather than copy. Equipping removes one from the inventory *before* placing it, and a
+displaced piece goes straight back, so no path loses or duplicates one — checked by counting each
+weapon across bag and slots after every swap.
+
+Health behaves as M6.3 established: equipping +2 VIT took the ceiling 100 → 116 and left a wounded
+player at 50/116 rather than healing them; unequipping at 116/116 dropped the ceiling to 100 and
+clamped current health to 100/100.
+
+Damage is `round((base + main-hand attack power) * STR multiplier)`, applied when a swing is
+prepared. The brief's worked example checks out both through the formula and through a real swing at
+an enemy: 13 allocated STR plus the Training Sword's +2 gives 15 effective and ×1.15, and
+`round((20 + 5) × 1.15) = 29` — the enemy took exactly 29, and the combo step still holds its base
+20 afterwards. An empty hand contributes 0 and the player still fights.
+
+Measured across a full loop — gate, dungeon, a swap inside it, boss, exit, second gate, death —
+`swift_blade` in the main hand and `hunter_jacket` on the chest held through every transition, along
+with STR 12 / AGI 13 / VIT 12, 8 attack power and a 116 ceiling. Dying kept the kit and restored
+health only.
+
+Next iteration: **M7.3 — the M7 milestone review**, or whatever the roadmap's remaining M7 scope
+calls for.
 
 ---
 
