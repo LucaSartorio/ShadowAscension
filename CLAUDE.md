@@ -152,7 +152,27 @@ Style:
 
 ---
 
-## 9. Performance rules
+## 9. UX and player feedback
+
+- **Every gameplay action that requires an explicit contextual input from the player MUST have a clear on-screen prompt.** If the player has to press something, the game has to say so — no hidden verbs, no "you just have to know".
+- Prompt format is `[KEY] Action`, with the key visually distinct from the label:
+
+```
+[E] Entra nel Gate
+[E] Esci dal Dungeon
+[E] Interagisci
+[E] Raccogli
+[E] Parla
+```
+
+- **Automatic actions MUST NOT ask for extra input.** Doors opening after a fight, room triggers arming on entry, and enemy aggro all happen on their own; adding a confirmation press to any of them is a regression.
+- Reuse the existing `InteractionPrompt` (`scripts/ui/interaction_prompt.gd`, `scenes/ui/interaction_prompt.tscn`) rather than building a second prompt system. Raise and clear it through the `InteractionPrompt.raise()` / `InteractionPrompt.clear()` helpers so the world-label fallback rule stays in one place.
+- A prompt is owned by whoever raised it: only that node may clear it. An interactable that goes dead (a spent portal, a used gate) clears its own prompt.
+- Keep prompt text short and in the player's language, and keep it readable without dominating the screen.
+
+---
+
+## 10. Performance rules
 
 - Avoid per-frame allocations in `_process` / `_physics_process` (no `Array`/`Dictionary` literals in hot paths — reuse).
 - Cache `get_node` results in `_ready`. Do not call `get_node` every frame.
@@ -163,9 +183,10 @@ Style:
 
 ---
 
-## 10. Git workflow
+## 11. Git workflow
 
-- Do **not** commit or push unless the user explicitly requests it.
+- **Commit and push to `main` at milestone completion without asking.** This is the standing default. It applies only once the work is validated: relevant test suites green, zero parser errors, zero runtime errors, docs updated.
+- Outside milestone completion, do **not** commit or push unless the user explicitly requests it. Never commit partial, unvalidated, or work-in-progress state.
 - Do **not** add files to staging speculatively.
 - When asked to commit: small, focused commits. Conventional-style subject preferred (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`). Subject ≤ 72 chars.
 - Never force-push to `main`. Never rewrite shared history without approval.
@@ -173,7 +194,7 @@ Style:
 
 ---
 
-## 11. Testing and validation
+## 12. Testing and validation
 
 - No test framework wired yet. When one is added (GUT or similar), document the runner in this file.
 - Tests live under `tests/` (test scenes + scripts).
@@ -196,7 +217,7 @@ Fix all errors and parser warnings before considering a task complete. Warnings 
 
 ---
 
-## 12. Documentation rules
+## 13. Documentation rules
 
 - `docs/` holds architecture notes, design decisions, system diagrams.
 - Update `docs/` and this `CLAUDE.md` when architecture changes (new autoload, new core system, changed folder layout, changed conventions).
@@ -205,7 +226,7 @@ Fix all errors and parser warnings before considering a task complete. Warnings 
 
 ---
 
-## 13. Definition of Done
+## 14. Definition of Done
 
 A task is Done only when ALL of these hold:
 
