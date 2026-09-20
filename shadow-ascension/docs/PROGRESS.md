@@ -32,7 +32,55 @@ M3.2 deliverable status (verified by `enemy_polish_test.tscn`, 17/17):
 - aggro refinement — implemented (`lose_target_delay`)
 - multi-enemy combat polish — implemented (per-instance approach angle + attack desync)
 
-M3 remains **In Progress** — parameters are placeholders pending playtest, and M3 exit criteria are not formally closed.
+### M3 final review (this pass)
+
+Behavior, stability and the M3.1 + M3.2 feature list all check out — see the verification list
+below. M3 is **NOT** closed, because one ROADMAP exit criterion and two deliverables are not met:
+
+| ROADMAP item | Status |
+|---|---|
+| Enemy base architecture, data-driven via `EnemyStats` Resource | **Missing** |
+| Idle / detection / chase / basic attack / damage reception | Met |
+| Death (drop hook stub only) | Death met, **drop hook stub missing** |
+| *Exit:* one enemy variant instantiated **from a Resource**, end to end | **Not met** |
+| *Exit:* Idle -> Detect -> Chase -> Attack -> Damaged -> Dead runs cleanly | Met |
+| *Exit:* multiple instances coexist without cross-talk or shared state | Met |
+| *Exit:* zero runtime errors in a 3+ enemy encounter | Met |
+
+The project currently contains **no `.tres` files at all**. `BasicMeleeEnemy` carries ~25 `@export`
+tuning values on the node instead. That also contradicts `CLAUDE.md` §7 ("Custom Resources under
+`resources/<domain>/` as `.tres`"; "No hardcoded stats in scripts once a value becomes configurable")
+and `ARCHITECTURE.md` §5. `AttackStep` exists as a Resource *script* but its instances are inline
+sub-resources inside `player.tscn`, not assets under `resources/`.
+
+Closing M3 therefore needs an `EnemyStats` Resource (`scripts/enemies/enemy_stats.gd` +
+`resources/enemies/*.tres`) that `BasicMeleeEnemy` reads its tuning from, and a no-op drop hook on
+death. Neither was implemented in this review pass, which was scoped to verification and bug fixes.
+
+M3 remains **In Progress** — parameters are also still playtest placeholders.
+
+**Verified in this review** (Godot 4.5.stable headless):
+- Parser: `--check-only` clean across every `.gd` in `scripts/` and `tests/`
+- Suites: combo 10/10, dodge 18/18, enemy 20/20, enemy polish 17/17 — **65/65**
+- `Main.tscn` 600 frames verbose: zero ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR
+- 18s scripted encounter in `test_world` with the trio engaged, player attacking and dodging:
+  zero engine errors; states visited across instances covered CHASE, REPOSITION, ATTACK, DEAD;
+  player took enemy damage; all three died independently and settled
+- Cross-talk probes: per-instance body materials and `HealthComponent`s are distinct objects;
+  damaging one enemy left the other two at full health (65 / 100 / 100)
+- Dead enemy: `avoidance_enabled` false, hitbox inactive, body collision disabled
+- NavigationMesh: 53 verts / 50 polys, map active, 1 region; `EnemyBehindWall` -> Player resolves
+  to a 7-point path reaching |x| = 4.50 around a wall spanning x -4..4 (real detour)
+- Collision layers/masks re-read at runtime; 6 `BasicMeleeEnemy` instances in `test_world`
+
+**Known non-blocking observations** (not fixed, no profiling evidence to justify churn):
+- `_has_line_of_sight()` allocates a `PhysicsRayQueryParameters3D` and an exclude array per call.
+  It is reached only when an enemy is inside `attack_range`, correctly facing, off cooldown *and*
+  blocked, so it is not a hot path today; it would become per-frame in a fight fought through a
+  thin wall. Cache or throttle it if that ever shows up in a profile.
+- `_hit_flash()` starts a new tween per damage event, so a fast combo runs overlapping tweens on
+  `mesh_instance.scale`. Visual only; it settles correctly.
+- `Orphan StringName: servers` at shutdown is vanilla Godot engine noise, not project state.
 
 ---
 
@@ -209,9 +257,12 @@ M3 remains **In Progress** — parameters are placeholders pending playtest, and
     - Range coherence (asserted, not assumed): hitbox covers 0.4–2.0 in front of the enemy;
       `attack_range` 1.8 <= 2.0 and `minimum_combat_distance` 1.15 >= 0.4, with
       `preferred_combat_distance` inside the band.
-    - Collision layers split so physics intent is explicit — see the table below. The camera
-      SpringArm (mask 1) no longer collides with the player's own body, which it did when every
-      body shared layer 1.
+    - Collision layers split so physics intent is explicit — see the table below. Correction to an
+      earlier claim in this file and in commit 29ee6db: the camera SpringArm never collided with the
+      player's own body, because `camera_rig.gd` already excludes it via `add_excluded_object()`.
+      What the split actually changed is that the SpringArm (mask 1) no longer collides with *enemy*
+      bodies, which moved from layer 1 to layer 4. Enemies are not geometry, so the camera pushing
+      in for them was not required by GAME_DESIGN's camera-collision rule.
     - Death: `_physics_process` returns early, and `nav_agent.avoidance_enabled` is set false so a
       corpse leaves the RVO simulation and stops steering the living. Telegraph is reset instantly.
       The topple tween is death feedback, not AI facing.
@@ -263,7 +314,11 @@ M3 remains **In Progress** — parameters are placeholders pending playtest, and
 - Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
 - Player-side death reaction (input lockout, visual state) — polish, deferred
 - Playtest-tune M3 enemy parameters (detection ranges, attack timings, damage, speed)
-- Optional M3 polish: enemy variants, more expressive telegraph, per-enemy drop hook stub
+- **Blocking M3 closure:** `EnemyStats` Resource (`scripts/enemies/enemy_stats.gd` +
+  `resources/enemies/*.tres`) driving `BasicMeleeEnemy` tuning, replacing the ~25 node-level
+  `@export`s — required by the M3 exit criteria, `CLAUDE.md` §7 and `ARCHITECTURE.md` §5
+- **Blocking M3 closure:** no-op drop hook on enemy death (stub only, no loot)
+- Optional M3 polish: enemy variants, more expressive telegraph
 - Close M3, then start M4 — Dungeon Foundation
 
 ---
