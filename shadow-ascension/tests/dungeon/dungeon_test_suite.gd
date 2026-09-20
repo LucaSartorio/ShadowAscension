@@ -269,8 +269,8 @@ func _dungeon_tests() -> void:
 	_record(_dungeon.get_state() == DungeonController.DungeonState.COMPLETED and _completed_count == 1,
 		"24) dungeon reaches COMPLETED exactly once (state=%d signals=%d)" % [
 			_dungeon.get_state(), _completed_count])
-	_record(_dungeon.completion_label.visible and _dungeon.completion_label.text == "DUNGEON COMPLETE",
-		"25) DUNGEON COMPLETE feedback is visible ('%s')" % _dungeon.completion_label.text)
+	_record(_dungeon.status_label.visible and _dungeon.status_label.text == "DUNGEON COMPLETE",
+		"25) DUNGEON COMPLETE feedback is visible ('%s')" % _dungeon.status_label.text)
 
 	# progression order
 	_record(",".join(_cleared_events) == "CombatRoom1,CombatRoom2,BossRoom",

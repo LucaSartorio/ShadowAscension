@@ -65,6 +65,14 @@ func get_enemies() -> Array[BasicMeleeEnemy]:
 	return _enemies
 
 
+## Halts the room for good: it can no longer arm, and nothing in it stays awake.
+## Used when the run ends, so no room event can fire after the player has died.
+func suspend() -> void:
+	entry_trigger.set_deferred("monitoring", false)
+	for enemy in _enemies:
+		enemy.set_combat_enabled(false)
+
+
 func _on_entry_body_entered(body: Node3D) -> void:
 	# Only IDLE arms. A cleared room never fights again, an active one never
 	# restarts, so backtracking is safe.

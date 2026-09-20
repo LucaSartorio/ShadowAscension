@@ -25,8 +25,22 @@ M4.1 deliverable status (verified by `dungeon_test_suite.tscn`, 31/31):
 - boss room placeholder — implemented
 - dungeon completion foundation — implemented
 
-M4 stays **In Progress**: M4.2 still owes the return trip to the test world, and the layout is a
-grey-box.
+M4.2 delivered: the loop closes. Fade transitions both ways, an exit portal that only wakes on
+completion, the return trip to the test world, and a minimal death/restart.
+
+M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real-scene-change run
+`dungeon_flow_run.gd` 16/16):
+
+- dungeon completion — implemented
+- exit portal — implemented
+- return transition — implemented
+- reusable gate target — implemented
+- scene fade transition — implemented
+- dungeon death/restart flow — implemented
+- full dungeon loop — implemented
+
+M4 stays **In Progress**: the layout is still a grey-box, and the return lands the player at the
+test world's default spawn rather than back at the gate — both deferred until a real hub exists.
 
 ---
 
@@ -342,6 +356,58 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
     - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17 — with the dungeon suite,
       **98/98**. `--check-only` clean; `Main.tscn` and `dungeon_test.tscn` each 480 frames verbose
       with zero ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR.
+- **M4.2 — Dungeon Completion & Transition Polish**. Refinement of M4.1; the dungeon system itself
+  was not rewritten.
+    - `scripts/ui/scene_transition.gd` + `scenes/ui/scene_transition.tscn` (`SceneTransition`) — a
+      per-scene fade curtain on a `CanvasLayer`, **not** an autoload. `fade_duration` 0.35,
+      `fade_in_on_ready` so an incoming transition lands softly. `transition_to_scene()` and
+      `reload_current_scene()` both refuse while `is_busy()`, and `_busy` deliberately stays latched
+      after a hand-off so nothing can queue a second one on the way out. Callers find it through the
+      `scene_transition` group, so a scene drops it in with no rewiring.
+    - `scripts/dungeon/dungeon_exit.gd` + `scenes/dungeons/components/dungeon_exit.tscn`
+      (`DungeonExit`) — starts dead: `monitoring` off, collider disabled, dimmed and squashed. The
+      controller switches it on at completion, which tints and emits it and scales it up by tween.
+      `activate()` refuses unless it is live, the player is inside, it has not been used, and no
+      transition is running.
+    - `DungeonGate` — `target_scene` was already an `@export_file`; added `prompt_text` for reuse, a
+      `_used` latch and a busy-transition check, and it now hands off to `SceneTransition` instead of
+      calling `change_scene_to_file` directly. Duplicating the gate for another dungeon needs no code.
+    - `DungeonController` — gained `FAILED`, `run_failed`, the exit portal hookup, banner timing and
+      the death/restart flow. A single `_run_ended` latch guards everything: completion, death,
+      restart and room events all check it, so no path can fire twice or interleave.
+    - Player death: the controller connects to the player's `HealthComponent.died` (one group lookup
+      at startup), suspends every room, kills the exit portal, shows `YOU DIED`, then reloads the
+      dungeon after `death_restart_delay` (1.2s). `RoomController.suspend()` was added for this — it
+      stops the trigger and parks the enemies, which is room lifecycle, not a new responsibility.
+      Health resets on its own: `HealthComponent._ready()` already sets current to max.
+    - **Bug found and fixed:** `_show_status()` and `_restart_after_delay()` originally awaited
+      `SceneTreeTimer`s. When the player left the dungeon before the completion banner's 1.8s timer
+      fired, the coroutine was stranded holding a reference to the label, and Godot reported
+      `ObjectDB instances leaked at exit`. Both now use node-bound tweens, which die with the node.
+      Isolated by bisecting: neither scene alone nor a single transition nor a single reload leaked,
+      only the full loop.
+    - Input: `interact` = E, unchanged. Gate and exit each gate on their own `_player_in_range`, so
+      only the area the player is actually standing in can answer.
+    - Automated validation `res://tests/dungeon/dungeon_loop_test.tscn` — **34/34 PASS**: fade in and
+      out, gate target, interact refused outside, ten spammed activations producing exactly one
+      transition, exit dead before completion and refusing interact from inside it, the three rooms,
+      COMPLETED once, banner shown then auto-hidden while the portal stays live, exit prompt, one
+      exit transition to the right target, death after completion queuing nothing, a clean second
+      run (6 enemies, rooms IDLE, doors locked, exit dead), `YOU DIED`, `FAILED` once, every room
+      suspended, a room refusing to arm after death, exactly one reload after the delay, a second
+      death during the restart ignored, and full health on the restarted run.
+    - Real-scene-change validation `res://tests/dungeon/dungeon_flow_run.gd` — **16/16 PASS**. It
+      swaps the running scene, so it is a SceneTree script rather than a test scene:
+      `godot --headless --path . --script res://tests/dungeon/dungeon_flow_run.gd`. It walks the
+      whole loop for real — test world → gate → dungeon → three rooms → COMPLETE → exit → test world
+      → second run → death → reload — and asserts the scene actually changed each time, including a
+      fresh scene instance after the restart. Note for future test authors: it waits on real time,
+      not frame counts; headless runs frames far faster than wall clock, and frame counting silently
+      skipped past `death_restart_delay` the first time.
+    - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
+      loop 34/34, real flow 16/16 — **148/148**. `--check-only` clean; `Main.tscn` and
+      `dungeon_test.tscn` each 480 verbose frames with zero ERROR / WARNING / Failed / Parse Error /
+      SCRIPT ERROR and no leaked instances.
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
@@ -359,8 +425,8 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
 - Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
 - Player-side death reaction (input lockout, visual state) — polish, deferred
 - Playtest-tune M3 enemy parameters — now edited in `resources/enemies/basic_melee_enemy_stats.tres`, not in code
-- M4.2 — return from the dungeon to the test world on completion (deferred from M4.1 by design)
-- M4.2 — dungeon layout pass: the grey-box is functional, not shaped for play
+- Dungeon layout pass: the grey-box is functional, not shaped for play
+- Return the player to the gate rather than the test world's default spawn — needs a real hub
 - Optional M3 polish, non-blocking: additional enemy archetypes as new `EnemyStats` assets,
   more expressive telegraph
 

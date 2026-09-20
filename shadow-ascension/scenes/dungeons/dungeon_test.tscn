@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_controller.gd" id="1_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/dungeons/rooms/combat_room.tscn" id="4_combat"]
 [ext_resource type="PackedScene" path="res://scenes/dungeons/rooms/boss_room_placeholder.tscn" id="5_boss"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/basic_melee_enemy.tscn" id="6_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/ui/scene_transition.tscn" id="7_trans"]
+[ext_resource type="PackedScene" path="res://scenes/dungeons/components/dungeon_exit.tscn" id="8_exit"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -205,9 +207,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -59)
 [node name="Player" parent="." instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 2)
 
-[node name="CompletionUI" type="CanvasLayer" parent="."]
+[node name="DungeonExit" parent="." instance=ExtResource("8_exit")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -65)
 
-[node name="CompletionLabel" type="Label" parent="CompletionUI"]
+[node name="SceneTransition" parent="." instance=ExtResource("7_trans")]
+
+[node name="DungeonUI" type="CanvasLayer" parent="."]
+
+[node name="StatusLabel" type="Label" parent="DungeonUI"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
