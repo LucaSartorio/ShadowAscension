@@ -56,7 +56,47 @@ resolves its siblings. One existing assertion was corrected alongside it: `enemy
 single enemy instance between sub-tests, which nothing in the game does, so its reset now clears the
 new death and XP latches too.
 
-Next iteration: **M6.2 — Stat Allocation and Derived Stats**.
+M6.2 delivered: a character sheet on C that pauses the game, points that buy stats, and four stats
+that now do something. No respec, no decrement, no caps, no equipment, no save.
+
+M6.2 deliverable status (verified by `stats_test.tscn` 53/53):
+
+- Stats Menu — implemented
+- stat allocation — implemented
+- STR — implemented
+- AGI — implemented
+- VIT — implemented
+- INT — implemented
+- derived stats — implemented
+- STR combat integration — implemented
+- AGI movement/dodge integration — implemented
+- VIT health integration — implemented
+- character stats HUD hint — implemented
+
+`PlayerProgression` stays the single source of truth: it owns the four stats and every derived
+getter, and nothing else keeps a copy. The player holds `effective_movement_speed`,
+`effective_dodge_speed` and `base_max_health` beside its untouched base exports, and recomputes all
+three from the bases on `stats_changed` — never incrementally, so a multiplier cannot compound. The
+same rule covers damage: STR is applied when a swing is prepared, and the `AttackStep` keeps its
+base value, which the tests check after real swings.
+
+`HealthComponent` gained `set_max_health()`, which clamps current health down to a new ceiling and
+never tops it up. It is generic and knows nothing about VIT — the enemy and the boss keep their own
+maximums, verified in the same run.
+
+The menu runs with `PROCESS_MODE_ALWAYS` and pauses the tree, so its buttons work while everything
+else is frozen: an enemy mid-fight and the boss mid-encounter both drift 0.0000 units while it is
+open and resume when it closes. It consumes C and, only while open, ESC — so the existing
+release-the-mouse behaviour of a bare ESC is untouched. A scene change with the menu still open
+unpauses on the way out.
+
+Numbers confirmed against the project's real base values: attack 1 goes 20 → 23 at STR 15 and 25 →
+29 for attack 2, measured both through the formula and through a real swing at an enemy; movement
+6.00 → 6.30 and dodge 11.50 → 11.79 at AGI 15; max health 100 → 140 at VIT 15, and investing at
+50/100 gives 50/108 rather than a free heal.
+
+Next iteration: **M6.3 — Runtime Progression Persistence**, which is what the M6.1 note about
+progression not surviving a scene reload is waiting on.
 
 ---
 

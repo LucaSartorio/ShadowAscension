@@ -20,8 +20,21 @@ extends Resource
 @export var xp_growth_factor: float = 1.25
 
 @export_group("Base stats")
-## Data only in M6.1. What they actually do lands in M6.2.
 @export var strength: int = 10
 @export var agility: int = 10
 @export var vitality: int = 10
 @export var intelligence: int = 10
+
+@export_group("Derived stats")
+## The value at which a stat contributes nothing. Below it a stat never
+## penalises; the formulas clamp at zero bonus.
+@export var neutral_stat_value: int = 10
+## Per point of STR above neutral.
+@export var melee_damage_per_point: float = 0.03
+## Per point of AGI above neutral.
+@export var movement_speed_per_point: float = 0.01
+@export var dodge_speed_per_point: float = 0.005
+## Flat max health per point of VIT above neutral.
+@export var health_per_vitality_point: float = 8.0
+## Per point of INT above neutral. Computed and shown; no system consumes it yet.
+@export var ability_power_per_point: float = 0.03

@@ -22,6 +22,12 @@ signal stat_points_changed(points: int)
 ## every point awarded on the way — a single large reward reports one level-up
 ## of several levels rather than a burst the UI has to queue.
 signal level_up(level: int, points_gained: int)
+## Fired whenever a stat changes, so every system that derives a value from the
+## stats recomputes once instead of polling. Carries nothing: listeners ask for
+## the derived value they care about.
+signal stats_changed
+
+enum Stat { STRENGTH, AGILITY, VITALITY, INTELLIGENCE }
 
 @export var stats: ProgressionStats
 ## The hitbox whose landed hits introduce combatants to this component. Left
@@ -46,11 +52,20 @@ var current_level: int = 1
 var current_xp: int = 0
 var available_stat_points: int = 0
 
-## M6.1 holds these as data only. M6.2 gives them effects.
+## The single source of truth for the player's stats. Nothing else stores a copy;
+## other systems read the derived getters below or react to `stats_changed`.
 var strength: int = 10
 var agility: int = 10
 var vitality: int = 10
 var intelligence: int = 10
+
+# Derived-stat tuning, seeded from `stats`.
+var neutral_stat_value: int = 10
+var melee_damage_per_point: float = 0.03
+var movement_speed_per_point: float = 0.01
+var dodge_speed_per_point: float = 0.005
+var health_per_vitality_point: float = 8.0
+var ability_power_per_point: float = 0.03
 
 ## Combatants already being watched, so one enemy is never subscribed twice.
 var _tracked: Dictionary = {}
@@ -81,6 +96,12 @@ func _apply_stats() -> void:
 	agility = stats.agility
 	vitality = stats.vitality
 	intelligence = stats.intelligence
+	neutral_stat_value = stats.neutral_stat_value
+	melee_damage_per_point = stats.melee_damage_per_point
+	movement_speed_per_point = stats.movement_speed_per_point
+	dodge_speed_per_point = stats.dodge_speed_per_point
+	health_per_vitality_point = stats.health_per_vitality_point
+	ability_power_per_point = stats.ability_power_per_point
 
 
 # --- XP curve -----------------------------------------------------------------
@@ -152,6 +173,79 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key.keycode == debug_xp_key:
 		debug_add_xp(debug_xp_amount)
+
+
+# --- stats and derived values -------------------------------------------------
+
+func get_stat(stat: Stat) -> int:
+	match stat:
+		Stat.STRENGTH:
+			return strength
+		Stat.AGILITY:
+			return agility
+		Stat.VITALITY:
+			return vitality
+		Stat.INTELLIGENCE:
+			return intelligence
+	return 0
+
+
+## Spends one point. Refuses when there is nothing to spend, so a double click or
+## a stale button press cannot go negative or charge twice.
+func allocate_stat(stat: Stat) -> bool:
+	if available_stat_points <= 0:
+		return false
+	match stat:
+		Stat.STRENGTH:
+			strength += 1
+		Stat.AGILITY:
+			agility += 1
+		Stat.VITALITY:
+			vitality += 1
+		Stat.INTELLIGENCE:
+			intelligence += 1
+		_:
+			return false
+	available_stat_points -= 1
+	stat_points_changed.emit(available_stat_points)
+	stats_changed.emit()
+	return true
+
+
+## Points above the value at which a stat does nothing. Never negative: a low
+## stat costs nothing, it simply grants nothing.
+func _points_above_neutral(value: int) -> int:
+	return maxi(0, value - neutral_stat_value)
+
+
+func get_melee_damage_multiplier() -> float:
+	return 1.0 + _points_above_neutral(strength) * melee_damage_per_point
+
+
+func get_movement_speed_multiplier() -> float:
+	return 1.0 + _points_above_neutral(agility) * movement_speed_per_point
+
+
+func get_dodge_speed_multiplier() -> float:
+	return 1.0 + _points_above_neutral(agility) * dodge_speed_per_point
+
+
+## Flat health added on top of the player's own base maximum.
+func get_bonus_max_health() -> float:
+	return _points_above_neutral(vitality) * health_per_vitality_point
+
+
+## Computed and shown, but nothing consumes it yet — the abilities it is meant
+## for do not exist. It is here so the stat reads as doing something real rather
+## than being invented later.
+func get_ability_power_multiplier() -> float:
+	return 1.0 + _points_above_neutral(intelligence) * ability_power_per_point
+
+
+## Applied when a swing is prepared, never written back into the combo step, so
+## the multiplier cannot stack across attacks.
+func get_effective_damage(base_damage: float) -> float:
+	return roundf(base_damage * get_melee_damage_multiplier())
 
 
 # --- receiving from combat ----------------------------------------------------

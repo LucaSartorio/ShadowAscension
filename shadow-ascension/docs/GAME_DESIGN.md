@@ -101,8 +101,27 @@ xp_required(level) = round(100 * 1.25 ^ (level - 1))
 so 100 XP for the first level, 125 for the second, 156 for the third. Both constants are tuning
 values on a Resource, not design commitments.
 
+**Derived stats** — confirmed in M6.2. A stat contributes only above the neutral value of 10; below
+it nothing is granted and nothing is penalised. All five constants are tuning fields on the
+progression Resource.
+
+| Stat | Drives | Formula | At 15 |
+|---|---|---|---|
+| STR | melee damage | `1.0 + max(0, STR - 10) * 0.03` | ×1.15 |
+| AGI | movement speed | `1.0 + max(0, AGI - 10) * 0.01` | ×1.05 |
+| AGI | dodge speed | `1.0 + max(0, AGI - 10) * 0.005` | ×1.025 |
+| VIT | max health | `base + max(0, VIT - 10) * 8` | base + 40 |
+| INT | ability power | `1.0 + max(0, INT - 10) * 0.03` | ×1.15 |
+
+STR scales a swing when it is prepared; the combo steps keep their base damage, so the multiplier
+never compounds and never writes back into the data. AGI touches speed only — never i-frames, dodge
+duration, cooldown, attack timings, active windows or cancel windows. VIT raises the ceiling without
+healing: investing while wounded leaves the wound. Ability power is computed and displayed but no
+system consumes it yet; the abilities it is meant for do not exist.
+
 **Not decided**: the real maximum level (the current 100 is a technical bound on the level-up loop,
-nothing more), respec, XP modifiers, prestige, and whether stat allocation stays manual.
+nothing more), respec, stat decrement, stat caps, XP modifiers, prestige, equipment modifiers, and
+what ability power will eventually scale.
 
 ---
 

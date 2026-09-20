@@ -1,0 +1,126 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/player_stats_menu.gd" id="1_menu"]
+
+[sub_resource type="StyleBoxFlat" id="panel_style"]
+bg_color = Color(0.07, 0.07, 0.1, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.45, 0.58, 0.9)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 22.0
+content_margin_top = 18.0
+content_margin_right = 22.0
+content_margin_bottom = 18.0
+
+[sub_resource type="StyleBoxFlat" id="hint_style"]
+bg_color = Color(0.07, 0.07, 0.1, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 9.0
+content_margin_top = 4.0
+content_margin_right = 9.0
+content_margin_bottom = 4.0
+
+[node name="PlayerStatsMenu" type="CanvasLayer"]
+layer = 70
+process_mode = 3
+script = ExtResource("1_menu")
+
+[node name="Root" type="Control" parent="."]
+process_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
+
+[node name="Dim" type="ColorRect" parent="Root"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.55)
+
+[node name="Panel" type="PanelContainer" parent="Root"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -190.0
+offset_top = -215.0
+offset_right = 190.0
+offset_bottom = 215.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("panel_style")
+
+[node name="Content" type="VBoxContainer" parent="Root/Panel"]
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(1, 0.88, 0.55, 1)
+text = "CHARACTER"
+
+[node name="LevelLabel" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 15
+text = "Level 1"
+
+[node name="PointsLabel" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.6, 0.85, 1, 1)
+text = "Punti disponibili: 0"
+
+[node name="Separator1" type="HSeparator" parent="Root/Panel/Content"]
+
+[node name="Rows" type="VBoxContainer" parent="Root/Panel/Content"]
+theme_override_constants/separation = 6
+
+[node name="Separator2" type="HSeparator" parent="Root/Panel/Content"]
+
+[node name="Derived" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.82, 0.86, 0.94, 1)
+text = "Danno melee        x1.00"
+
+[node name="Separator3" type="HSeparator" parent="Root/Panel/Content"]
+
+[node name="CloseHint" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.68, 0.7, 0.78, 1)
+text = "[C / ESC] Chiudi"
+horizontal_alignment = 1
+
+[node name="Hint" type="PanelContainer" parent="."]
+process_mode = 3
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -152.0
+offset_top = -42.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("hint_style")
+
+[node name="Label" type="Label" parent="Hint"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.85, 0.88, 0.95, 1)
+text = "[C] Statistiche"
+horizontal_alignment = 1

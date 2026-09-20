@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/test_world.gd" id="0_root"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/scene_transition.tscn" id="6_trans"]
 [ext_resource type="PackedScene" path="res://scenes/ui/interaction_prompt.tscn" id="7_prompt"]
 [ext_resource type="PackedScene" path="res://scenes/ui/progression_hud.tscn" id="90_proghud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/player_stats_menu.tscn" id="91_statsmenu"]
 
 [sub_resource type="Environment" id="env_1"]
 background_mode = 1
@@ -174,3 +175,5 @@ mesh = SubResource("dmgzone_mesh")
 material_override = SubResource("dmgzone_mat")
 
 [node name="ProgressionHUD" parent="." instance=ExtResource("90_proghud")]
+
+[node name="PlayerStatsMenu" parent="." instance=ExtResource("91_statsmenu")]

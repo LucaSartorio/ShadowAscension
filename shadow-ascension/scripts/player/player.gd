@@ -3,6 +3,8 @@ extends CharacterBody3D
 
 enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 
+## Base values. AGI scales these into the `effective_*` fields below; the bases
+## themselves are never written to, so a multiplier can never compound.
 @export var movement_speed: float = 6.0
 @export var acceleration: float = 40.0
 @export var deceleration: float = 50.0
@@ -26,6 +28,14 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var progression: PlayerProgression = $PlayerProgression
 
+## What the controller actually uses. Recomputed from the base values whenever
+## the stats change — never from the previous effective value.
+var effective_movement_speed: float = 6.0
+var effective_dodge_speed: float = 11.5
+## The player's own maximum, before VIT. Captured once so raising VIT adds to the
+## original ceiling rather than to an already-raised one.
+var base_max_health: float = 0.0
+
 var _attack_state: AttackState = AttackState.IDLE
 var _attack_timer: float = 0.0
 var _recovery_elapsed: float = 0.0
@@ -46,6 +56,31 @@ func _ready() -> void:
 	add_to_group("player")
 	attack_hitbox.source = self
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
+	base_max_health = health_component.max_health
+	if progression != null:
+		progression.stats_changed.connect(_apply_stat_effects)
+	_apply_stat_effects()
+
+
+## Recomputes every stat-driven value from its base. Called once at startup and
+## again on each stat change — never incrementally, so nothing compounds.
+func _apply_stat_effects() -> void:
+	if progression == null:
+		effective_movement_speed = movement_speed
+		effective_dodge_speed = dodge_speed
+		return
+	effective_movement_speed = movement_speed * progression.get_movement_speed_multiplier()
+	effective_dodge_speed = dodge_speed * progression.get_dodge_speed_multiplier()
+	# Raises the ceiling without healing: HealthComponent only clamps downwards.
+	health_component.set_max_health(base_max_health + progression.get_bonus_max_health())
+
+
+## STR scaling for one swing. Kept here rather than written into the AttackStep,
+## which stays the base damage for every attack.
+func _effective_damage(base_damage: float) -> float:
+	if progression == null:
+		return base_damage
+	return progression.get_effective_damage(base_damage)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -79,7 +114,7 @@ func _physics_process(delta: float) -> void:
 	if desired_dir.length() > 1.0:
 		desired_dir = desired_dir.normalized()
 
-	var target_horiz: Vector3 = desired_dir * movement_speed
+	var target_horiz: Vector3 = desired_dir * effective_movement_speed
 	var current_horiz: Vector3 = Vector3(velocity.x, 0.0, velocity.z)
 	var accel_rate: float = acceleration if desired_dir.length_squared() > 0.001 else deceleration
 	current_horiz = current_horiz.move_toward(target_horiz, accel_rate * delta)
@@ -166,7 +201,8 @@ func _update_attack(delta: float) -> void:
 		AttackState.STARTUP:
 			_attack_state = AttackState.ACTIVE
 			_attack_timer = _current_step.active
-			attack_hitbox.damage = _current_step.damage
+			# The step keeps its base damage; STR is applied here, once per swing.
+			attack_hitbox.damage = _effective_damage(_current_step.damage)
 			attack_hitbox.set_debug_color(_current_step.debug_color)
 			attack_hitbox.activate()
 		AttackState.ACTIVE:
@@ -277,8 +313,8 @@ func _tick_dodge(delta: float) -> void:
 		_dodge_iframes_active = should_be_invulnerable
 		if hurtbox != null:
 			hurtbox.set_invulnerable(should_be_invulnerable)
-	velocity.x = _dodge_direction.x * dodge_speed
-	velocity.z = _dodge_direction.z * dodge_speed
+	velocity.x = _dodge_direction.x * effective_dodge_speed
+	velocity.z = _dodge_direction.z * effective_dodge_speed
 	if is_on_floor():
 		if velocity.y < 0.0:
 			velocity.y = 0.0

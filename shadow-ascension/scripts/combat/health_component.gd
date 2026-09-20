@@ -26,6 +26,17 @@ func receive_damage(amount: float) -> void:
 		died.emit()
 
 
+## Changes the ceiling without healing: current health is only ever clamped down
+## to the new maximum, never topped up. Generic on purpose — this component knows
+## nothing about what raised the ceiling.
+func set_max_health(value: float) -> void:
+	if value <= 0.0 or is_equal_approx(value, max_health):
+		return
+	max_health = value
+	current_health = minf(current_health, max_health)
+	health_changed.emit(current_health, max_health)
+
+
 func heal(amount: float) -> void:
 	if is_dead:
 		return
