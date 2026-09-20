@@ -7,11 +7,20 @@ extends RoomCombatant
 
 ## Carries what a health bar needs without the boss knowing a UI exists.
 signal encounter_started(display_name: String, health: HealthComponent)
+## Emitted on every phase change, including the transition itself. A UI listens;
+## the boss still knows nothing about one.
+signal phase_changed(phase: BossPhase)
 
-enum State { INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, RECOVERY, DEAD }
-enum AttackPhase { NONE, STARTUP, ACTIVE }
+enum State { INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, TRANSITION, RECOVERY, DEAD }
+## Which half of the fight this is. Distinct from State: the boss stays in
+## PHASE_2 while it chases, attacks and recovers.
+enum BossPhase { PHASE_1, TRANSITION, PHASE_2 }
+enum AttackPhase { NONE, STARTUP, ACTIVE, BETWEEN_HITS }
 
 const GROUP: StringName = &"boss"
+## The body keeps this once phase 2 starts, so the boss reads as changed even
+## when it is standing still.
+const PHASE_2_COLOR: Color = Color(0.72, 0.12, 0.16)
 
 @export var display_name: String = "Dungeon Boss"
 ## Body tuning. Copied into the runtime fields below on _ready().
@@ -39,6 +48,13 @@ var reposition_speed_fraction: float = 0.85
 var target_update_interval: float = 0.2
 var intro_duration: float = 0.8
 var death_topple_duration: float = 1.2
+var phase_2_health_fraction: float = 0.5
+var phase_transition_duration: float = 1.5
+var phase_2_movement_speed: float = 3.8
+var phase_2_reposition_timeout: float = 0.9
+## Held so phase 2 can restore phase 1's values if the boss is ever reset.
+var _phase_1_movement_speed: float = 3.2
+var _phase_1_reposition_timeout: float = 1.4
 
 @onready var visual_root: Node3D = $VisualRoot
 ## Telegraph animations live here, below the facing node, so a wind-up can lean
@@ -53,7 +69,14 @@ var death_topple_duration: float = 1.2
 @onready var body_collision: CollisionShape3D = $CollisionShape3D
 
 var _state: State = State.INACTIVE
+var _phase: BossPhase = BossPhase.PHASE_1
+## Latched the moment the transition starts, so it can never run twice — not on
+## a second dip below the threshold, not on a heal and re-damage.
+var _phase_transition_spent: bool = false
+var _phase_timer_remaining: float = 0.0
 var _attack_phase: AttackPhase = AttackPhase.NONE
+## Swings already delivered by the attack in progress.
+var _hits_done: int = 0
 var _phase_timer: float = 0.0
 var _intro_timer: float = 0.0
 var _reposition_timer: float = 0.0
@@ -83,6 +106,8 @@ func _ready() -> void:
 	_rng.seed = decision_seed
 	health_component.max_health = max_health
 	_last_health = max_health
+	_phase_1_movement_speed = movement_speed
+	_phase_1_reposition_timeout = reposition_timeout
 	_setup_hitboxes()
 	_setup_navigation()
 	_setup_material()
@@ -111,6 +136,10 @@ func _apply_stats() -> void:
 	max_attack_facing_angle = stats.max_attack_facing_angle
 	max_consecutive_repeats = stats.max_consecutive_repeats
 	reposition_timeout = stats.reposition_timeout
+	phase_2_health_fraction = stats.phase_2_health_fraction
+	phase_transition_duration = stats.phase_transition_duration
+	phase_2_movement_speed = stats.phase_2_movement_speed
+	phase_2_reposition_timeout = stats.phase_2_reposition_timeout
 	reposition_speed_fraction = stats.reposition_speed_fraction
 	target_update_interval = stats.target_update_interval
 	intro_duration = stats.intro_duration
@@ -172,10 +201,28 @@ func set_combat_enabled(enabled: bool) -> void:
 	_intro_timer = intro_duration
 	_play_intro_telegraph()
 	encounter_started.emit(display_name, health_component)
+	phase_changed.emit(_phase)
 
 
 func get_state() -> State:
 	return _state
+
+
+func get_phase() -> BossPhase:
+	return _phase
+
+
+func is_phase_2() -> bool:
+	return _phase == BossPhase.PHASE_2
+
+
+## True once the transition has run, whether or not the boss survived it.
+func phase_transition_spent() -> bool:
+	return _phase_transition_spent
+
+
+func get_hits_done() -> int:
+	return _hits_done
 
 
 func get_attack_cooldown(index: int) -> float:
@@ -224,6 +271,8 @@ func _physics_process(delta: float) -> void:
 			_reposition_step(delta, dist, player)
 		State.ATTACK:
 			_attack_step(delta, to_player)
+		State.TRANSITION:
+			_transition_step(delta)
 		State.RECOVERY:
 			_recovery_step(delta)
 
@@ -269,10 +318,13 @@ func _decide_step(delta: float, dist: float, player: Player) -> void:
 		_enter_reposition()
 		return
 
+	var p2: bool = is_phase_2()
 	_candidates.clear()
 	for i in attacks.size():
 		var attack: BossAttack = attacks[i]
 		if _hitboxes[i] == null or _cooldowns[i] > 0.0:
+			continue
+		if not attack.is_available(p2):
 			continue
 		if dist < attack.min_range or dist > attack.max_range:
 			continue
@@ -288,7 +340,23 @@ func _decide_step(delta: float, dist: float, player: Player) -> void:
 		_enter_reposition()
 		return
 
-	_begin_attack(_candidates[_rng.randi_range(0, _candidates.size() - 1)])
+	_begin_attack(_pick_weighted(p2))
+
+
+## Picks among the valid candidates by their per-phase weight. Still random, but
+## a heavy attack stays rarer than a jab instead of being equally likely.
+func _pick_weighted(in_phase_2: bool) -> int:
+	var total: float = 0.0
+	for i in _candidates:
+		total += maxf(0.0, attacks[i].get_weight(in_phase_2))
+	if total <= 0.0:
+		return _candidates[_rng.randi_range(0, _candidates.size() - 1)]
+	var roll: float = _rng.randf() * total
+	for i in _candidates:
+		roll -= maxf(0.0, attacks[i].get_weight(in_phase_2))
+		if roll <= 0.0:
+			return i
+	return _candidates[_candidates.size() - 1]
 
 
 func _chase_step(delta: float, dist: float, player: Player) -> void:
@@ -339,12 +407,14 @@ func _begin_attack(index: int) -> void:
 	_consecutive = 1 if index != _last_attack else _consecutive + 1
 	_last_attack = index
 	var attack: BossAttack = attacks[index]
-	_cooldowns[index] = attack.cooldown
+	var p2: bool = is_phase_2()
+	_cooldowns[index] = attack.get_cooldown(p2)
 	_state = State.ATTACK
 	_attack_phase = AttackPhase.STARTUP
-	_phase_timer = attack.startup
+	_phase_timer = attack.get_startup(p2)
+	_hits_done = 0
 	_desired_horizontal = Vector3.ZERO
-	_play_telegraph(attack)
+	_play_telegraph(attack, p2)
 
 
 func _attack_step(delta: float, to_player: Vector3) -> void:
@@ -353,9 +423,15 @@ func _attack_step(delta: float, to_player: Vector3) -> void:
 	var attack: BossAttack = attacks[_active_attack]
 
 	# STARTUP may correct facing, and only partially. ACTIVE does not turn at
-	# all, so a committed swing can be sidestepped.
-	if _attack_phase == AttackPhase.STARTUP and to_player.length_squared() > 0.0001:
-		var turn: float = rotation_speed * attack.facing_correction_fraction
+	# all, so a committed swing can be sidestepped. The gap between two swings of
+	# a multi-hit allows a small nudge, never a snap onto a player who left.
+	if to_player.length_squared() > 0.0001:
+		var fraction: float = 0.0
+		if _attack_phase == AttackPhase.STARTUP:
+			fraction = attack.facing_correction_fraction
+		elif _attack_phase == AttackPhase.BETWEEN_HITS:
+			fraction = attack.between_hits_facing_fraction
+		var turn: float = rotation_speed * fraction
 		if turn > 0.0:
 			_rotate_visual_toward(to_player.normalized(), delta, turn)
 
@@ -365,18 +441,84 @@ func _attack_step(delta: float, to_player: Vector3) -> void:
 
 	match _attack_phase:
 		AttackPhase.STARTUP:
-			_attack_phase = AttackPhase.ACTIVE
-			_phase_timer = attack.active
-			var hitbox: Hitbox = _hitboxes[_active_attack]
-			if hitbox != null:
-				hitbox.damage = attack.damage
-				hitbox.activate()
+			_start_hit_window(attack)
+		AttackPhase.BETWEEN_HITS:
+			_play_rewind_telegraph(attack)
+			_start_hit_window(attack)
 		AttackPhase.ACTIVE:
 			_deactivate_all_hitboxes()
+			_hits_done += 1
+			if _hits_done < maxi(1, attack.hit_count):
+				# Another swing to come: committed, but harmless in the gap.
+				_attack_phase = AttackPhase.BETWEEN_HITS
+				_phase_timer = attack.delay_between_hits
+				return
 			_attack_phase = AttackPhase.NONE
 			_state = State.RECOVERY
-			_phase_timer = attack.recovery
+			_phase_timer = attack.get_recovery(is_phase_2())
 			_reset_telegraph()
+
+
+## Opens one swing. activate() clears the hitbox's hit registry, so each swing
+## can land on the player exactly once and the next swing starts fresh.
+func _start_hit_window(attack: BossAttack) -> void:
+	_attack_phase = AttackPhase.ACTIVE
+	_phase_timer = attack.active
+	var hitbox: Hitbox = _hitboxes[_active_attack]
+	if hitbox != null:
+		hitbox.damage = attack.damage
+		hitbox.activate()
+
+
+## Drops everything the boss was doing and hands it a harmless, committed beat.
+## Safe from any state: mid-startup, mid-swing, between two hits of a Double
+## Strike, mid-chase.
+func _begin_phase_transition() -> void:
+	_phase_transition_spent = true
+	_phase = BossPhase.TRANSITION
+	_state = State.TRANSITION
+	_phase_timer_remaining = phase_transition_duration
+
+	# Cancel the attack in flight rather than letting its windows keep firing.
+	_deactivate_all_hitboxes()
+	_attack_phase = AttackPhase.NONE
+	_active_attack = -1
+	_hits_done = 0
+	_phase_timer = 0.0
+
+	# Stop moving and stop pathing, so nothing carries over into the beat.
+	velocity = Vector3.ZERO
+	_desired_horizontal = Vector3.ZERO
+	nav_agent.target_position = global_position
+	_reposition_timer = 0.0
+
+	_play_transition_telegraph()
+	phase_changed.emit(_phase)
+
+
+func _transition_step(delta: float) -> void:
+	# No decisions, no navigation, no hitboxes — only gravity.
+	_desired_horizontal = Vector3.ZERO
+	_apply_motion(Vector3.ZERO, delta)
+	_phase_timer_remaining -= delta
+	if _phase_timer_remaining > 0.0:
+		return
+	_enter_phase_2()
+
+
+func _enter_phase_2() -> void:
+	_phase = BossPhase.PHASE_2
+	movement_speed = phase_2_movement_speed
+	reposition_timeout = phase_2_reposition_timeout
+	nav_agent.max_speed = movement_speed
+	# Phase 2 opens with a clean slate rather than inheriting phase 1 cooldowns.
+	for i in _cooldowns.size():
+		_cooldowns[i] = 0.0
+	_last_attack = -1
+	_consecutive = 0
+	_reset_telegraph()
+	_state = State.DECIDE
+	phase_changed.emit(_phase)
 
 
 func _recovery_step(delta: float) -> void:
@@ -462,11 +604,11 @@ func _kill_telegraph() -> void:
 
 ## Each attack winds up with a different shape, so they stay distinguishable
 ## without animation: a forward lean, a wind-up spin, or a vertical compression.
-func _play_telegraph(attack: BossAttack) -> void:
+func _play_telegraph(attack: BossAttack, in_phase_2: bool) -> void:
 	_kill_telegraph()
 	_telegraph_tween = create_tween()
 	_telegraph_tween.set_parallel(true)
-	var duration: float = maxf(0.05, attack.startup * 0.9)
+	var duration: float = maxf(0.05, attack.get_startup(in_phase_2) * 0.9)
 	match attack.telegraph:
 		BossAttack.Telegraph.LEAN:
 			_telegraph_tween.tween_property(mesh_root, "rotation:x", deg_to_rad(-22.0), duration)
@@ -474,8 +616,45 @@ func _play_telegraph(attack: BossAttack) -> void:
 			_telegraph_tween.tween_property(mesh_root, "rotation:y", -TAU, duration)
 		BossAttack.Telegraph.COMPRESS:
 			_telegraph_tween.tween_property(mesh_root, "scale", Vector3(1.35, 0.55, 1.35), duration)
+		BossAttack.Telegraph.RECOIL:
+			# Cocks backwards and narrows instead of leaning in: reads as a
+			# wind-up with something held back, not as a single jab.
+			_telegraph_tween.tween_property(mesh_root, "position:z", 0.45, duration)
+			_telegraph_tween.tween_property(mesh_root, "rotation:x", deg_to_rad(14.0), duration)
+			_telegraph_tween.tween_property(mesh_root, "scale", Vector3(0.78, 1.22, 0.78), duration)
 	if _body_material != null:
 		_telegraph_tween.tween_property(_body_material, "albedo_color", attack.telegraph_color, duration)
+
+
+## Played in the gap between two swings, so the second one is announced rather
+## than arriving out of a still body.
+func _play_rewind_telegraph(attack: BossAttack) -> void:
+	if attack.delay_between_hits <= 0.0:
+		return
+	_kill_telegraph()
+	var half: float = maxf(0.03, attack.delay_between_hits * 0.45)
+	_telegraph_tween = create_tween()
+	_telegraph_tween.set_parallel(true)
+	_telegraph_tween.tween_property(mesh_root, "position:z", 0.5, half)
+	_telegraph_tween.tween_property(mesh_root, "scale", Vector3(0.7, 1.3, 0.7), half)
+	if _body_material != null:
+		_telegraph_tween.tween_property(_body_material, "albedo_color", Color(1.0, 1.0, 0.85), half)
+
+
+## The phase beat: a visible pulse and a colour shift, no asset required.
+func _play_transition_telegraph() -> void:
+	_kill_telegraph()
+	mesh_root.rotation = Vector3.ZERO
+	mesh_root.position.z = 0.0
+	var beat: float = maxf(0.1, phase_transition_duration / 6.0)
+	_telegraph_tween = create_tween()
+	_telegraph_tween.set_loops(3)
+	_telegraph_tween.tween_property(mesh_root, "scale", Vector3(1.3, 1.3, 1.3), beat)
+	_telegraph_tween.tween_property(mesh_root, "scale", Vector3(0.9, 0.9, 0.9), beat)
+	if _body_material != null:
+		_body_material.emission_enabled = true
+		_body_material.emission = PHASE_2_COLOR
+		_body_material.albedo_color = PHASE_2_COLOR
 
 
 func _play_intro_telegraph() -> void:
@@ -485,24 +664,28 @@ func _play_intro_telegraph() -> void:
 	_telegraph_tween.tween_property(mesh_root, "scale", Vector3.ONE, maxf(0.05, intro_duration * 0.5))
 
 
+func _resting_albedo() -> Color:
+	return PHASE_2_COLOR if _phase == BossPhase.PHASE_2 else _base_albedo
+
+
 func _reset_telegraph() -> void:
 	_kill_telegraph()
 	_telegraph_tween = create_tween()
 	_telegraph_tween.set_parallel(true)
 	_telegraph_tween.tween_property(mesh_root, "rotation", Vector3.ZERO, 0.25)
 	_telegraph_tween.tween_property(mesh_root, "scale", Vector3.ONE, 0.25)
-	_telegraph_tween.tween_property(mesh_root, "position:y", 0.0, 0.25)
+	_telegraph_tween.tween_property(mesh_root, "position", Vector3.ZERO, 0.25)
 	if _body_material != null:
-		_telegraph_tween.tween_property(_body_material, "albedo_color", _base_albedo, 0.25)
+		_telegraph_tween.tween_property(_body_material, "albedo_color", _resting_albedo(), 0.25)
 
 
 func _reset_telegraph_instantly() -> void:
 	_kill_telegraph()
 	mesh_root.rotation = Vector3.ZERO
 	mesh_root.scale = Vector3.ONE
-	mesh_root.position.y = 0.0
+	mesh_root.position = Vector3.ZERO
 	if _body_material != null:
-		_body_material.albedo_color = _base_albedo
+		_body_material.albedo_color = _resting_albedo()
 
 
 # --- damage / death -----------------------------------------------------------
@@ -515,10 +698,18 @@ func _deactivate_all_hitboxes() -> void:
 
 ## Deliberately lighter than the enemy's squash: a boss should not read as
 ## flinching. A brief tint pulse, no displacement, no stagger.
-func _on_health_changed(current: float, _maximum: float) -> void:
+func _on_health_changed(current: float, maximum: float) -> void:
 	if current < _last_health:
 		_hit_flash()
 	_last_health = current
+	# A blow that takes the boss to zero emits health_changed before died; there
+	# is no phase left to enter, so let the death handler have it.
+	if current <= 0.0 or _state == State.DEAD:
+		return
+	if _phase_transition_spent or not combat_enabled:
+		return
+	if current <= maximum * phase_2_health_fraction:
+		_begin_phase_transition()
 
 
 func _hit_flash() -> void:
@@ -532,10 +723,16 @@ func _hit_flash() -> void:
 	_feedback_tween.tween_property(_body_material, "albedo_color", resting, 0.16)
 
 
+## Safe from every state, the phase transition and the gap between two swings of
+## a Double Strike included: the attack machine is torn down here, so no delayed
+## hit window can open after death.
 func _on_died() -> void:
 	_state = State.DEAD
 	_attack_phase = AttackPhase.NONE
 	_active_attack = -1
+	_hits_done = 0
+	_phase_timer = 0.0
+	_phase_timer_remaining = 0.0
 	velocity = Vector3.ZERO
 	_desired_horizontal = Vector3.ZERO
 	_deactivate_all_hitboxes()

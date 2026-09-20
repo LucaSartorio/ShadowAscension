@@ -34,6 +34,16 @@ extends Resource
 @export var reposition_speed_fraction: float = 0.85
 @export var target_update_interval: float = 0.2
 
+@export_group("Phase 2")
+## The boss drops into its phase transition when health falls to this fraction
+## of maximum. It happens once per life.
+@export_range(0.0, 1.0) var phase_2_health_fraction: float = 0.5
+## Harmless, committed beat between the two phases.
+@export var phase_transition_duration: float = 1.5
+@export var phase_2_movement_speed: float = 3.8
+## Shorter than phase 1's, so the boss spends less time circling.
+@export var phase_2_reposition_timeout: float = 0.9
+
 @export_group("Encounter")
 ## Brief wind-up when the fight starts. No cutscene, just a readable beat.
 @export var intro_duration: float = 0.8

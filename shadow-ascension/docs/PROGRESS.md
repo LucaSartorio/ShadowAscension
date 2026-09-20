@@ -33,7 +33,57 @@ DECIDE`, and a boss placed in a scene with no room still starts its own encounte
 The hitbox nodes `SweepHitbox` and `SlamHitbox` were renamed to `WideSweepHitbox` and
 `GroundSlamHitbox`, so every node name matches its attack's name.
 
-Next iteration: **M5.2 — Boss Phase 2 and Encounter Polish**.
+M5.2 delivered: the fight has two halves. The boss opens in phase 1 exactly as M5.1 shipped it,
+drops into a harmless, committed beat at half health, and comes out faster with a fourth attack.
+No phase 3, no loot, no enrage timer, no adds.
+
+M5.2 deliverable status (verified by `boss_phase_test.tscn` 49/49 and the real-scene-change flow
+45/45):
+
+- Phase 1 — implemented (unchanged from M5.1)
+- Phase Transition — implemented
+- Phase 2 — implemented
+- Phase 2 timing — implemented
+- Double Strike — implemented
+- Phase 2 decision logic — implemented
+- Phase UI — implemented
+- encounter polish — implemented
+
+`BossPhase` is a separate concept from `State`: the boss stays in `PHASE_2` while it chases,
+attacks and recovers, so the two never have to be kept in sync by hand. Only the beat between them
+is both at once — `State.TRANSITION` and `BossPhase.TRANSITION`. The transition is latched the
+moment it starts, so no amount of further damage, or a heal and re-damage, can run it twice.
+
+Crossing the threshold tears down whatever was in flight rather than waiting for it: hitboxes off,
+the queued attack cancelled, navigation parked, the boss harmless for the whole 1.5s. That is
+tested by catching the boss mid-Ground-Slam and cutting its health at that instant. It is not
+invulnerable there, and dying inside the beat is covered: the boss stays dead, never reaches phase
+2, opens no hit window, and the room still clears exactly once.
+
+Phase-2 tuning lives on the same resources as phase 1 rather than a duplicate set: each
+`BossAttack` carries its phase-2 startup, recovery and cooldown, and the boss asks the resource for
+a timing instead of branching on the phase itself. Damage and reach never change between phases —
+phase 2 changes the rhythm, not the numbers. Attack choice moved from uniform to weighted, so
+Ground Slam stays rarer than the standard melee without ever being impossible.
+
+Double Strike is phase 2 only, and is the first multi-hit attack: `hit_count` and
+`delay_between_hits` drive a `BETWEEN_HITS` window in the attack machine. Each swing re-activates
+one real hitbox, and `Hitbox.activate()` already clears its hit registry, so a swing lands once and
+the next starts fresh — no bespoke dedup logic was needed. The gap allows a quarter of the boss's
+turn rate, enough to track a little and not enough to snap onto a player who left.
+
+Arena: checked, not changed. A full dodge (4.0 units) fits in every direction from where the fight
+happens, with 5.0 clear at the tightest; the player can walk into all four corners and back out;
+and the navmesh reaches every corner. Nothing needed moving, so nothing was moved.
+
+One existing assertion was corrected, not a behaviour: `boss_test`'s reposition check gave the boss
+1.8s to back out of the player's lap, which is shorter than a Ground Slam's 2.05s commitment.
+Weighted selection changed the seeded RNG stream, the boss happened to be mid-slam, and the test
+failed. A probe showed the boss entering REPOSITION at T=0.05 and reaching 1.78 units — the
+behaviour was correct and the window was too short. The test now outlasts a committed attack.
+
+Next iteration: **M5.3 — boss encounter balance**, or M6. Balance is still deliberately untuned:
+600 HP against a 20/25/35 combo is thirty swings, and the phase transition lands on swing 15.
 
 A fix + UX pass landed between M5.1 and M5.2, before any further boss work: the boss room was
 physically unreachable, and the dungeon gave the player no contextual guidance. Both are fixed —

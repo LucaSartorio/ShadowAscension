@@ -41,6 +41,7 @@ func _initialize() -> void:
 			after_run_1["orphans"], after_run_2["orphans"]])
 
 	await _death_and_restart()
+	await _boss_fight_death_and_restart()
 
 	print("[SUMMARY] passed=%d failed=%d" % [_pass, _fail])
 	await _pause(0.3)
@@ -120,19 +121,32 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 		return false
 	_record(bar.is_showing(), "RUN %d/2) boss health bar appears when the encounter starts" % n)
 
+	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_1 and bar.get_phase_text() == "PHASE 1",
+		"RUN %d/2) the fight opens in phase 1" % n)
+
 	player.hurtbox.set_invulnerable(true)
 	var swings: int = 0
 	var bar_tracked: bool = true
+	var saw_transition: bool = false
+	var transition_at: int = -1
 	while not boss.health_component.is_dead and swings < 40:
 		player.global_position = boss.global_position + Vector3(0, 0, 2.0)
 		boss.hurtbox.receive_hit(20.0, null)
 		swings += 1
 		await _pause(0.12)
+		if boss.get_phase() == DungeonBoss.BossPhase.TRANSITION and not saw_transition:
+			saw_transition = true
+			transition_at = swings
 		var expected: float = boss.health_component.current_health / boss.health_component.max_health
 		if not is_equal_approx(bar.get_ratio(), expected):
 			bar_tracked = false
 	player.hurtbox.set_invulnerable(false)
 	await _pause(0.5)
+
+	_record(saw_transition and transition_at == 15,
+		"RUN %d/2) the phase transition fired at half health, on swing %d of 30" % [n, transition_at])
+	_record(boss.phase_transition_spent(),
+		"RUN %d/2) and it is spent, so it cannot run again this life" % n)
 
 	_record(swings == 30, "RUN %d/2) the boss took %d hits of 20 to fell (600 HP)" % [n, swings])
 	_record(bar_tracked, "RUN %d/2) the health bar tracked the whole fight" % n)
@@ -190,3 +204,54 @@ func _record(passed: bool, description: String) -> void:
 ## so frame counting would skip past timers like death_restart_delay.
 func _pause(seconds: float) -> void:
 	await create_timer(seconds).timeout
+
+
+## Dies to the boss mid-fight, in phase 2, and checks the reload hands back a
+## boss that is whole and asleep again rather than one carrying the last run's
+## phase.
+func _boss_fight_death_and_restart() -> void:
+	# The previous block left a freshly reloaded dungeon running, so this one
+	# starts there rather than walking in through the gate again.
+	var dungeon: DungeonController = current_scene as DungeonController
+	if dungeon == null:
+		_record(false, "19) expected a dungeon scene to fight the boss in")
+		return
+	var player: Player = current_scene.get_node("Player")
+	for i in 2:
+		player.global_position = ROOM_ANCHORS[i]
+		await _pause(0.4)
+		for enemy in dungeon.get_rooms()[i].get_enemies():
+			enemy.hurtbox.receive_hit(10000.0, null)
+		await _pause(0.5)
+	player.global_position = ROOM_ANCHORS[2]
+	await _pause(0.6)
+
+	var boss: DungeonBoss = dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
+	boss.hurtbox.receive_hit(boss.health_component.max_health * 0.55, null)
+	await _pause(2.0)
+	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
+		"19) the boss reached phase 2 before the player died")
+
+	var doomed_id: int = current_scene.get_instance_id()
+	player.health_component.receive_damage(1000.0)
+	await _pause(0.3)
+	_record(dungeon.get_state() == DungeonController.DungeonState.FAILED,
+		"20) dying to the boss in phase 2 fails the run")
+
+	await _pause(2.5)
+	var restarted: DungeonController = current_scene as DungeonController
+	_record(current_scene.get_instance_id() != doomed_id,
+		"21) the dungeon reloaded out of the boss fight")
+
+	var fresh_boss: DungeonBoss = restarted.get_rooms()[2].get_enemies()[0] as DungeonBoss
+	var fresh_bar: BossHealthBar = restarted.get_node("BossHealthBar")
+	_record(fresh_boss.get_phase() == DungeonBoss.BossPhase.PHASE_1
+			and not fresh_boss.phase_transition_spent(),
+		"22) the restarted boss is back in phase 1 with its transition unspent")
+	_record(fresh_boss.health_component.current_health == fresh_boss.health_component.max_health,
+		"23) at full health (%.0f/%.0f)" % [
+			fresh_boss.health_component.current_health, fresh_boss.health_component.max_health])
+	_record(fresh_boss.get_state() == DungeonBoss.State.INACTIVE and not fresh_boss.combat_enabled,
+		"24) and INACTIVE until the player walks into the boss room again")
+	_record(not fresh_bar.is_showing() and not fresh_bar.is_banner_showing(),
+		"25) the boss UI and phase callout start hidden again")

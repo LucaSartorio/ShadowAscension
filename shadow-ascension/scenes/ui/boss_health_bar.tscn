@@ -35,3 +35,28 @@ grow_horizontal = 2
 max_value = 600.0
 value = 600.0
 show_percentage = false
+
+[node name="PhaseLabel" type="Label" parent="Root"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 56.0
+offset_bottom = 78.0
+grow_horizontal = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.85, 0.85, 0.9, 1)
+text = "PHASE 1"
+
+[node name="Banner" type="Label" parent="Root"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 82.0
+offset_bottom = 118.0
+grow_horizontal = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(1, 0.4, 0.35, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+text = "PHASE 2"
+visible = false

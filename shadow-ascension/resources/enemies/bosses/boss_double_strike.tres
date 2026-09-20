@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BossAttack" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/boss_attack.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+attack_name = "Double Strike"
+hitbox_name = &"DoubleStrikeHitbox"
+damage = 18.0
+startup = 0.22
+active = 0.1
+recovery = 0.55
+cooldown = 2.2
+min_range = 0.0
+max_range = 2.8
+hit_count = 2
+delay_between_hits = 0.22
+between_hits_facing_fraction = 0.25
+phase_2_startup = 0.22
+phase_2_recovery = 0.55
+phase_2_cooldown = 2.2
+available_in_phase_1 = false
+weight_phase_1 = 0.0
+weight_phase_2 = 0.9
+telegraph = 3
+telegraph_color = Color(1, 0.95, 0.6, 1)
+facing_correction_fraction = 0.3

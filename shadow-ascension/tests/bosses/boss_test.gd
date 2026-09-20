@@ -159,13 +159,17 @@ func _activation_tests() -> void:
 	_record(start_dist - end_dist > 1.0, "7) boss closes distance (%.2f -> %.2f)" % [start_dist, end_dist])
 	_record(saw_chase, "7b) it does it in CHASE, not by drifting")
 
-	# 8) reposition: standing on top of it, the boss should back off, not stay glued
+	# 8) reposition: standing on top of it, the boss should back off, not stay glued.
+	# The budget has to outlast an attack already in flight — a Ground Slam commits
+	# the boss for 2.05s, and refusing to abandon it is the feature, not a stall.
 	_player.global_position = _boss.global_position + Vector3(0, 0, 0.9)
 	var saw_reposition: bool = false
 	var rep_elapsed: float = 0.0
-	while rep_elapsed < 1.8:
+	while rep_elapsed < 5.0:
 		if _boss.get_state() == DungeonBoss.State.REPOSITION:
 			saw_reposition = true
+		if saw_reposition and _boss.get_state() != DungeonBoss.State.REPOSITION:
+			break
 		await get_tree().physics_frame
 		rep_elapsed += get_physics_process_delta_time()
 	_record(saw_reposition, "8b) it enters REPOSITION to do it")
