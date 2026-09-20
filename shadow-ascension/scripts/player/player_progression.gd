@@ -10,10 +10,10 @@ extends Node
 ## ever hears about are the ones the player actually hit — so nothing here
 ## searches the tree and no controller has to wire enemies to the player.
 ##
-## NOTE: progression does not survive a scene reload. Dying in a dungeon
-## reloads it and builds a fresh player, which starts at level 1. Persisting
-## progression across scene changes needs a save/session layer and is deliberately
-## out of scope here; it belongs to its own milestone.
+## Progression survives a scene change: the first player of the session hands its
+## starting values to the PlayerRuntimeState autoload, and every later player
+## restores from it. That autoload stores data only — every formula, including
+## the XP curve and each derived stat, stays here.
 
 signal xp_changed(current_xp: int, required_xp: int)
 signal level_changed(level: int)
@@ -73,6 +73,7 @@ var _tracked: Dictionary = {}
 
 func _ready() -> void:
 	_apply_stats()
+	_restore_or_capture()
 	if attack_hitbox == null:
 		# Resolved here rather than read off the player's own @onready var: this
 		# node is a child, so its _ready() runs first and that var is still null.
@@ -153,6 +154,7 @@ func add_xp(amount: int) -> void:
 		# Nothing left to earn towards, so the bar reads full rather than drifting.
 		current_xp = 0
 
+	_sync_to_runtime_state()
 	xp_changed.emit(current_xp, get_xp_to_next_level())
 	if levels_gained > 0:
 		level_changed.emit(current_level)
@@ -173,6 +175,49 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key.keycode == debug_xp_key:
 		debug_add_xp(debug_xp_amount)
+
+
+# --- session persistence ------------------------------------------------------
+
+## The first player of a session defines the starting point; every player after
+## it picks up where the last one left off. Only the raw values travel — derived
+## stats are always recomputed here, never restored.
+func _restore_or_capture() -> void:
+	var state: Node = _runtime_state()
+	if state == null:
+		return
+	if not state.initialized:
+		state.capture_initial(current_level, current_xp, available_stat_points, _stat_dictionary())
+		return
+	current_level = state.current_level
+	current_xp = state.current_xp
+	available_stat_points = state.available_stat_points
+	strength = state.strength
+	agility = state.agility
+	vitality = state.vitality
+	intelligence = state.intelligence
+
+
+## One place writes progress back, so a new field does not have to be remembered
+## in every callback that can change it.
+func _sync_to_runtime_state() -> void:
+	var state: Node = _runtime_state()
+	if state == null:
+		return
+	state.sync_progression(current_level, current_xp, available_stat_points, _stat_dictionary())
+
+
+func _stat_dictionary() -> Dictionary:
+	return {
+		"strength": strength,
+		"agility": agility,
+		"vitality": vitality,
+		"intelligence": intelligence,
+	}
+
+
+func _runtime_state() -> Node:
+	return get_tree().root.get_node_or_null("PlayerRuntimeState")
 
 
 # --- stats and derived values -------------------------------------------------
@@ -207,6 +252,7 @@ func allocate_stat(stat: Stat) -> bool:
 		_:
 			return false
 	available_stat_points -= 1
+	_sync_to_runtime_state()
 	stat_points_changed.emit(available_stat_points)
 	stats_changed.emit()
 	return true

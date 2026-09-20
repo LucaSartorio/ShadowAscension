@@ -20,6 +20,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	_reset_session()
 	await _wait(0.2)
 	await _gate_prompt_tests()
 	await _traversal_tests()
@@ -226,3 +227,12 @@ func _traversal_tests() -> void:
 	await _wait(0.4)
 	_record(prompt.is_showing() and prompt.get_text() == "Esci dal Dungeon",
 		"done2) the live exit prompts '%s %s'" % [prompt.key_label.text, prompt.get_text()])
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

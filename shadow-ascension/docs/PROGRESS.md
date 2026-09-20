@@ -6,101 +6,180 @@
 
 ## Current Milestone
 
-**M6 — Player Progression** (In Progress)
+**M7 — Loot and Equipment** (Not Started)
 
-M6.1 delivered: XP, levels, a computed curve, stat points that accumulate, base stats as data, XP
-rewards declared by enemies and the boss, a progression HUD and a level-up callout. No allocation,
-no stat screen, no effects — those are M6.2.
+Next per the roadmap. M6 leaves two hooks ready for it: `RoomCombatant.enemy_died` is already the
+drop point that XP subscribes to, and `PlayerRuntimeState` is where equipped items would live for a
+session.
 
-M6.1 deliverable status (verified by `progression_test.tscn` 47/47 and a full real run 17/17):
+Carried into M7, non-blocking:
 
-- XP foundation — implemented
-- level system — implemented
-- XP curve — implemented
-- stat points — implemented
-- base stats — implemented (data only)
-- enemy XP rewards — implemented
-- boss XP reward — implemented
-- progression HUD — implemented
-- level-up feedback — implemented
-
-`PlayerProgression` is a component on the player, not part of its controller. It is the active
-receiver: a combatant only *declares* what it is worth (`RoomCombatant.get_xp_reward()`, which the
-enemy and the boss override to answer from their own stats Resource), and this node decides whether
-to take it. The base asks rather than being written to, so no subclass assigns an inherited field
-while it is initialising and nothing about initialisation order can decide what a kill is worth. It learns which combatants exist by
-listening to the player's own attack hitbox — `Hitbox.hit_landed` already fired for every hit the
-player lands — so the only enemies it ever subscribes to are ones the player actually fought.
-Nothing searches the tree, no controller wires enemies to the player, and it works in the test world
-and the dungeon alike with no extra plumbing.
-
-Paying twice is guarded at the source rather than at each call site: `RoomCombatant.claim_xp()`
-hands its reward out once and returns 0 forever after, and `report_death()` makes the death hook
-fire once however the death was reached. A duplicated signal, a room clearing, a boss phase
-transition and a dungeon completing were each tested and add nothing.
-
-A full run — test world, gate, both combat rooms, boss, completion — with real player combos awards
-**325 XP**: two enemies at 25, three at 25, and the boss at 200, over six kills and 23 boss swings.
-That takes the player to **level 3 with 100/156 XP and 10 unspent stat points**, through two
-level-ups.
-
-**Progression does not survive a scene reload.** Dying in a dungeon reloads the scene and builds a
-fresh player, which starts at level 1 again. Persisting progression across scene changes needs a
-save or session layer; introducing an autoload solely for that was explicitly out of scope here, so
-it is deferred to its own milestone. The limitation is recorded in `player_progression.gd` as well.
-
-Bug found and fixed while building: `PlayerProgression` is a child of the player, so its `_ready()`
-runs *before* the player's — `player.attack_hitbox` was still null and the subscription was never
-made, leaving every kill worth nothing. It now resolves the hitbox itself, the way `Hurtbox` already
-resolves its siblings. One existing assertion was corrected alongside it: `enemy_test` revives a
-single enemy instance between sub-tests, which nothing in the game does, so its reset now clears the
-new death and XP latches too.
-
-M6.2 delivered: a character sheet on C that pauses the game, points that buy stats, and four stats
-that now do something. No respec, no decrement, no caps, no equipment, no save.
-
-M6.2 deliverable status (verified by `stats_test.tscn` 53/53):
-
-- Stats Menu — implemented
-- stat allocation — implemented
-- STR — implemented
-- AGI — implemented
-- VIT — implemented
-- INT — implemented
-- derived stats — implemented
-- STR combat integration — implemented
-- AGI movement/dodge integration — implemented
-- VIT health integration — implemented
-- character stats HUD hint — implemented
-
-`PlayerProgression` stays the single source of truth: it owns the four stats and every derived
-getter, and nothing else keeps a copy. The player holds `effective_movement_speed`,
-`effective_dodge_speed` and `base_max_health` beside its untouched base exports, and recomputes all
-three from the bases on `stats_changed` — never incrementally, so a multiplier cannot compound. The
-same rule covers damage: STR is applied when a swing is prepared, and the `AttackStep` keeps its
-base value, which the tests check after real swings.
-
-`HealthComponent` gained `set_max_health()`, which clamps current health down to a new ceiling and
-never tops it up. It is generic and knows nothing about VIT — the enemy and the boss keep their own
-maximums, verified in the same run.
-
-The menu runs with `PROCESS_MODE_ALWAYS` and pauses the tree, so its buttons work while everything
-else is frozen: an enemy mid-fight and the boss mid-encounter both drift 0.0000 units while it is
-open and resume when it closes. It consumes C and, only while open, ESC — so the existing
-release-the-mouse behaviour of a bare ESC is untouched. A scene change with the menu still open
-unpauses on the way out.
-
-Numbers confirmed against the project's real base values: attack 1 goes 20 → 23 at STR 15 and 25 →
-29 for attack 2, measured both through the formula and through a real swing at an enemy; movement
-6.00 → 6.30 and dodge 11.50 → 11.79 at AGI 15; max health 100 → 140 at VIT 15, and investing at
-50/100 gives 50/108 rather than a free heal.
-
-Next iteration: **M6.3 — Runtime Progression Persistence**, which is what the M6.1 note about
-progression not surviving a scene reload is waiting on.
+- Progression persists for a session only. Closing the game starts over — `PlayerRuntimeState` is
+  explicitly not a save system, and permanent saving is its own milestone.
+- Ability power (INT) is computed and displayed but nothing consumes it; the abilities it is meant
+  for do not exist yet.
+- Stat allocation is one-way. No respec, no decrement, and no final stat caps.
+- Boss balance is untuned, the dungeon layout is a grey-box, and a run returns the player to the
+  test world's default spawn rather than the gate.
 
 ---
 
 ## Done
+
+- **M6 — Player Progression** (Completed). Milestone review passed; all four ROADMAP exit criteria
+  verified by walking the whole thing end to end rather than by reading it:
+    - Killing enemies awards XP; hitting the threshold levels up — 60 XP does not level, 100 does,
+      and five kills plus a boss inside a dungeon carried the character from level 2 to level 4.
+    - Points can be allocated to stats; stats affect combat as expected — five points spent on the
+      sheet moved attack damage 20 → 22, movement 6.00 → 6.06 and max health 100 → 108 in the same
+      frame.
+    - Level and stats update UI or debug readout in real time — the HUD followed the level-up with
+      no prompting, the callout fired, and the sheet redrew as each point was spent.
+    - Zero errors on level-up transitions and stat mutations — 531/531 across every suite with zero
+      runtime errors, zero warnings and zero leaked instances.
+    - The review also covered the full loop with real scene changes: test world, progression, gate,
+      dungeon, more progression, boss, exit, second run, and a death. `m6_review_run.gd` 28/28.
+    - One latent inconsistency was found and fixed (below); nothing else in M6 needed changing.
+
+    Review fix — `Player._restore_health()` did not re-sync the session in its clamping branch. The
+    other two branches did, so the stored health only went stale when the clamp actually bit: a
+    restore above the new ceiling would be trimmed for this player and left untrimmed in the
+    session. Not reachable today, because VIT only ever rises and so the ceiling only ever grows,
+    but it would have become a real desync the moment anything lowered max health. The branch now
+    reports the clamped value like the others.
+
+    M6.1 delivered: XP, levels, a computed curve, stat points that accumulate, base stats as data, XP
+    rewards declared by enemies and the boss, a progression HUD and a level-up callout. No allocation,
+    no stat screen, no effects — those are M6.2.
+
+    M6.1 deliverable status (verified by `progression_test.tscn` 47/47 and a full real run 17/17):
+
+    - XP foundation — implemented
+    - level system — implemented
+    - XP curve — implemented
+    - stat points — implemented
+    - base stats — implemented (data only)
+    - enemy XP rewards — implemented
+    - boss XP reward — implemented
+    - progression HUD — implemented
+    - level-up feedback — implemented
+
+    `PlayerProgression` is a component on the player, not part of its controller. It is the active
+    receiver: a combatant only *declares* what it is worth (`RoomCombatant.get_xp_reward()`, which the
+    enemy and the boss override to answer from their own stats Resource), and this node decides whether
+    to take it. The base asks rather than being written to, so no subclass assigns an inherited field
+    while it is initialising and nothing about initialisation order can decide what a kill is worth. It learns which combatants exist by
+    listening to the player's own attack hitbox — `Hitbox.hit_landed` already fired for every hit the
+    player lands — so the only enemies it ever subscribes to are ones the player actually fought.
+    Nothing searches the tree, no controller wires enemies to the player, and it works in the test world
+    and the dungeon alike with no extra plumbing.
+
+    Paying twice is guarded at the source rather than at each call site: `RoomCombatant.claim_xp()`
+    hands its reward out once and returns 0 forever after, and `report_death()` makes the death hook
+    fire once however the death was reached. A duplicated signal, a room clearing, a boss phase
+    transition and a dungeon completing were each tested and add nothing.
+
+    A full run — test world, gate, both combat rooms, boss, completion — with real player combos awards
+    **325 XP**: two enemies at 25, three at 25, and the boss at 200, over six kills and 23 boss swings.
+    That takes the player to **level 3 with 100/156 XP and 10 unspent stat points**, through two
+    level-ups.
+
+    **Progression does not survive a scene reload.** Dying in a dungeon reloads the scene and builds a
+    fresh player, which starts at level 1 again. Persisting progression across scene changes needs a
+    save or session layer; introducing an autoload solely for that was explicitly out of scope here, so
+    it is deferred to its own milestone. The limitation is recorded in `player_progression.gd` as well.
+
+    Bug found and fixed while building: `PlayerProgression` is a child of the player, so its `_ready()`
+    runs *before* the player's — `player.attack_hitbox` was still null and the subscription was never
+    made, leaving every kill worth nothing. It now resolves the hitbox itself, the way `Hurtbox` already
+    resolves its siblings. One existing assertion was corrected alongside it: `enemy_test` revives a
+    single enemy instance between sub-tests, which nothing in the game does, so its reset now clears the
+    new death and XP latches too.
+
+    M6.2 delivered: a character sheet on C that pauses the game, points that buy stats, and four stats
+    that now do something. No respec, no decrement, no caps, no equipment, no save.
+
+    M6.2 deliverable status (verified by `stats_test.tscn` 53/53):
+
+    - Stats Menu — implemented
+    - stat allocation — implemented
+    - STR — implemented
+    - AGI — implemented
+    - VIT — implemented
+    - INT — implemented
+    - derived stats — implemented
+    - STR combat integration — implemented
+    - AGI movement/dodge integration — implemented
+    - VIT health integration — implemented
+    - character stats HUD hint — implemented
+
+    `PlayerProgression` stays the single source of truth: it owns the four stats and every derived
+    getter, and nothing else keeps a copy. The player holds `effective_movement_speed`,
+    `effective_dodge_speed` and `base_max_health` beside its untouched base exports, and recomputes all
+    three from the bases on `stats_changed` — never incrementally, so a multiplier cannot compound. The
+    same rule covers damage: STR is applied when a swing is prepared, and the `AttackStep` keeps its
+    base value, which the tests check after real swings.
+
+    `HealthComponent` gained `set_max_health()`, which clamps current health down to a new ceiling and
+    never tops it up. It is generic and knows nothing about VIT — the enemy and the boss keep their own
+    maximums, verified in the same run.
+
+    The menu runs with `PROCESS_MODE_ALWAYS` and pauses the tree, so its buttons work while everything
+    else is frozen: an enemy mid-fight and the boss mid-encounter both drift 0.0000 units while it is
+    open and resume when it closes. It consumes C and, only while open, ESC — so the existing
+    release-the-mouse behaviour of a bare ESC is untouched. A scene change with the menu still open
+    unpauses on the way out.
+
+    Numbers confirmed against the project's real base values: attack 1 goes 20 → 23 at STR 15 and 25 →
+    29 for attack 2, measured both through the formula and through a real swing at an enemy; movement
+    6.00 → 6.30 and dodge 11.50 → 11.79 at AGI 15; max health 100 → 140 at VIT 15, and investing at
+    50/100 gives 50/108 rather than a free heal.
+
+    M6.3 delivered, and with it the bug M6.1 had flagged: level, XP, stat points and stats were reset
+    every time the player changed scene. They now survive.
+
+    M6.3 deliverable status (verified by `persistence_run.gd` 48/48, all with real scene changes):
+
+    - runtime progression persistence — implemented
+    - scene transition persistence — implemented
+    - runtime stat persistence — implemented
+    - runtime XP/Level persistence — implemented
+    - runtime health persistence — implemented
+    - death health reset — implemented
+    - second dungeon run persistence — implemented
+
+    **Cause of the reset.** Nothing was broken in the progression system itself. A scene change destroys
+    the player and instantiates a new one, and `PlayerProgression` seeded itself from its
+    `ProgressionStats` asset every time — which is exactly the starting values. There was nowhere for a
+    session to live, so every gate, every exit portal and every death restart handed back a level 1
+    character.
+
+    `PlayerRuntimeState` is a new autoload holding only that session data; it is documented in
+    ARCHITECTURE.md, including that it is explicitly **not** a save system. The first player of a
+    session hands it its starting values, every later player restores from it, and `PlayerProgression`
+    writes back through one `_sync_to_runtime_state()` so a new field does not have to be remembered in
+    each callback. Max health is deliberately not stored — it is recomputed from the player's base plus
+    VIT on every load, so the two cannot desync — and health is reported by the player through
+    `HealthComponent.health_changed` rather than polled.
+
+    Death is the one case that restores health without touching progress. A negative stored health means
+    "full", which is both what a death leaves behind and the fresh-session state.
+
+    Measured across a real run — test world, gate, dungeon, five kills, a boss, exit portal, a second
+    gate, then a death — every value held: level 4, 84 XP, 8 unspent points, STR 12 / AGI 11 / VIT 12 /
+    INT 12, and 37/116 health carried unchanged through the gate, the exit and the second entry. After
+    dying at 20/116 the character came back at 116/116 with all of that intact.
+
+    One real bug was found and fixed while building: `capture_initial()` took a health argument that
+    `PlayerProgression` could not know, so it passed `0.0` and the first player of the session restored
+    itself to zero health. Health is now the player's to report, and the autoload's default means
+    "full" rather than "empty".
+
+    Every suite now begins by resetting the session. Without that, one test would inherit whatever an
+    earlier one left behind — which is the persistence working, not a defect.
+
+    The M6 milestone review then ran and passed; its result is at the top of this entry.
+
 
 - **M5 — First Boss** (Completed). Milestone review passed; all four ROADMAP exit criteria verified:
     - Boss executes each attack correctly with readable telegraphs — two full fights used all four
@@ -723,14 +802,15 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-No milestone in flight. M6 has not been started. Two definitions stay open by design:
+No milestone in flight. M7 has not been started. Two definitions stay open by design:
 
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
     - mouse-controlled aim
     - combat feel direction
-  Still in progress: progression, loot, shadow mechanic, dungeon structure, UI, etc.
+  Still in progress: loot, shadow mechanic, dungeon structure, UI, etc. Progression is
+  settled as of M6 and recorded in GAME_DESIGN.md.
 - Technical architecture definition — grows as systems land.
 
 ---

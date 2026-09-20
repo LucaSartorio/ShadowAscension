@@ -30,6 +30,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	await _wait(0.2)
+	_reset_session()
 	await _setup()
 	await _activation_tests()
 	await _attack_tests()
@@ -452,3 +453,12 @@ func _death_tests() -> void:
 	_record(_dungeon.get_state() == DungeonController.DungeonState.COMPLETED,
 		"33) the dungeon reaches COMPLETED (state=%d)" % _dungeon.get_state())
 	_record(_dungeon.exit_portal.is_enabled(), "34) the exit portal goes live")
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

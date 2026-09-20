@@ -13,6 +13,7 @@ func _ready() -> void:
 
 
 func _run_tests() -> void:
+	_reset_session()
 	await get_tree().create_timer(0.15).timeout
 	await _test_dodge_direction_with_input()
 	await _test_diagonal_normalized()
@@ -318,3 +319,12 @@ func _test_spam_space_no_break() -> void:
 	var recovered: bool = _player._is_dodging
 	_record(recovered, "18) after spamming Space, state remains usable (is_dodging=%s)" % _player._is_dodging)
 	await _wait(0.6)
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

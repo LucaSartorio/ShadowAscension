@@ -23,6 +23,10 @@ var _fail: int = 0
 
 
 func _initialize() -> void:
+	# A clean session: progression and health now survive scene changes.
+	var state: Node = root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()
 	change_scene_to_file(TEST_WORLD)
 	await _pause(0.6)
 	_record(current_scene.scene_file_path == TEST_WORLD, "1) test world is the running scene")

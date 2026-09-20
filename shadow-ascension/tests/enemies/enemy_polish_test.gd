@@ -22,6 +22,7 @@ func _ready() -> void:
 
 
 func _run_tests() -> void:
+	_reset_session()
 	await _wait(0.4)
 	await _test_avoidance_configured()
 	await _test_two_enemies_do_not_share_a_target()
@@ -446,3 +447,12 @@ func _test_aggro_survives_brief_distance_spike() -> void:
 	var still_engaged: bool = _a._state != BasicMeleeEnemy.State.IDLE
 	_record(engaged and held and still_engaged, "17) aggro survives a spike shorter than lose_target_delay (engaged=%s held=%s recovered=%s)" % [
 		engaged, held, still_engaged])
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

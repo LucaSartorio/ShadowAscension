@@ -21,6 +21,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	_reset_session()
 	await _wait(0.2)
 	await _gate_and_fade()
 	await _full_dungeon_loop()
@@ -292,3 +293,12 @@ func _death_restart() -> void:
 		"29) the restarted run gives the player full health (%.0f/%.0f)" % [
 			fresh_player.health_component.current_health, fresh_player.health_component.max_health])
 	await _clear_scene(fresh)
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

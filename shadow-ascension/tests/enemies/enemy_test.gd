@@ -16,6 +16,7 @@ func _ready() -> void:
 
 
 func _run_tests() -> void:
+	_reset_session()
 	# wait for navigation server to register the baked map
 	await _wait(0.4)
 	await _test_idle_when_far()
@@ -456,3 +457,12 @@ func _test_death_drop_hook() -> void:
 	var correct_payload: bool = once and payloads[0] == _enemy
 	_record(once and correct_payload, "22) death emits the drop hook once with itself (emissions=%d payload_ok=%s)" % [
 		payloads.size(), correct_payload])
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

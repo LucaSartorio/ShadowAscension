@@ -229,3 +229,40 @@ Direction:
 - **Definition of Done** (from `CLAUDE.md`) is the acceptance bar for every task: project launches, zero runtime errors, zero parser errors, coherent structure, feature verifiable, docs updated.
 
 Regressions caught during play are the priority signal until automation exists.
+
+---
+
+## PlayerRuntimeState (autoload)
+
+`scripts/core/player_runtime_state.gd`, registered as the autoload `PlayerRuntimeState`.
+
+**Global runtime session data — not a save system.** Nothing here touches the disk. Closing the
+game starts a fresh session at level 1. Permanent saving is a separate milestone and will not live
+in this node.
+
+It exists because a scene change destroys the player and builds a new one, so everything the player
+knew about itself died with it. This node holds the few values that belong to the *session* rather
+than to any one scene, and hands them to the next player:
+
+- `current_level`, `current_xp`, `available_stat_points`
+- `strength`, `agility`, `vitality`, `intelligence`
+- `current_health`
+
+It is the one autoload CLAUDE.md §4 allows: genuinely global state that has to outlive a scene, not
+gameplay logic parked in a singleton. It stores and returns data and owns no behaviour — every
+formula, from the XP curve to each derived stat, stays in `PlayerProgression`. It is not a
+`GameManager`, a `SceneManager`, or a general blackboard, and nothing unrelated to player session
+data belongs in it.
+
+**Max health is deliberately not stored.** It is recomputed from the player's own base plus VIT on
+every load, so the two can never desync. A negative `current_health` means "start at whatever this
+player computes as its maximum" — both the fresh-session state and what a death leaves behind.
+
+**Flow.** The first player of a session calls `capture_initial()` with the values its own resources
+gave it. Every later player restores from the node instead, then recomputes its derived stats from
+scratch. `PlayerProgression` writes back through a single `_sync_to_runtime_state()`, so a new
+persisted field does not have to be remembered in each callback that can change it. The player
+itself reports health, through `HealthComponent.health_changed`.
+
+**Not persisted**, on purpose: position, camera rotation, combat and combo state, dodge state,
+cooldowns, the current room, dungeon progress, enemy and boss state, and transient UI.

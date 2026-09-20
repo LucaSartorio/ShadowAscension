@@ -30,6 +30,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	await _wait(0.2)
+	_reset_session()
 	await _curve_tests()
 	await _levelling_tests()
 	await _dungeon_reward_tests()
@@ -82,6 +83,7 @@ func _curve_tests() -> void:
 # --- levelling ------------------------------------------------------------------
 
 func _levelling_tests() -> void:
+	_reset_session()
 	var player: Player = PLAYER.instantiate() as Player
 	add_child(player)
 	await _wait(0.3)
@@ -175,6 +177,7 @@ func _kill_with_combo(target: RoomCombatant, budget: float = 12.0) -> int:
 
 
 func _dungeon_reward_tests() -> void:
+	_reset_session()
 	_dungeon = DUNGEON.instantiate() as DungeonController
 	add_child(_dungeon)
 	await _wait(0.8)
@@ -300,3 +303,12 @@ func _total_xp() -> int:
 	for level in range(1, _prog.current_level):
 		total += _prog.xp_required_for_level(level)
 	return total
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

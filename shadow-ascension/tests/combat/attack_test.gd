@@ -10,6 +10,7 @@ var _hit_counter: int = 0
 
 
 func _ready() -> void:
+	_reset_session()
 	_player.global_position = Vector3(0, 0.1, 0)
 	_run_all_tests()
 
@@ -218,3 +219,12 @@ func _test_orientation_toward_aim() -> void:
 	await _wait(1.4)
 	_player.camera_rig.rotation.y = 0.0
 	d.queue_free()
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

@@ -30,6 +30,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	_reset_session()
 	await _wait(0.2)
 	await _gate_tests()
 	await _dungeon_tests()
@@ -278,3 +279,12 @@ func _dungeon_tests() -> void:
 	# progression order
 	_record(",".join(_cleared_events) == "CombatRoom1,CombatRoom2,BossRoom",
 		"seq) rooms cleared in dungeon order: %s" % str(_cleared_events))
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

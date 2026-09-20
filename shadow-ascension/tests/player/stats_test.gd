@@ -26,6 +26,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	await _wait(0.2)
+	_reset_session()
 	await _setup()
 	await _menu_tests()
 	await _allocation_tests()
@@ -390,3 +391,12 @@ func _pause_tests() -> void:
 	_record(not get_tree().paused and boss.global_position.distance_to(boss_pos) > 0.01,
 		"35) closing the menu resumes the fight (moved %.3f)" % [
 			boss.global_position.distance_to(boss_pos)])
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()

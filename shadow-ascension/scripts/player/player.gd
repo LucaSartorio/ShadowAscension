@@ -60,6 +60,48 @@ func _ready() -> void:
 	if progression != null:
 		progression.stats_changed.connect(_apply_stat_effects)
 	_apply_stat_effects()
+	_restore_health()
+	health_component.health_changed.connect(_on_health_changed)
+	health_component.died.connect(_on_player_died)
+
+
+## Health carries across a scene change, so walking through a gate is not a free
+## heal. The ceiling is never restored — _apply_stat_effects() has already
+## recomputed it from this player's own base plus VIT — only the wound is.
+func _restore_health() -> void:
+	var state: Node = _runtime_state()
+	if state == null or not state.initialized:
+		if state != null:
+			state.sync_health(health_component.current_health)
+		return
+	if state.wants_full_health():
+		health_component.current_health = health_component.max_health
+		state.sync_health(health_component.current_health)
+		return
+	health_component.current_health = clampf(
+		state.current_health, 0.0, health_component.max_health)
+	# Written straight to the field, which emits nothing, so the session is told
+	# explicitly. It matters when the clamp actually bit: without this the stored
+	# value would stay above the ceiling it was just clamped to.
+	state.sync_health(health_component.current_health)
+
+
+func _on_health_changed(current: float, _maximum: float) -> void:
+	var state: Node = _runtime_state()
+	if state != null:
+		state.sync_health(current)
+
+
+## The run restarts, the character does not: the next player comes back at full
+## health with its level, XP and stats untouched.
+func _on_player_died() -> void:
+	var state: Node = _runtime_state()
+	if state != null:
+		state.reset_health_to_max()
+
+
+func _runtime_state() -> Node:
+	return get_tree().root.get_node_or_null("PlayerRuntimeState")
 
 
 ## Recomputes every stat-driven value from its base. Called once at startup and

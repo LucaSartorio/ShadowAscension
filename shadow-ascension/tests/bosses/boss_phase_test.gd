@@ -62,6 +62,7 @@ func _record(passed: bool, description: String) -> void:
 ## Brings a fresh dungeon up with the player standing in the boss room, both
 ## combat rooms cleared behind them, exactly as a real run arrives.
 func _setup() -> void:
+	_reset_session()
 	if _dungeon != null:
 		_dungeon.queue_free()
 		await _wait(0.5)
@@ -668,3 +669,12 @@ func _death_during_transition_tests() -> void:
 		"30b) it stays dead past the transition's end — no phase 2, no hitbox, no drift")
 	_record(_boss_room.is_cleared() and _dungeon.get_state() == DungeonController.DungeonState.COMPLETED,
 		"30c) the room still clears exactly once and the dungeon completes")
+
+
+## Every suite starts from a clean session: PlayerRuntimeState now carries
+## progression and health across scene changes, so without this a later test
+## would inherit whatever an earlier one left behind.
+func _reset_session() -> void:
+	var state: Node = get_tree().root.get_node_or_null("PlayerRuntimeState")
+	if state != null:
+		state.reset_runtime_state()
