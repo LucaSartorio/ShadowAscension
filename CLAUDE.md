@@ -203,6 +203,10 @@ Style:
 Manual validation commands (run from `shadow-ascension/`):
 
 ```powershell
+# Rebuild the global class cache. Run this FIRST after any pull that adds or
+# renames a script — see the note below.
+godot --headless --path . --import
+
 # Open editor
 godot -e --path .
 
@@ -212,6 +216,29 @@ godot --path .
 # Headless smoke test (loads project, quits)
 godot --headless --path . --quit
 ```
+
+### After pulling: rebuild the class cache
+
+Godot resolves every `class_name` through `.godot/global_script_class_cache.cfg`, which is
+generated, gitignored, and only rebuilt when the editor scans the project. Pulling a commit that
+adds a script while the editor is open leaves that cache stale, and the next run fails with:
+
+```
+Parse Error: Could not find type "<SomeClass>" in the current scope
+```
+
+This is **not** a code error, and the named class is just the first one that failed — on a fully
+cold cache every `class_name` in the project fails the same way. Fix it with one of:
+
+```powershell
+godot --headless --path . --import     # fastest, no editor needed
+```
+
+or, in the editor, **Project → Reload Current Project**. Deleting `shadow-ascension/.godot/` and
+reopening works too, and is the safe option when in doubt: the folder is generated and regenerates
+itself on the next launch.
+
+Do not work around this by weakening a type annotation. The cache is the problem, not the code.
 
 Fix all errors and parser warnings before considering a task complete. Warnings that are legitimately intentional must be silenced with an explicit `@warning_ignore` and a comment explaining why.
 
