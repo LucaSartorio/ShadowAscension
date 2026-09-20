@@ -45,7 +45,12 @@ func deactivate() -> void:
 	if not _active:
 		return
 	_active = false
-	monitoring = false
+	# Deferred because this can be reached from inside a physics signal: a hit
+	# that kills the player runs area_entered -> receive_hit -> died -> the room
+	# suspending its combatants, which deactivates whatever was mid-swing. Godot
+	# blocks a direct write to `monitoring` there. `_active` is already false, and
+	# _on_area_entered refuses on that, so nothing can land in the deferred frame.
+	set_deferred("monitoring", false)
 	if _debug_visual != null:
 		_debug_visual.visible = false
 

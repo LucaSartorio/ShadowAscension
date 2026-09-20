@@ -106,6 +106,10 @@ func _only_attack(index: int) -> void:
 	_boss._active_attack = -1
 	_boss._hits_done = 0
 	_boss._phase_timer = 0.0
+	# Every real interruption resets the wind-up (the transition and death both
+	# do). This helper interrupts too, so it must leave the body where the boss
+	# would — otherwise the next attack is read through the last one's pose.
+	_boss._reset_telegraph_instantly()
 	for i in _boss.attacks.size():
 		_boss._cooldowns[i] = 0.0 if i == index else 99.0
 	_boss._last_attack = -1
@@ -487,6 +491,53 @@ func _double_strike_tests() -> void:
 	var swing: float = absf(wrapf(yaw_at_hit2 - yaw_at_gap, -PI, PI))
 	_record(seen_gap and swing < deg_to_rad(35.0),
 		"25) the second swing is nudged, not snapped onto the player (turned %.1f deg)" % rad_to_deg(swing))
+
+	# The spec asks specifically that Double Strike not look like Quick Strike.
+	# Read it off the body, not the resource: a telegraph that is configured but
+	# never animated must not count as readable.
+	var quick_peak: Dictionary = await _telegraph_peak(QUICK)
+	var double_peak: Dictionary = await _telegraph_peak(DOUBLE)
+	_record(_shape_of(quick_peak) == "lean" and _shape_of(double_peak) == "recoil",
+		"D1) Double Strike's wind-up reads apart from Quick Strike's: %s vs %s" % [
+			_shape_of(quick_peak), _shape_of(double_peak)])
+	_record(double_peak["pz"] > 0.1 and quick_peak["pz"] < 0.05,
+		"D2) it cocks backwards (%.2f) where Quick Strike does not (%.2f)" % [
+			double_peak["pz"], quick_peak["pz"]])
+
+
+## Forces one attack and returns how far the body actually moved during its
+## wind-up.
+func _telegraph_peak(index: int) -> Dictionary:
+	_heal_player()
+	await _place_player(1.8)
+	_only_attack(index)
+	var peak: Dictionary = {"pz": 0.0, "rx": 0.0, "ry": 0.0, "sy": 1.0}
+	var elapsed: float = 0.0
+	while elapsed < 3.5:
+		if _boss.get_active_attack_index() == index \
+				and _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP:
+			var root: Node3D = _boss.mesh_root
+			peak["pz"] = maxf(peak["pz"], absf(root.position.z))
+			peak["rx"] = maxf(peak["rx"], absf(root.rotation.x))
+			peak["ry"] = maxf(peak["ry"], absf(root.rotation.y))
+			peak["sy"] = minf(peak["sy"], root.scale.y)
+		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE:
+			break
+		await get_tree().physics_frame
+		elapsed += get_physics_process_delta_time()
+	return peak
+
+
+func _shape_of(peak: Dictionary) -> String:
+	if peak["ry"] > 0.5:
+		return "spin"
+	if peak["sy"] < 0.8:
+		return "compress"
+	if peak["pz"] > 0.1:
+		return "recoil"
+	if peak["rx"] > 0.1:
+		return "lean"
+	return "none"
 
 
 # --- decision logic ----------------------------------------------------------------

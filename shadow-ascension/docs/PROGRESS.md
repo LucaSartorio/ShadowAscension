@@ -6,92 +6,231 @@
 
 ## Current Milestone
 
-**M5 — First Boss** (In Progress)
+**M6 — Player Progression** (Not Started)
 
-M5.1 delivered: `DungeonBoss` replaces the boss-room placeholder — its own state logic, three
-distinct attacks with a decision layer, per-attack cooldowns, a temporary health bar, and death
-that feeds the existing room/dungeon completion flow. No phase 2, no cutscene, no loot.
+Next per the roadmap: XP from enemies and the boss, a level curve, a baseline stat set (HP, attack,
+defense), manual point allocation driven by Resource-defined rules, and progression data split
+between Resource definitions and in-memory runtime state. Persistence comes later.
 
-M5.1 deliverable status (verified by `boss_test.tscn` 37/37 and the real-scene-change flow 32/32):
+M5's `enemy_died` drop hook is already the subscription point for XP — neither the boss nor the
+enemies need changing to feed it.
 
-- boss base scene — implemented
-- boss state foundation — implemented
-- boss decision logic — implemented
-- Quick Strike — implemented
-- Wide Sweep — implemented
-- Ground Slam — implemented
-- boss cooldowns — implemented
-- boss UI prototype — implemented
-- boss room integration — implemented
-- boss death/completion integration — implemented
+Carried into M6, non-blocking:
 
-A later conformance pass added the explicit `INACTIVE` state. The boss was already dormant before
-the player arrived — the room parks it and `combat_enabled` gated every system — but it reported
-`INTRO` while parked, so "dormant" and "winding up" were the same value to anything reading the
-state. They are now distinct: a parked boss is `INACTIVE`, the wake goes `INACTIVE -> INTRO ->
-DECIDE`, and a boss placed in a scene with no room still starts its own encounter from `_ready()`.
-The hitbox nodes `SweepHitbox` and `SlamHitbox` were renamed to `WideSweepHitbox` and
-`GroundSlamHitbox`, so every node name matches its attack's name.
-
-M5.2 delivered: the fight has two halves. The boss opens in phase 1 exactly as M5.1 shipped it,
-drops into a harmless, committed beat at half health, and comes out faster with a fourth attack.
-No phase 3, no loot, no enrage timer, no adds.
-
-M5.2 deliverable status (verified by `boss_phase_test.tscn` 49/49 and the real-scene-change flow
-45/45):
-
-- Phase 1 — implemented (unchanged from M5.1)
-- Phase Transition — implemented
-- Phase 2 — implemented
-- Phase 2 timing — implemented
-- Double Strike — implemented
-- Phase 2 decision logic — implemented
-- Phase UI — implemented
-- encounter polish — implemented
-
-`BossPhase` is a separate concept from `State`: the boss stays in `PHASE_2` while it chases,
-attacks and recovers, so the two never have to be kept in sync by hand. Only the beat between them
-is both at once — `State.TRANSITION` and `BossPhase.TRANSITION`. The transition is latched the
-moment it starts, so no amount of further damage, or a heal and re-damage, can run it twice.
-
-Crossing the threshold tears down whatever was in flight rather than waiting for it: hitboxes off,
-the queued attack cancelled, navigation parked, the boss harmless for the whole 1.5s. That is
-tested by catching the boss mid-Ground-Slam and cutting its health at that instant. It is not
-invulnerable there, and dying inside the beat is covered: the boss stays dead, never reaches phase
-2, opens no hit window, and the room still clears exactly once.
-
-Phase-2 tuning lives on the same resources as phase 1 rather than a duplicate set: each
-`BossAttack` carries its phase-2 startup, recovery and cooldown, and the boss asks the resource for
-a timing instead of branching on the phase itself. Damage and reach never change between phases —
-phase 2 changes the rhythm, not the numbers. Attack choice moved from uniform to weighted, so
-Ground Slam stays rarer than the standard melee without ever being impossible.
-
-Double Strike is phase 2 only, and is the first multi-hit attack: `hit_count` and
-`delay_between_hits` drive a `BETWEEN_HITS` window in the attack machine. Each swing re-activates
-one real hitbox, and `Hitbox.activate()` already clears its hit registry, so a swing lands once and
-the next starts fresh — no bespoke dedup logic was needed. The gap allows a quarter of the boss's
-turn rate, enough to track a little and not enough to snap onto a player who left.
-
-Arena: checked, not changed. A full dodge (4.0 units) fits in every direction from where the fight
-happens, with 5.0 clear at the tightest; the player can walk into all four corners and back out;
-and the navmesh reaches every corner. Nothing needed moving, so nothing was moved.
-
-One existing assertion was corrected, not a behaviour: `boss_test`'s reposition check gave the boss
-1.8s to back out of the player's lap, which is shorter than a Ground Slam's 2.05s commitment.
-Weighted selection changed the seeded RNG stream, the boss happened to be mid-slam, and the test
-failed. A probe showed the boss entering REPOSITION at T=0.05 and reaching 1.78 units — the
-behaviour was correct and the window was too short. The test now outlasts a committed attack.
-
-Next iteration: **M5.3 — boss encounter balance**, or M6. Balance is still deliberately untuned:
-600 HP against a 20/25/35 combo is thirty swings, and the phase transition lands on swing 15.
-
-A fix + UX pass landed between M5.1 and M5.2, before any further boss work: the boss room was
-physically unreachable, and the dungeon gave the player no contextual guidance. Both are fixed —
-see the entry under In Progress.
+- Boss balance is untuned. 600 HP against a 20/25/35 combo is 23 swings, with the phase transition
+  landing on the fifteenth. It is a foundation, not a tuned encounter.
+- The dungeon layout is a functional grey-box, and the return from a run lands the player at the
+  test world's default spawn rather than back at the gate. Both wait on a real hub.
 
 ---
 
 ## Done
+
+- **M5 — First Boss** (Completed). Milestone review passed; all four ROADMAP exit criteria verified:
+    - Boss executes each attack correctly with readable telegraphs — two full fights used all four
+      attacks, and each wind-up was read off the body rather than the resource: lean, spin, compress
+      and recoil, four distinct shapes.
+    - Phase transition triggers on an HP threshold and swaps behavior — `PHASE_1 -> TRANSITION ->
+      PHASE_2` exactly once per fight, on swing 15 of 23, with movement speed, attack timings,
+      cooldowns and the attack set all changing after it.
+    - Player can defeat the boss without engine errors — killed twice with the player's own combo,
+      driven through `camera_rig.attack_light_pressed` rather than by calling `receive_hit`, so the
+      whole damage path ran: 23 swings for 600 damage each time, zero runtime errors.
+    - Boss death emits an event other systems can subscribe to — `enemy_died`, which
+      `RoomController` already consumes and M6/M7/M8 will subscribe to for XP, loot and shadow
+      extraction.
+    - The review also covered a player death in phase 2, the restart it forces, and a second full
+      fight on the reloaded dungeon. Validation: `m5_review_run.gd` 37/37, and 338/338 across every
+      suite with zero runtime errors and zero leaked instances.
+    - One real bug was found and fixed (see below); nothing else in M5 needed changing.
+
+    M5.1 delivered: `DungeonBoss` replaces the boss-room placeholder — its own state logic, three
+    distinct attacks with a decision layer, per-attack cooldowns, a temporary health bar, and death
+    that feeds the existing room/dungeon completion flow. No phase 2, no cutscene, no loot.
+
+    M5.1 deliverable status (verified by `boss_test.tscn` 37/37 and the real-scene-change flow 45/45):
+
+    - boss base scene — implemented
+    - boss state foundation — implemented
+    - boss decision logic — implemented
+    - Quick Strike — implemented
+    - Wide Sweep — implemented
+    - Ground Slam — implemented
+    - boss cooldowns — implemented
+    - boss UI prototype — implemented
+    - boss room integration — implemented
+    - boss death/completion integration — implemented
+
+    A later conformance pass added the explicit `INACTIVE` state. The boss was already dormant before
+    the player arrived — the room parks it and `combat_enabled` gated every system — but it reported
+    `INTRO` while parked, so "dormant" and "winding up" were the same value to anything reading the
+    state. They are now distinct: a parked boss is `INACTIVE`, the wake goes `INACTIVE -> INTRO ->
+    DECIDE`, and a boss placed in a scene with no room still starts its own encounter from `_ready()`.
+    The hitbox nodes `SweepHitbox` and `SlamHitbox` were renamed to `WideSweepHitbox` and
+    `GroundSlamHitbox`, so every node name matches its attack's name.
+
+    M5.2 delivered: the fight has two halves. The boss opens in phase 1 exactly as M5.1 shipped it,
+    drops into a harmless, committed beat at half health, and comes out faster with a fourth attack.
+    No phase 3, no loot, no enrage timer, no adds.
+
+    M5.2 deliverable status (verified by `boss_phase_test.tscn` 51/51 and the real-scene-change flow
+    45/45):
+
+    - Phase 1 — implemented (unchanged from M5.1)
+    - Phase Transition — implemented
+    - Phase 2 — implemented
+    - Phase 2 timing — implemented
+    - Double Strike — implemented
+    - Phase 2 decision logic — implemented
+    - Phase UI — implemented
+    - encounter polish — implemented
+
+    `BossPhase` is a separate concept from `State`: the boss stays in `PHASE_2` while it chases,
+    attacks and recovers, so the two never have to be kept in sync by hand. Only the beat between them
+    is both at once — `State.TRANSITION` and `BossPhase.TRANSITION`. The transition is latched the
+    moment it starts, so no amount of further damage, or a heal and re-damage, can run it twice.
+
+    Crossing the threshold tears down whatever was in flight rather than waiting for it: hitboxes off,
+    the queued attack cancelled, navigation parked, the boss harmless for the whole 1.5s. That is
+    tested by catching the boss mid-Ground-Slam and cutting its health at that instant. It is not
+    invulnerable there, and dying inside the beat is covered: the boss stays dead, never reaches phase
+    2, opens no hit window, and the room still clears exactly once.
+
+    Phase-2 tuning lives on the same resources as phase 1 rather than a duplicate set: each
+    `BossAttack` carries its phase-2 startup, recovery and cooldown, and the boss asks the resource for
+    a timing instead of branching on the phase itself. Damage and reach never change between phases —
+    phase 2 changes the rhythm, not the numbers. Attack choice moved from uniform to weighted, so
+    Ground Slam stays rarer than the standard melee without ever being impossible.
+
+    Double Strike is phase 2 only, and is the first multi-hit attack: `hit_count` and
+    `delay_between_hits` drive a `BETWEEN_HITS` window in the attack machine. Each swing re-activates
+    one real hitbox, and `Hitbox.activate()` already clears its hit registry, so a swing lands once and
+    the next starts fresh — no bespoke dedup logic was needed. The gap allows a quarter of the boss's
+    turn rate, enough to track a little and not enough to snap onto a player who left.
+
+    Arena: checked, not changed. A full dodge (4.0 units) fits in every direction from where the fight
+    happens, with 5.0 clear at the tightest; the player can walk into all four corners and back out;
+    and the navmesh reaches every corner. Nothing needed moving, so nothing was moved.
+
+    One existing assertion was corrected, not a behaviour: `boss_test`'s reposition check gave the boss
+    1.8s to back out of the player's lap, which is shorter than a Ground Slam's 2.05s commitment.
+    Weighted selection changed the seeded RNG stream, the boss happened to be mid-slam, and the test
+    failed. A probe showed the boss entering REPOSITION at T=0.05 and reaching 1.78 units — the
+    behaviour was correct and the window was too short. The test now outlasts a committed attack.
+
+    Balance is still deliberately untuned:
+    600 HP against a 20/25/35 combo is thirty swings, and the phase transition lands on swing 15.
+
+    A fix + UX pass landed between M5.1 and M5.2, before any further boss work: the boss room was
+    physically unreachable, and the dungeon gave the player no contextual guidance. Both are fixed —
+    see the entry under In Progress.
+
+    Review fix — `Hitbox.deactivate()` wrote `monitoring` directly. A blow that kills the player runs
+    `area_entered -> receive_hit -> died -> DungeonController._on_player_died -> RoomController.suspend()
+    -> set_combat_enabled(false)`, which deactivates whatever the boss had mid-swing — all inside a
+    physics signal, where Godot refuses a direct write and logs `Function blocked during in/out signal`.
+    Only reachable when the killing blow lands during an attacker's own active window, which is why
+    every earlier suite missed it: they damaged the player with `receive_hit` directly instead of
+    letting the boss do it. The write is now deferred; `_active` is already false and `_on_area_entered`
+    refuses on that, so nothing can land in the deferred frame. The fix is in a shared M2 component but
+    the same path exists for `BasicMeleeEnemy`, so it closes both.
+
+    - **M5.1 — First Boss Foundation**:
+        - `scripts/enemies/room_combatant.gd` (`RoomCombatant`) — a behaviourless base holding only what
+          a `RoomController` drives: the `enemy_died` drop hook and `set_combat_enabled()`. It exists so
+          a room can hold an enemy or a boss without either inheriting the other's AI. `BasicMeleeEnemy`
+          now implements it (two lines changed, no behavior touched) and `RoomController` is typed to it.
+        - `scripts/enemies/bosses/dungeon_boss.gd` (`DungeonBoss`) — its own state logic,
+          `INTRO / DECIDE / CHASE / REPOSITION / ATTACK / RECOVERY / DEAD`, sharing only the common
+          components: `HealthComponent`, `Hurtbox`, `Hitbox`, `NavigationAgent3D`. No boss state machine
+          framework, no manager.
+        - Data-driven per `CLAUDE.md` §7: `BossStats` (`resources/enemies/bosses/dungeon_boss_stats.tres`)
+          holds the body tuning, and `BossAttack` holds one attack each —
+          `boss_quick_strike.tres`, `boss_wide_sweep.tres`, `boss_ground_slam.tres`. The boss copies
+          stats into its own fields on `_ready()`, so the shared assets are never written to.
+        - Decision layer: from DECIDE it filters the attack set by cooldown, by the attack's own range
+          band, and by how many times that attack has already run back to back (`max_consecutive_repeats`
+          = 2), then picks among what survives with a **seeded** RNG so a run is reproducible. Too far →
+          CHASE. Too close, or aimed outside the 30° cone → REPOSITION. Measured over a 22-second free
+          fight: 16 attacks, all three used, longest identical run 1.
+        - Attacks — Quick Strike 20 dmg, 0.25/0.12/0.45, cd 1.0, reach ≤ 2.6; Wide Sweep 30 dmg,
+          0.50/0.20/0.70, cd 2.0, reach ≤ 3.4 over a 4.4-wide box; Ground Slam 40 dmg, 0.85/0.20/1.00,
+          cd 3.5, a 3.2-radius cylinder centred on the boss. Each drives its own real `Hitbox` on layer
+          32 / mask 64 — there is no distance check anywhere in the damage path, proven by blinding the
+          player's hurtbox and watching the same attack at the same range deal nothing.
+        - Commitment: STARTUP may correct facing, and only by its own fraction of `rotation_speed`
+          (0.35 / 0.15 / 0.00); ACTIVE and RECOVERY do not turn at all. The player can walk out of a
+          wind-up, and dodge i-frames stop a boss attack with no boss-side logic.
+        - Telegraphs animate a `MeshRoot` **below** the facing node, so a wind-up can lean, spin or
+          compress the body without moving the hitboxes or changing where the boss aims. The three read
+          apart — measured as lean / spin / compress on their dominant channel.
+        - Hit feedback is a brief albedo pulse with no displacement: a boss should not read as flinching.
+          No stagger.
+        - `scripts/ui/boss_health_bar.gd` + `scenes/ui/boss_health_bar.tscn` — a temporary CanvasLayer
+          readout. It finds the boss through the `boss` group and listens to `encounter_started` and
+          `enemy_died`, so the boss knows nothing about any UI. Explicitly not a HUD framework; M5.2
+          replaces it.
+        - Death emits the inherited `enemy_died`, which the room already counts — the boss never
+          references `DungeonController`. The M4 completion flow continues untouched: room clears, exit
+          portal wakes, banner shows, return trip works.
+        - **Bug found and fixed during the build:** all three attacks have `min_range = 0`, so the
+          decision layer considered attacking valid even standing inside the player, and the boss never
+          unglued itself. DECIDE now sends it to REPOSITION below `minimum_combat_distance`. Verified:
+          dropped at 0.9 from the player it backs off to 1.78.
+        - Automated validation `res://tests/bosses/boss_test.tscn` — **33/33 PASS**, covering dormancy
+          before entry, activation and door lock, health bar appearing full, chase and reposition, each
+          attack's exact damage, hitbox gating, the no-distance-damage proof, distinct wind-ups, ACTIVE
+          facing lock, escaping a wind-up, dodge i-frames, the repeat ceiling and all-three usage,
+          per-attack cooldowns, player combo damage and one-hit-per-swing, hit feedback without recoil,
+          bar tracking, death, and the room/dungeon/exit-portal chain.
+        - The real-scene-change flow `dungeon_flow_run.gd` now **fights the boss** rather than one-shotting
+          it: 30 hits of 20 to fell 600 HP, twice in a row, with the bar tracked throughout — and the
+          node count across two loops is still identical (127 vs 127, 0 orphans).
+        - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
+          loop 34/34, boss 33/33, real flow 32/32 — **197/197**. `--check-only` clean; `Main.tscn` and
+          `dungeon_test.tscn` each 600 verbose frames with zero ERROR / WARNING / Failed / Parse Error /
+          SCRIPT ERROR and no leaked instances.
+    - **Dungeon fix + UX polish** (between M5.1 and M5.2):
+        - **Blocking bug: the boss room was sealed shut.** `RoomController._ready()` called
+          `exit_door.lock()` unconditionally, and the boss room's door sits in its *entrance* — placed
+          there in M4.1 so it would seal behind the player. It sealed at load instead, walling the room
+          off before the player could arrive. Reproduced by physically walking the body down the
+          dungeon: it stopped at `z = -49.35`, blocked by `ExitDoor/Blocker` at `z = -49.75`, with both
+          combat rooms cleared and their doors open behind it.
+        - Why no test caught it: every dungeon test *teleported* the player to the boss trigger at
+          `z = -53`, past the doorway. State transitions were all correct; nobody had ever walked the
+          floor. Fixed by letting each door's own `start_locked` decide its initial state (the boss
+          room's now starts open) and adding `dungeon_traversal_test.tscn`, which drives the body with
+          `move_and_slide` end to end instead of teleporting.
+        - `InteractionPrompt` (`scripts/ui/interaction_prompt.gd`) — bottom-centre contextual strip,
+          `[E]` keycap tinted apart from the label. One per scene, found through a group, so it dies
+          with the scene and cannot leave a stale prompt after a transition. Prompts are owned: only the
+          node that raised one may clear it, so two overlapping interactables cannot blank each other.
+          `DungeonGate` and `DungeonExit` use it; their world `Label3D` remains as a fallback for a
+          scene without the UI. The static `raise()`/`clear()` helpers keep that fallback rule in one
+          place rather than duplicated in each interactable.
+        - `DungeonObjectiveUI` (`scripts/ui/dungeon_objective_ui.gd`) — top-left objective line. It is
+          pure display: `DungeonController` owns the wording and emits `objective_changed`. Not a quest
+          system. Text runs "Avanza nel dungeon" → "Elimina i nemici: N rimasti" (singular at 1) →
+          "Camera completata - Procedi" → "Camera completata - Raggiungi la Boss Room" → "Sconfiggi il
+          Boss" → "Dungeon completato", with "Sei morto" on a failed run.
+        - `RoomController.remaining_enemies_changed(room, remaining)` — emitted on arming and on each
+          death, so the UI never polls. No manager was introduced.
+        - Door feedback: an unlocked door now also glows and raises a bobbing marker above the doorway,
+          so the way on is readable across a room. Locked doors are unchanged — closed, red, collider
+          live. Doors that open automatically on a room clear still do so; nothing became a manual
+          interaction.
+        - Automated validation `res://tests/dungeon/dungeon_traversal_test.tscn` — **36/36 PASS**:
+          the gate prompt appearing, hiding and clearing on use; prompt ownership; walking the start
+          room, both combat rooms and the corridors on foot; the enemy counter and every objective
+          string; each door's collider actually going away; the corridor to the boss room being clear;
+          the boss room arming on arrival; backtracking through cleared rooms without re-arming them;
+          the boss room's seal holding mid-fight; and the exit prompt once the run is done.
+        - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
+          loop 34/34, traversal 36/36, boss 33/33, real two-run flow 32/32 — **233/233**. Three
+          pre-existing assertions were updated to the new intended behavior: the gate and exit prompts
+          now assert the on-screen UI rather than the world label, and the boss room's door is expected
+          to start open.
 
 - Godot 4.7.x project created
 - Git repository configured
@@ -508,102 +647,8 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-- **M5.1 — First Boss Foundation**:
-    - `scripts/enemies/room_combatant.gd` (`RoomCombatant`) — a behaviourless base holding only what
-      a `RoomController` drives: the `enemy_died` drop hook and `set_combat_enabled()`. It exists so
-      a room can hold an enemy or a boss without either inheriting the other's AI. `BasicMeleeEnemy`
-      now implements it (two lines changed, no behavior touched) and `RoomController` is typed to it.
-    - `scripts/enemies/bosses/dungeon_boss.gd` (`DungeonBoss`) — its own state logic,
-      `INTRO / DECIDE / CHASE / REPOSITION / ATTACK / RECOVERY / DEAD`, sharing only the common
-      components: `HealthComponent`, `Hurtbox`, `Hitbox`, `NavigationAgent3D`. No boss state machine
-      framework, no manager.
-    - Data-driven per `CLAUDE.md` §7: `BossStats` (`resources/enemies/bosses/dungeon_boss_stats.tres`)
-      holds the body tuning, and `BossAttack` holds one attack each —
-      `boss_quick_strike.tres`, `boss_wide_sweep.tres`, `boss_ground_slam.tres`. The boss copies
-      stats into its own fields on `_ready()`, so the shared assets are never written to.
-    - Decision layer: from DECIDE it filters the attack set by cooldown, by the attack's own range
-      band, and by how many times that attack has already run back to back (`max_consecutive_repeats`
-      = 2), then picks among what survives with a **seeded** RNG so a run is reproducible. Too far →
-      CHASE. Too close, or aimed outside the 30° cone → REPOSITION. Measured over a 22-second free
-      fight: 16 attacks, all three used, longest identical run 1.
-    - Attacks — Quick Strike 20 dmg, 0.25/0.12/0.45, cd 1.0, reach ≤ 2.6; Wide Sweep 30 dmg,
-      0.50/0.20/0.70, cd 2.0, reach ≤ 3.4 over a 4.4-wide box; Ground Slam 40 dmg, 0.85/0.20/1.00,
-      cd 3.5, a 3.2-radius cylinder centred on the boss. Each drives its own real `Hitbox` on layer
-      32 / mask 64 — there is no distance check anywhere in the damage path, proven by blinding the
-      player's hurtbox and watching the same attack at the same range deal nothing.
-    - Commitment: STARTUP may correct facing, and only by its own fraction of `rotation_speed`
-      (0.35 / 0.15 / 0.00); ACTIVE and RECOVERY do not turn at all. The player can walk out of a
-      wind-up, and dodge i-frames stop a boss attack with no boss-side logic.
-    - Telegraphs animate a `MeshRoot` **below** the facing node, so a wind-up can lean, spin or
-      compress the body without moving the hitboxes or changing where the boss aims. The three read
-      apart — measured as lean / spin / compress on their dominant channel.
-    - Hit feedback is a brief albedo pulse with no displacement: a boss should not read as flinching.
-      No stagger.
-    - `scripts/ui/boss_health_bar.gd` + `scenes/ui/boss_health_bar.tscn` — a temporary CanvasLayer
-      readout. It finds the boss through the `boss` group and listens to `encounter_started` and
-      `enemy_died`, so the boss knows nothing about any UI. Explicitly not a HUD framework; M5.2
-      replaces it.
-    - Death emits the inherited `enemy_died`, which the room already counts — the boss never
-      references `DungeonController`. The M4 completion flow continues untouched: room clears, exit
-      portal wakes, banner shows, return trip works.
-    - **Bug found and fixed during the build:** all three attacks have `min_range = 0`, so the
-      decision layer considered attacking valid even standing inside the player, and the boss never
-      unglued itself. DECIDE now sends it to REPOSITION below `minimum_combat_distance`. Verified:
-      dropped at 0.9 from the player it backs off to 1.78.
-    - Automated validation `res://tests/bosses/boss_test.tscn` — **33/33 PASS**, covering dormancy
-      before entry, activation and door lock, health bar appearing full, chase and reposition, each
-      attack's exact damage, hitbox gating, the no-distance-damage proof, distinct wind-ups, ACTIVE
-      facing lock, escaping a wind-up, dodge i-frames, the repeat ceiling and all-three usage,
-      per-attack cooldowns, player combo damage and one-hit-per-swing, hit feedback without recoil,
-      bar tracking, death, and the room/dungeon/exit-portal chain.
-    - The real-scene-change flow `dungeon_flow_run.gd` now **fights the boss** rather than one-shotting
-      it: 30 hits of 20 to fell 600 HP, twice in a row, with the bar tracked throughout — and the
-      node count across two loops is still identical (127 vs 127, 0 orphans).
-    - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
-      loop 34/34, boss 33/33, real flow 32/32 — **197/197**. `--check-only` clean; `Main.tscn` and
-      `dungeon_test.tscn` each 600 verbose frames with zero ERROR / WARNING / Failed / Parse Error /
-      SCRIPT ERROR and no leaked instances.
-- **Dungeon fix + UX polish** (between M5.1 and M5.2):
-    - **Blocking bug: the boss room was sealed shut.** `RoomController._ready()` called
-      `exit_door.lock()` unconditionally, and the boss room's door sits in its *entrance* — placed
-      there in M4.1 so it would seal behind the player. It sealed at load instead, walling the room
-      off before the player could arrive. Reproduced by physically walking the body down the
-      dungeon: it stopped at `z = -49.35`, blocked by `ExitDoor/Blocker` at `z = -49.75`, with both
-      combat rooms cleared and their doors open behind it.
-    - Why no test caught it: every dungeon test *teleported* the player to the boss trigger at
-      `z = -53`, past the doorway. State transitions were all correct; nobody had ever walked the
-      floor. Fixed by letting each door's own `start_locked` decide its initial state (the boss
-      room's now starts open) and adding `dungeon_traversal_test.tscn`, which drives the body with
-      `move_and_slide` end to end instead of teleporting.
-    - `InteractionPrompt` (`scripts/ui/interaction_prompt.gd`) — bottom-centre contextual strip,
-      `[E]` keycap tinted apart from the label. One per scene, found through a group, so it dies
-      with the scene and cannot leave a stale prompt after a transition. Prompts are owned: only the
-      node that raised one may clear it, so two overlapping interactables cannot blank each other.
-      `DungeonGate` and `DungeonExit` use it; their world `Label3D` remains as a fallback for a
-      scene without the UI. The static `raise()`/`clear()` helpers keep that fallback rule in one
-      place rather than duplicated in each interactable.
-    - `DungeonObjectiveUI` (`scripts/ui/dungeon_objective_ui.gd`) — top-left objective line. It is
-      pure display: `DungeonController` owns the wording and emits `objective_changed`. Not a quest
-      system. Text runs "Avanza nel dungeon" → "Elimina i nemici: N rimasti" (singular at 1) →
-      "Camera completata - Procedi" → "Camera completata - Raggiungi la Boss Room" → "Sconfiggi il
-      Boss" → "Dungeon completato", with "Sei morto" on a failed run.
-    - `RoomController.remaining_enemies_changed(room, remaining)` — emitted on arming and on each
-      death, so the UI never polls. No manager was introduced.
-    - Door feedback: an unlocked door now also glows and raises a bobbing marker above the doorway,
-      so the way on is readable across a room. Locked doors are unchanged — closed, red, collider
-      live. Doors that open automatically on a room clear still do so; nothing became a manual
-      interaction.
-    - Automated validation `res://tests/dungeon/dungeon_traversal_test.tscn` — **36/36 PASS**:
-      the gate prompt appearing, hiding and clearing on use; prompt ownership; walking the start
-      room, both combat rooms and the corridors on foot; the enemy counter and every objective
-      string; each door's collider actually going away; the corridor to the boss room being clear;
-      the boss room arming on arrival; backtracking through cleared rooms without re-arming them;
-      the boss room's seal holding mid-fight; and the exit prompt once the run is done.
-    - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17, dungeon suite 31/31,
-      loop 34/34, traversal 36/36, boss 33/33, real two-run flow 32/32 — **233/233**. Three
-      pre-existing assertions were updated to the new intended behavior: the gate and exit prompts
-      now assert the on-screen UI rather than the world label, and the boss room's door is expected
-      to start open.
+No milestone in flight. M6 has not been started. Two definitions stay open by design:
+
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
