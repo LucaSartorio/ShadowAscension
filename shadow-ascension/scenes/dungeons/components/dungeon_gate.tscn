@@ -1,0 +1,42 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_gate.gd" id="1_gate"]
+
+[sub_resource type="BoxShape3D" id="gate_area"]
+size = Vector3(5, 4, 5)
+
+[sub_resource type="TorusMesh" id="gate_mesh"]
+inner_radius = 1.4
+outer_radius = 2.0
+
+[sub_resource type="StandardMaterial3D" id="gate_mat"]
+albedo_color = Color(0.45, 0.25, 0.85, 1)
+emission_enabled = true
+emission = Color(0.5, 0.3, 0.95, 1)
+emission_energy_multiplier = 1.5
+
+[node name="DungeonGate" type="Area3D"]
+collision_layer = 0
+collision_mask = 2
+monitoring = true
+monitorable = false
+script = ExtResource("1_gate")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("gate_area")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 2.2, 0)
+mesh = SubResource("gate_mesh")
+surface_material_override/0 = SubResource("gate_mat")
+
+[node name="Prompt" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6, 0)
+billboard = 1
+no_depth_test = true
+fixed_size = true
+pixel_size = 0.01
+text = "Press E to enter Gate"

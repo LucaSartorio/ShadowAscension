@@ -13,6 +13,10 @@ signal enemy_died(enemy: BasicMeleeEnemy)
 @export var stats: EnemyStats
 
 @export_group("Per-Instance")
+## While false the enemy does not perceive, chase, attack or navigate — only
+## gravity is applied. Rooms use this to hold their enemies until the fight
+## starts. Toggle it with set_combat_enabled().
+@export var combat_enabled: bool = true
 ## Bias of the approach bearing. Non-zero values make instances converge on
 ## different points around the player instead of the same one.
 @export_range(-180.0, 180.0) var combat_angle_offset_degrees: float = 0.0
@@ -154,7 +158,7 @@ func _setup_navigation() -> void:
 	# The exports stay the single source of truth for values the AI also reads.
 	nav_agent.radius = enemy_spacing_radius
 	nav_agent.max_speed = movement_speed
-	nav_agent.avoidance_enabled = true
+	nav_agent.avoidance_enabled = combat_enabled
 	nav_agent.velocity_computed.connect(_on_velocity_computed)
 
 
@@ -169,11 +173,38 @@ func _setup_material() -> void:
 	_base_albedo = _body_material.albedo_color
 
 
+## Wakes or parks the enemy. A dead enemy stays dead.
+func set_combat_enabled(enabled: bool) -> void:
+	if _state == State.DEAD:
+		return
+	combat_enabled = enabled
+	nav_agent.avoidance_enabled = enabled
+	if enabled:
+		return
+	_enter_idle()
+	_attack_phase = AttackPhase.NONE
+	_phase_timer = 0.0
+	_cooldown_timer = 0.0
+	_attack_delay_timer = 0.0
+	if hitbox.is_active():
+		hitbox.deactivate()
+	_reset_telegraph_instantly()
+	velocity = Vector3.ZERO
+
+
 func _physics_process(delta: float) -> void:
 	if _state == State.DEAD:
 		return
 
 	_moved_this_frame = false
+
+	if not combat_enabled:
+		# Dormant: no perception, no navigation, no timers. Gravity only, so the
+		# body still rests on the floor.
+		_desired_horizontal = Vector3.ZERO
+		_apply_motion(Vector3.ZERO, delta)
+		return
+
 	_tick_timers(delta)
 
 	var player: Player = _get_player()

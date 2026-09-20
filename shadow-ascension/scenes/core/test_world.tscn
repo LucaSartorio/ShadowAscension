@@ -1,10 +1,11 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/test_world.gd" id="0_root"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/training_dummy.tscn" id="2_dummy"]
 [ext_resource type="Script" path="res://tests/combat/debug_damage_zone.gd" id="3_dmgzone"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/basic_melee_enemy.tscn" id="4_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/dungeons/components/dungeon_gate.tscn" id="5_gate"]
 
 [sub_resource type="Environment" id="env_1"]
 background_mode = 1
@@ -144,6 +145,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.1, 13)
 combat_angle_offset_degrees = 70.0
 initial_attack_delay = 0.45
 attack_cooldown_variation = 0.2
+
+[node name="DungeonGate" parent="." instance=ExtResource("5_gate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -16)
 
 [node name="DebugDamageZone" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 1, -8)

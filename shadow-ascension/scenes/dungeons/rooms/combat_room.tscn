@@ -1,0 +1,154 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/room_controller.gd" id="1_room"]
+[ext_resource type="PackedScene" path="res://scenes/dungeons/components/dungeon_door.tscn" id="2_door"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/basic_melee_enemy.tscn" id="3_enemy"]
+
+[sub_resource type="NavigationMesh" id="navmesh"]
+cell_size = 0.25
+cell_height = 0.25
+agent_radius = 0.5
+agent_height = 2.0
+agent_max_climb = 0.5
+agent_max_slope = 45.0
+geometry_parsed_geometry_type = 1
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(16, 1, 16)
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+size = Vector3(16, 1, 16)
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.28, 0.29, 0.33, 1)
+
+[sub_resource type="BoxShape3D" id="wall_seg_shape"]
+size = Vector3(6, 3, 0.5)
+
+[sub_resource type="BoxMesh" id="wall_seg_mesh"]
+size = Vector3(6, 3, 0.5)
+
+[sub_resource type="BoxShape3D" id="side_wall_shape"]
+size = Vector3(0.5, 3, 16.5)
+
+[sub_resource type="BoxMesh" id="side_wall_mesh"]
+size = Vector3(0.5, 3, 16.5)
+
+[sub_resource type="StandardMaterial3D" id="wall_mat"]
+albedo_color = Color(0.45, 0.4, 0.36, 1)
+
+[sub_resource type="BoxShape3D" id="trigger_shape"]
+size = Vector3(4, 3, 2)
+
+[node name="CombatRoom" type="Node3D"]
+script = ExtResource("1_room")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Floor"]
+mesh = SubResource("floor_mesh")
+surface_material_override/0 = SubResource("floor_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Floor"]
+shape = SubResource("floor_shape")
+
+[node name="NorthWallA" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.5, 8)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/NorthWallA"]
+mesh = SubResource("wall_seg_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/NorthWallA"]
+shape = SubResource("wall_seg_shape")
+
+[node name="NorthWallB" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1.5, 8)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/NorthWallB"]
+mesh = SubResource("wall_seg_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/NorthWallB"]
+shape = SubResource("wall_seg_shape")
+
+[node name="SouthWallA" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.5, -8)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/SouthWallA"]
+mesh = SubResource("wall_seg_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/SouthWallA"]
+shape = SubResource("wall_seg_shape")
+
+[node name="SouthWallB" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1.5, -8)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/SouthWallB"]
+mesh = SubResource("wall_seg_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/SouthWallB"]
+shape = SubResource("wall_seg_shape")
+
+[node name="EastWall" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 1.5, 0)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/EastWall"]
+mesh = SubResource("side_wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/EastWall"]
+shape = SubResource("side_wall_shape")
+
+[node name="WestWall" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 1.5, 0)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/WestWall"]
+mesh = SubResource("side_wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/WestWall"]
+shape = SubResource("side_wall_shape")
+
+[node name="Enemies" type="Node3D" parent="."]
+
+[node name="Enemy1" parent="Enemies" instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.1, -2)
+
+[node name="Enemy2" parent="Enemies" instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.1, -2)
+combat_angle_offset_degrees = 30.0
+initial_attack_delay = 0.35
+
+[node name="EntryTrigger" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 5)
+collision_layer = 0
+collision_mask = 2
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="EntryTrigger"]
+shape = SubResource("trigger_shape")
+
+[node name="ExitDoor" parent="." instance=ExtResource("2_door")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -8)

@@ -1,0 +1,110 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/dungeons/components/dungeon_door.tscn" id="1_door"]
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(12, 1, 12)
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+size = Vector3(12, 1, 12)
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.3, 0.34, 0.3, 1)
+
+[sub_resource type="BoxShape3D" id="wall_seg_shape"]
+size = Vector3(4, 3, 0.5)
+
+[sub_resource type="BoxMesh" id="wall_seg_mesh"]
+size = Vector3(4, 3, 0.5)
+
+[sub_resource type="BoxShape3D" id="side_wall_shape"]
+size = Vector3(0.5, 3, 12.5)
+
+[sub_resource type="BoxMesh" id="side_wall_mesh"]
+size = Vector3(0.5, 3, 12.5)
+
+[sub_resource type="StandardMaterial3D" id="wall_mat"]
+albedo_color = Color(0.45, 0.4, 0.36, 1)
+
+[node name="StartRoom" type="Node3D"]
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("floor_mesh")
+surface_material_override/0 = SubResource("floor_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("floor_shape")
+
+[node name="NorthWall" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 6)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NorthWall"]
+mesh = SubResource("side_wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NorthWall"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+shape = SubResource("side_wall_shape")
+
+[node name="SouthWallA" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 1.5, -6)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SouthWallA"]
+mesh = SubResource("wall_seg_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SouthWallA"]
+shape = SubResource("wall_seg_shape")
+
+[node name="SouthWallB" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1.5, -6)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SouthWallB"]
+mesh = SubResource("wall_seg_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SouthWallB"]
+shape = SubResource("wall_seg_shape")
+
+[node name="EastWall" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1.5, 0)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="EastWall"]
+mesh = SubResource("side_wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="EastWall"]
+shape = SubResource("side_wall_shape")
+
+[node name="WestWall" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 1.5, 0)
+collision_layer = 1
+collision_mask = 1
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WestWall"]
+mesh = SubResource("side_wall_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WestWall"]
+shape = SubResource("side_wall_shape")
+
+[node name="PlayerSpawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 2)
+
+[node name="ExitDoor" parent="." instance=ExtResource("1_door")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6)
+start_locked = false

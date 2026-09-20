@@ -6,10 +6,27 @@
 
 ## Current Milestone
 
-**M4 — Dungeon Foundation** (Not Started)
+**M4 — Dungeon Foundation** (In Progress)
 
-Next per `ROADMAP.md`: gate entry, dungeon scene container, start room, combat rooms populated
-from M3 enemies, boss room placeholder, room transitions. Nothing implemented yet.
+M4.1 delivered: a static, deterministic dungeon that runs end to end — Gate in the test world,
+start room, two combat rooms gated by locking doors, a boss-room placeholder, and dungeon
+completion. No procedural generation, no real boss, no loot/XP/shadow systems.
+
+M4.1 deliverable status (verified by `dungeon_test_suite.tscn`, 31/31):
+
+- dungeon gate — implemented
+- dungeon scene — implemented
+- start room — implemented
+- room controller — implemented
+- combat rooms — implemented
+- door locking — implemented
+- room clearing — implemented
+- sequential progression — implemented
+- boss room placeholder — implemented
+- dungeon completion foundation — implemented
+
+M4 stays **In Progress**: M4.2 still owes the return trip to the test world, and the layout is a
+grey-box.
 
 ---
 
@@ -276,6 +293,55 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
 
 ## In Progress
 
+- **M4.1 — Dungeon Foundation**:
+    - `scripts/dungeon/dungeon_controller.gd` (`DungeonController`) — dungeon state
+      `NOT_STARTED / IN_PROGRESS / COMPLETED`, room order taken from tree order under its `Rooms`
+      container, completion when the last room reports cleared. No combat, AI, health or door
+      details. No global manager of any kind.
+    - `scripts/dungeon/room_controller.gd` (`RoomController`) — one room's lifecycle:
+      `IDLE / ACTIVE / CLEARED`, arms on player entry, locks its exit, wakes its own enemies,
+      counts their deaths, unlocks and emits. A cleared room never re-arms, so backtracking is
+      safe. It only ever touches its own subtree — no global enemy search, no per-frame scan.
+    - `scripts/dungeon/dungeon_door.gd` (`DungeonDoor`) — `lock()` / `unlock()` / `is_locked()`.
+      Locked: collider on, slab down, red. Unlocked: collider off, slab raised by tween, green.
+      It knows nothing above itself.
+    - `scripts/dungeon/dungeon_gate.gd` (`DungeonGate`) — Area3D that tracks the player, shows a
+      `Label3D` prompt, and answers `interact` only while the player is inside. `activate()` is
+      public so a future scene router (M4.2) can drive it; `change_scene_on_activate` lets it
+      announce without switching scenes.
+    - Enemy interface added, AI untouched: `BasicMeleeEnemy.set_combat_enabled(bool)` plus a
+      `combat_enabled` export. While false `_physics_process` applies gravity and returns —
+      no perception, no chase, no attack, no navigation, and the agent leaves the avoidance
+      simulation. Rooms park their enemies in `_ready()` so a room can never ship with live ones.
+    - Rooms subscribe to the enemy `enemy_died` drop hook added in M3, which is its first consumer.
+      `BasicMeleeEnemy` still knows nothing about rooms.
+    - **Bug found and fixed during the build:** the `NavigationMesh` is a sub-resource of
+      `combat_room.tscn`, so both instances of that scene shared one object and the second bake
+      overwrote the first — room 2's obstacles were never carved. `RoomController` now duplicates
+      the navmesh before baking. Same class of shared-sub-resource bug as the enemy body material
+      in M3.2. Verified: room 1 bakes 4 polygons, room 2 bakes 33, and a path straight through
+      room 2's obstacle deviates 1.75 laterally while an open lane stays at 0.00.
+    - Navigation: one `NavigationRegion3D` per room, baked by that room. Rooms are walled off, so
+      each navmesh is an island and no enemy can path out of its own room. No runtime rebaking
+      beyond the one bake per room at load.
+    - Input map: `interact` = E added to `project.godot`.
+    - Layout (static, grey-box): Start (0) → corridor → Combat 1 (z −18, 2 enemies) → corridor →
+      Combat 2 (z −38, 3 enemies + 2 obstacles) → corridor → Boss placeholder (z −59, 1 clearly
+      labelled `BasicMeleeEnemy`). The boss room's door seals behind the player on entry and opens
+      on clear.
+    - Collision layers reuse the M3 scheme: doors, floors, walls and corridors on world layer 1;
+      room entry triggers are layer 0 / mask 2 (player body only); the Gate likewise. No new layers.
+    - Test world: `DungeonGate` at (0, −16), 19.1 units from the nearest testing enemy — outside
+      both `detection_range` (10) and `lose_target_range` (14), so the player is not harassed while
+      using it.
+    - Automated validation `res://tests/dungeon/dungeon_test_suite.tscn` — **31/31 PASS**, covering
+      gate in/out of range, spawn, dormant enemies, one-shot room arming, door lock/unlock with a
+      real `test_move()` collision probe, partial kills holding the door, backtracking, room 2 on
+      the same controller, obstacle navigation, boss placeholder, `COMPLETED` firing once, the
+      visible DUNGEON COMPLETE label and the cleared-room ordering.
+    - Regression: combo 10/10, dodge 18/18, enemy 22/22, enemy polish 17/17 — with the dungeon suite,
+      **98/98**. `--check-only` clean; `Main.tscn` and `dungeon_test.tscn` each 480 frames verbose
+      with zero ERROR / WARNING / Failed / Parse Error / SCRIPT ERROR.
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
@@ -293,7 +359,8 @@ First iteration delivered: `BasicMeleeEnemy` scene + local enum state machine (I
 - Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
 - Player-side death reaction (input lockout, visual state) — polish, deferred
 - Playtest-tune M3 enemy parameters — now edited in `resources/enemies/basic_melee_enemy_stats.tres`, not in code
-- Start M4 — Dungeon Foundation (gate entry, dungeon container, rooms, transitions)
+- M4.2 — return from the dungeon to the test world on completion (deferred from M4.1 by design)
+- M4.2 — dungeon layout pass: the grey-box is functional, not shaped for play
 - Optional M3 polish, non-blocking: additional enemy archetypes as new `EnemyStats` assets,
   more expressive telegraph
 
