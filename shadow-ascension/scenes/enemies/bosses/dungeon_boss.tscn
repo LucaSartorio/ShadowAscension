@@ -96,7 +96,7 @@ surface_material_override/0 = SubResource("body_mat")
 [node name="QuickStrikeHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -1.3)
 collision_layer = 32
-collision_mask = 64
+collision_mask = 320
 monitoring = false
 monitorable = true
 script = ExtResource("2_hitbox")
@@ -113,7 +113,7 @@ visible = false
 [node name="WideSweepHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -1.2)
 collision_layer = 32
-collision_mask = 64
+collision_mask = 320
 monitoring = false
 monitorable = true
 script = ExtResource("2_hitbox")
@@ -130,7 +130,7 @@ visible = false
 [node name="GroundSlamHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
 collision_layer = 32
-collision_mask = 64
+collision_mask = 320
 monitoring = false
 monitorable = true
 script = ExtResource("2_hitbox")
@@ -147,7 +147,7 @@ visible = false
 [node name="DoubleStrikeHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -1.5)
 collision_layer = 32
-collision_mask = 64
+collision_mask = 320
 monitoring = false
 monitorable = true
 script = ExtResource("2_hitbox")

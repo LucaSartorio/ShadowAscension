@@ -96,6 +96,13 @@ theme_override_colors/font_color = Color(0.82, 0.86, 0.94, 1)
 autowrap_mode = 3
 text = "Seleziona un'Ombra per i dettagli."
 
+[node name="SummonButton" type="Button" parent="Root/Panel/Content"]
+custom_minimum_size = Vector2(0, 32)
+focus_mode = 0
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.82, 0.74, 1, 1)
+text = "[Evoca]"
+
 [node name="Separator3" type="HSeparator" parent="Root/Panel/Content"]
 
 [node name="CloseHint" type="Label" parent="Root/Panel/Content"]

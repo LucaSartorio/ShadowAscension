@@ -5,12 +5,16 @@ extends Node
 ## inventory and the equipment.
 ##
 ## It holds ShadowInstance objects rather than a count per type, because each
-## extraction is its own thing and M8.2 will give them individual state. Minting
+## extraction is its own thing and carries its own level and XP. Minting
 ## the ids is this node's job; the session only remembers where the counter got
 ## to, so two scenes can never hand out the same number.
 
 signal shadow_added(shadow: ShadowInstance)
 signal shadow_removed(shadow: ShadowInstance)
+signal shadow_xp_gained(shadow: ShadowInstance, amount: int)
+## Emitted once per award, with how many levels it covered, so a burst of XP
+## produces one message rather than one per level.
+signal shadow_leveled_up(shadow: ShadowInstance, levels: int)
 ## Fired after any change, so a UI redraws once instead of listening to both.
 signal collection_changed
 
@@ -86,6 +90,23 @@ func remove_shadow(instance_id: StringName) -> bool:
 	return false
 
 
+## XP goes to one named shadow, not to the collection: only the one that struck
+## the killing blow earns it. Returns the levels gained.
+func award_xp(instance_id: StringName, amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var shadow: ShadowInstance = get_shadow(instance_id)
+	if shadow == null:
+		return 0
+	var levels: int = shadow.add_xp(amount)
+	_sync()
+	shadow_xp_gained.emit(shadow, amount)
+	if levels > 0:
+		shadow_leveled_up.emit(shadow, levels)
+	collection_changed.emit()
+	return levels
+
+
 func clear() -> void:
 	if _shadows.is_empty():
 		return
@@ -112,7 +133,11 @@ func _restore() -> void:
 		return
 	_shadows.clear()
 	for row in state.shadows:
-		_shadows.append(ShadowInstance.new(row["instance_id"], row["shadow_data"]))
+		_shadows.append(ShadowInstance.new(
+			row["instance_id"],
+			row["shadow_data"],
+			row.get("level", 1),
+			row.get("current_xp", 0)))
 
 
 func _sync() -> void:
@@ -121,7 +146,12 @@ func _sync() -> void:
 		return
 	var rows: Array[Dictionary] = []
 	for shadow in _shadows:
-		rows.append({"instance_id": shadow.instance_id, "shadow_data": shadow.shadow_data})
+		rows.append({
+			"instance_id": shadow.instance_id,
+			"shadow_data": shadow.shadow_data,
+			"level": shadow.level,
+			"current_xp": shadow.current_xp,
+		})
 	state.sync_shadows(rows)
 
 

@@ -5,9 +5,9 @@ extends CanvasLayer
 ## like the character sheet and the inventory, and closes whichever of those was
 ## up.
 ##
-## Display only: rows come from PlayerShadowCollection and are rebuilt on
-## `collection_changed`, never polled. There is no Summon button, because
-## summoning does not exist yet and a dead control would be a lie.
+## Rows come from PlayerShadowCollection and are rebuilt on `collection_changed`,
+## never polled. The one button summons the selected shadow, or takes it back if
+## it is already out — the summoner decides what happens, this only labels it.
 
 const GROUP: StringName = &"shadow_collection_menu"
 const PAUSE_MENU_GROUP: StringName = &"pause_menu"
@@ -18,15 +18,20 @@ const PAUSE_MENU_GROUP: StringName = &"pause_menu"
 @onready var rows: VBoxContainer = $Root/Panel/Content/Rows
 @onready var empty_label: Label = $Root/Panel/Content/EmptyLabel
 @onready var detail_label: Label = $Root/Panel/Content/Detail
+@onready var summon_button: Button = $Root/Panel/Content/SummonButton
 
 @export var total_format: String = "Totale: %d"
 @export var empty_text: String = "Nessuna Ombra estratta"
 @export var detail_placeholder: String = "Seleziona un'Ombra per i dettagli."
-## Shown under a selected shadow so the empty detail pane is not mistaken for a
-## missing feature. No button, because there is nothing to press yet.
-@export var summon_note: String = "Evocazione disponibile in una fase successiva."
+@export var summon_text: String = "[Evoca]"
+@export var recall_text: String = "[Richiama]"
+## Marks the row that is currently in the world.
+@export var active_marker: String = "ATTIVA"
+@export var level_format: String = "Livello %d"
+@export var xp_format: String = "XP: %d/%d"
 
 var _collection: PlayerShadowCollection = null
+var _summoner: PlayerShadowSummoner = null
 var _open: bool = false
 var _selected_id: StringName = &""
 var last_mouse_mode_request: int = Input.MOUSE_MODE_CAPTURED
@@ -42,6 +47,12 @@ func _ready() -> void:
 		return
 	_collection = player.shadows
 	_collection.collection_changed.connect(_refresh)
+	_summoner = player.shadow_summoner
+	if _summoner != null:
+		# One redraw per change of who is out, so the marker and the button
+		# label follow a summon the player made from anywhere.
+		_summoner.active_shadow_changed.connect(_on_active_changed)
+	summon_button.pressed.connect(_on_summon_pressed)
 	_refresh()
 
 
@@ -69,6 +80,19 @@ func is_empty_shown() -> bool:
 
 func get_detail_text() -> String:
 	return detail_label.text
+
+
+func get_summon_button_text() -> String:
+	return summon_button.text
+
+
+func is_summon_button_visible() -> bool:
+	return summon_button.visible
+
+
+func press_summon() -> void:
+	if summon_button.visible:
+		summon_button.pressed.emit()
 
 
 func select_row(index: int) -> void:
@@ -154,12 +178,15 @@ func _refresh() -> void:
 	if shadows.is_empty():
 		_selected_id = &""
 		detail_label.text = detail_placeholder
+		summon_button.visible = false
 		return
 
 	var still_selected: bool = false
 	for shadow in shadows:
 		var button: Button = Button.new()
-		button.text = "%-10s %s" % [shadow.get_short_id(), shadow.get_display_name()]
+		var marker: String = "  %s" % active_marker if _is_active(shadow) else ""
+		button.text = "%-10s %s  Lv.%d%s" % [
+			shadow.get_short_id(), shadow.get_display_name(), shadow.level, marker]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.focus_mode = Control.FOCUS_NONE
 		if shadow.shadow_data != null:
@@ -185,12 +212,31 @@ func _update_detail() -> void:
 		if _selected_id != &"" else null
 	if shadow == null:
 		detail_label.text = detail_placeholder
+		summon_button.visible = false
 		return
 	detail_label.text = "\n".join([
 		shadow.get_display_name(),
 		shadow.get_short_id(),
+		level_format % shadow.level,
+		xp_format % [shadow.current_xp, shadow.get_xp_to_next_level()],
 		"",
 		shadow.shadow_data.description if shadow.shadow_data != null else "",
-		"",
-		summon_note,
 	])
+	summon_button.visible = _summoner != null
+	summon_button.text = recall_text if _is_active(shadow) else summon_text
+
+
+func _is_active(shadow: ShadowInstance) -> bool:
+	return _summoner != null and _summoner.is_active(shadow.instance_id)
+
+
+func _on_summon_pressed() -> void:
+	if _summoner == null or _selected_id == &"":
+		return
+	_summoner.toggle(_selected_id)
+
+
+## The marker lives on every row, so a change of who is out redraws the list
+## rather than just the detail pane.
+func _on_active_changed(_instance_id: StringName) -> void:
+	_refresh()

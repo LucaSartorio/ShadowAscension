@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="ShadowData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="ShadowData" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/shadows/shadow_data.gd" id="1_shadow"]
+[ext_resource type="PackedScene" path="res://scenes/shadows/basic_melee_shadow.tscn" id="2_summon"]
 
 [resource]
 script = ExtResource("1_shadow")
@@ -9,3 +10,10 @@ display_name = "Basic Melee Shadow"
 description = "L'ombra di un soldato caduto. Ricorda come si impugna un'arma, e poco altro."
 extraction_chance = 0.7
 accent_color = Color(0.55, 0.35, 0.95, 1)
+summon_scene = ExtResource("2_summon")
+base_health = 80.0
+health_per_level = 8.0
+base_damage = 12.0
+damage_per_level = 2.0
+base_xp_requirement = 50
+xp_growth_factor = 1.2
