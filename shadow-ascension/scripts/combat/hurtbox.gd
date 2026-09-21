@@ -21,12 +21,12 @@ func set_invulnerable(value: bool) -> void:
 	is_invulnerable = value
 
 
-func receive_hit(amount: float, _source: Node) -> void:
+func receive_hit(amount: float, source: Node = null) -> void:
 	if is_invulnerable:
 		return
 	if health_component == null:
 		return
-	health_component.receive_damage(amount)
+	health_component.receive_damage(amount, source)
 
 
 func get_owner_entity() -> Node:
