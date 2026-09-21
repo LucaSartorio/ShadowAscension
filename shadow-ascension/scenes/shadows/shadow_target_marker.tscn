@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/shadows/shadow_target_marker.gd" id="1_marker"]
+
+[sub_resource type="StandardMaterial3D" id="marker_mat"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.55, 0.3, 0.9)
+emission_enabled = true
+emission = Color(1, 0.55, 0.3, 1)
+emission_energy_multiplier = 2.0
+disable_receive_shadows = true
+
+[sub_resource type="PrismMesh" id="marker_mesh"]
+size = Vector3(0.36, 0.42, 0.36)
+
+[node name="ShadowTargetMarker" type="Node3D"]
+script = ExtResource("1_marker")
+
+[node name="Pivot" type="Node3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Pivot"]
+transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("marker_mesh")
+surface_material_override/0 = SubResource("marker_mat")

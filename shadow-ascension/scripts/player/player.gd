@@ -31,6 +31,7 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 @onready var equipment: PlayerEquipment = $PlayerEquipment
 @onready var shadows: PlayerShadowCollection = $PlayerShadowCollection
 @onready var shadow_summoner: PlayerShadowSummoner = $PlayerShadowSummoner
+@onready var shadow_commander: PlayerShadowCommander = $PlayerShadowCommander
 
 ## What the controller actually uses. Recomputed from the base values whenever
 ## the stats change — never from the previous effective value.
