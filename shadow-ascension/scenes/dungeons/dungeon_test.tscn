@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_controller.gd" id="1_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -17,6 +17,9 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/shadow_collection_menu.tscn" id="93_shadowmenu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/extraction_feedback.tscn" id="94_extract"]
 [ext_resource type="PackedScene" path="res://scenes/ui/active_shadow_hud.tscn" id="95_shadowhud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="96_summary"]
+[ext_resource type="PackedScene" path="res://scenes/ui/player_health_hud.tscn" id="89_hphud"]
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_run_stats.gd" id="97_runstats"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -235,8 +238,12 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 horizontal_alignment = 1
 vertical_alignment = 1
-theme_override_font_sizes/font_size = 40
-text = "DUNGEON COMPLETE"
+theme_override_font_sizes/font_size = 44
+theme_override_colors/font_color = Color(0.92, 0.28, 0.26, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 8
+text = "SEI MORTO"
+visible = false
 
 [editable path="Rooms/CombatRoom2"]
 
@@ -251,3 +258,10 @@ text = "DUNGEON COMPLETE"
 [node name="ExtractionFeedback" parent="." instance=ExtResource("94_extract")]
 
 [node name="ActiveShadowHUD" parent="." instance=ExtResource("95_shadowhud")]
+
+[node name="DungeonRunStats" type="Node" parent="."]
+script = ExtResource("97_runstats")
+
+[node name="PlayerHealthHUD" parent="." instance=ExtResource("89_hphud")]
+
+[node name="RunSummary" parent="." instance=ExtResource("96_summary")]

@@ -15,9 +15,8 @@ signal objective_changed(text: String)
 enum DungeonState { NOT_STARTED, IN_PROGRESS, COMPLETED, FAILED }
 
 @export var completion_message: String = "DUNGEON COMPLETE"
-@export var death_message: String = "YOU DIED"
+@export var death_message: String = "SEI MORTO"
 ## How long the completion banner stays up. The exit portal stays live after it.
-@export var completion_message_duration: float = 1.8
 @export var death_restart_delay: float = 1.2
 
 @export_group("Objective text")
@@ -133,8 +132,10 @@ func _on_room_cleared(room: RoomController) -> void:
 		exit_portal.set_enabled(true)
 	print("[Dungeon] " + completion_message)
 	_set_objective(objective_complete)
+	# No banner here any more: the run summary owns this moment, and two things
+	# announcing the same event over each other is what made it read as a test
+	# scene. The message is still printed, where only a developer sees it.
 	dungeon_completed.emit()
-	_show_status(completion_message, completion_message_duration)
 
 
 func _on_player_died() -> void:
