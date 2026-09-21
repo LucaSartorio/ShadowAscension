@@ -1,0 +1,121 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_menu"]
+
+[sub_resource type="StyleBoxFlat" id="panel_style"]
+bg_color = Color(0.05, 0.04, 0.09, 0.55)
+border_width_left = 3
+border_color = Color(0.55, 0.35, 0.95, 0.75)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 48.0
+content_margin_top = 40.0
+content_margin_right = 48.0
+content_margin_bottom = 40.0
+
+[sub_resource type="StyleBoxFlat" id="button_normal"]
+bg_color = Color(0.13, 0.11, 0.2, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.32, 0.72, 0.85)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 20.0
+content_margin_top = 10.0
+content_margin_right = 20.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="button_hover"]
+bg_color = Color(0.24, 0.18, 0.4, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.72, 0.56, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 20.0
+content_margin_top = 10.0
+content_margin_right = 20.0
+content_margin_bottom = 10.0
+
+[node name="MainMenu" type="CanvasLayer"]
+layer = 80
+script = ExtResource("1_menu")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="Root"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.035, 0.07, 1)
+
+[node name="Panel" type="PanelContainer" parent="Root"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -150.0
+offset_right = 230.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("panel_style")
+
+[node name="Content" type="VBoxContainer" parent="Root/Panel"]
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 40
+theme_override_colors/font_color = Color(0.82, 0.72, 1, 1)
+theme_override_colors/font_outline_color = Color(0.12, 0.05, 0.25, 1)
+theme_override_constants/outline_size = 6
+text = "SHADOW ASCENSION"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Root/Panel/Content"]
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.62, 0.6, 0.72, 1)
+text = "Vertical Slice"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="Root/Panel/Content"]
+custom_minimum_size = Vector2(0, 18)
+
+[node name="PlayButton" type="Button" parent="Root/Panel/Content"]
+custom_minimum_size = Vector2(0, 46)
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.92, 0.88, 1, 1)
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_hover")
+text = "GIOCA"
+
+[node name="QuitButton" type="Button" parent="Root/Panel/Content"]
+custom_minimum_size = Vector2(0, 46)
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.88, 0.84, 0.94, 1)
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_hover")
+text = "ESCI"
