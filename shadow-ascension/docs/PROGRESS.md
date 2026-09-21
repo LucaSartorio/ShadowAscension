@@ -8,64 +8,97 @@
 
 **M8 — Shadow System** (In Progress)
 
-M8.2 delivered: a shadow can be put into the world, fights on its own, levels from the kills it
-finishes, and comes back after a scene change without being asked twice.
+M8.3 delivered: the shadow now takes orders. Two command modes, an aimed attack
+command, a tactical recall, a leash, progress-based stuck recovery, and a panel that says
+what it is doing.
 
-M8.2 deliverable status (verified by `summon_test.tscn` 72/72 and `summon_run.gd` 24/24, the latter
-with real scene changes):
+M8.3 deliverable status (verified by `command_test.tscn` 91/91 and `command_run.gd` 22/22, the
+latter with real scene changes):
 
-- Shadow level and XP — implemented
-- Shadow summon scene and AI — implemented
-- Summon / recall, max one active — implemented
-- Ally / enemy collision, no friendly fire — implemented
-- Player / shadow XP split — implemented
-- Shadow Collection UI with `[Evoca]` / `[Richiama]` — implemented
-- Runtime persistence of level, XP and the active shadow — implemented
+- Shadow command modes — implemented
+- FOLLOW — implemented
+- AGGRESSIVE — implemented
+- Quick Recall — implemented
+- Manual Attack Command — implemented
+- Manual Target Priority — implemented
+- Target indicator — implemented
+- Combat leash — implemented
+- Stuck recovery — implemented
+- Active Shadow HUD — implemented
+- Shadow health feedback — implemented
+- Command hints — implemented
+- Target switching polish — implemented
 
-**Level and XP are the shadow's own.** `ShadowData` carries the curve (50 XP at Lv.1, x1.2 per
-level) and the scaling (80 HP + 8/level, 12 damage + 2/level); a `ShadowInstance` carries where it
-has got to. The brief's worked example holds exactly: 70 XP onto a fresh shadow gives Lv.2 with
-20/60. One award covers as many levels as it pays for and is reported once, so a large reward is a
-single level-up rather than a burst.
+**M8.3 is complete.** M8 stays In Progress.
 
-**A kill is split by who finished it.** The player keeps the whole reward for its own kills. When
-the shadow lands the killing blow the shadow takes 70% and the player takes the remainder — 25 XP
-splits 18/7, and the two halves always add back up to the full reward because the player's share is
-the remainder rather than a second rounded share. Attribution rides the damage pipeline:
-`HealthComponent` remembers the last source, `RoomCombatant` records the killer, and nothing about
-the existing `enemy_died` signature changed.
+**Inputs.** `shadow_recall` = Q, `shadow_mode_toggle` = T, `shadow_attack_command` = middle mouse
+button. All three were free; nothing existing was rebound. A test asserts that no two gameplay
+actions share a binding, so the next addition cannot quietly collide.
 
-**No friendly fire, by construction rather than by check.** The shadow's hitbox masks enemy
-hurtboxes only, so it can never see the player; the player's hitbox never sees the shadow's
-hurtbox. Enemy and boss hitbox masks were widened (64 → 320) so their swings can reach the shadow,
-without losing the player. Three new collision layers were added and every layer in the project is
-now named in `project.godot`.
+**Who owns what.** `PlayerShadowCollection` owns what is held, `PlayerShadowSummoner` what is out,
+and the new `PlayerShadowCommander` what it is told. The shadow never reads input — it is given
+orders through methods, which is what lets the suite drive it without faking keys, and lets the
+same order come from the HUD, a key, or a test.
 
-**One at a time, and it comes back on its own.** `PlayerShadowSummoner` owns what is out; summoning
-a second recalls the first, so "max one active" is a rule of one node rather than a check every
-caller repeats. The session stores which shadow was out, so walking through a gate re-summons it —
-the player asked once. A player death clears that id: the next run does not start with a shadow
-already standing there.
+**Target priority is one rule in one place.** Manual order first, then what it found itself in
+AGGRESSIVE, then nothing. `is_valid_target()` is the single answer to "may it act on this" — alive,
+in the tree, and inside the leash — and every state asks it rather than repeating the checks.
 
-**A dead shadow is not a lost shadow.** The entity dies; the instance stays in the collection with
-its level and XP and can be summoned again. Measured across a real loop — gate, dungeon, a kill the
-shadow finished, exit portal, second gate, then a death — a Lv.4 shadow with 36 XP came back
-identical on a different `Player` instance, with the 104 HP its level buys.
+**The leash is measured from the player, not from the shadow**, because the point is to keep the
+fight near whoever is being guarded. A target already outside it refuses the order outright rather
+than starting a chase that gets abandoned.
 
-**One real bug was found and fixed while building.** A summoned shadow that walked off the level
-fell for as long as the stuck timer allowed — three seconds of gravity is ninety metres down. The
-distance fallback would have recovered it eventually, which is not the same as recovering it. A
-shadow more than six metres below the player is now returned at once. Found by a test that put the
-player outside the dungeon geometry; the test was wrong, the fall was real.
+**Stuck recovery escalates rather than teleporting.** No progress for 1.75s triggers a repath —
+a stale path is far more common than a trapped shadow. Only a shadow that is *still* stuck after
+that AND more than 13m from the player is repositioned, once, behind a 6s cooldown. Standing still
+in melee is explicitly not stuck, and the tests assert the order of escalation, not just the
+outcome.
 
-`ShadowCollectionMenu` lost its "coming in a later phase" note and gained the real control, so the
-M8.1 assertion that checked for that note was updated rather than deleted.
+**Three real bugs were found and fixed while building, all by tests that failed for the right
+reason:**
 
-Next iteration: **M8.3**, per ROADMAP.
+- *The shadow froze when chasing.* It asked the NavigationAgent for a moving target's exact centre,
+  which is off the navmesh more often than not, and an agent given an unreachable point returns no
+  path at all. It now asks for the nearest navigable point and steers directly as a last resort.
+  This was also why a recalled shadow sometimes never arrived.
+- *An enemy could pin the shadow.* The shadow's body collided with enemy bodies while enemies
+  passed straight through it — solid in one direction only. An enemy walking at the player wedged
+  the shadow against nothing. Its body now collides with the world only, which is what the enemies
+  already did to it.
+- *A wall behind the player ate the attack order.* The aim ray started at the camera, so the boss
+  room's own door — which shuts behind the player — blocked commands from inside the room. The ray
+  now starts at the player and keeps the camera's direction.
+
+**One design call worth knowing about.** A quick recall in AGGRESSIVE was undone within a second:
+the shadow came back, re-acquired the nearest enemy and left again. It now holds off from picking
+its own fights for `recall_hold_duration` (3s) after a recall. It is a hold, not a mode change —
+the mode stays the player's to set, an order overrides the hold immediately, and it expires on its
+own. Making the recall switch the shadow to FOLLOW would be the other reasonable answer.
+
+**Mode persistence policy.** The command mode lives on the entity and is mirrored into
+`PlayerRuntimeState` as a plain int. A shadow that re-summons itself after a scene change comes
+back in the mode it was fighting in. Any path that leaves no shadow out — a despawn, the shadow's
+death, the player's death — forgets the mode, so the next summon starts from AGGRESSIVE. Nothing
+survives closing the game, which M8.3 does not require.
+
+**Menu safety needs no special case.** The commander is a pausable node reading `_unhandled_input`,
+and every menu pauses the tree, so shadow commands cannot fire behind a UI. Tested with real key
+presses, not by reasoning about it.
+
+Next iteration: **M8.4**, per ROADMAP.
 
 ---
 
 ## Done
+
+- **M8.2 — Shadow Summoning, Combat and Progression** (Completed). A shadow could be put into the
+  world, fought on its own, levelled from the kills it finished, and re-summoned itself after a
+  scene change. `ShadowData` carries the curve (50 XP at Lv.1, x1.2 per level) and the scaling
+  (80 HP + 8/level, 12 damage + 2/level); a `ShadowInstance` carries the progress. A kill is split
+  by who finished it: the player keeps its own kills whole, and the shadow takes 70% of the ones it
+  finishes with the player taking the remainder, so the halves always sum to the full reward.
+  No friendly-fire check exists anywhere, because the collision masks make it unrepresentable.
+  Verified by `summon_test.tscn` 72/72 and `summon_run.gd` 24/24.
 
 - **M8.1 — Shadow Extraction and Collection Foundation** (Completed).
   M8.1 delivered: enemies leave remnants, a remnant grants one attempt, and what comes out is an
