@@ -196,19 +196,36 @@ func _follow_tests() -> void:
 	_record(near <= node.max_follow_distance,
 		"31) settling inside its %.0f m leash" % node.max_follow_distance)
 
-	# Absurdly far for long enough and it is put back rather than left stranded.
-	node.global_position = _player.global_position + Vector3(0, 0, 40.0)
-	await _wait(node.teleport_stuck_time + 0.8)
-	_record(_player.global_position.distance_to(node.global_position) < 10.0,
-		"32) a hopelessly stranded shadow is returned to the player (%.1f m)" %
-			_player.global_position.distance_to(node.global_position))
+	# M8.3 replaced the old "far for three seconds" teleport with progress-based
+	# stuck detection, so distance alone no longer moves a shadow. One with a
+	# clear path walks back under its own power.
+	# Measured per PHYSICS FRAME, not per second: headless runs physics far
+	# faster than the wall clock, so a rate in m/s means nothing here. What
+	# separates walking from teleporting is how far it can move in one step.
+	# Into the level (-z), not out of it: dropped outside the geometry it would
+	# only fall, and the fall recovery below is a different rule.
+	node.global_position = _player.global_position + Vector3(0, 0, -14.0)
+	await _wait(0.3)
+	var step_ceiling: float = node.movement_speed / Engine.physics_ticks_per_second * 1.6
+	var biggest: float = 0.0
+	var total: float = 0.0
+	var previous: Vector3 = node.global_position
+	for _i in 60:
+		await get_tree().physics_frame
+		var moved: float = previous.distance_to(node.global_position)
+		biggest = maxf(biggest, moved)
+		total += moved
+		previous = node.global_position
+	_record(total > 0.5 and biggest <= step_ceiling,
+		"32) left 14 m out it walks back, never jumping (%.2f m covered, biggest step %.3f m of %.3f)" % [
+			total, biggest, step_ceiling])
 
-	# Falling out of the level is recovered at once, not on the stuck timer:
-	# every extra second of it is another ten metres down.
+	# Falling out of the level is the one case still recovered at once: every
+	# extra second of it is another ten metres down.
 	node.global_position = _player.global_position - Vector3(0, 20.0, 0)
 	await _wait(0.4)
 	_record(_player.global_position.y - node.global_position.y < node.fall_recovery_depth,
-		"32b) and one that fell out of the world comes back immediately (%.1f m below)" %
+		"32b) a shadow that fell out of the world comes back immediately (%.1f m below)" %
 			(_player.global_position.y - node.global_position.y))
 	_summoner.recall()
 	await _wait(0.3)
