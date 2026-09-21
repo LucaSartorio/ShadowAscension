@@ -17,6 +17,10 @@ extends CanvasLayer
 
 ## How long the phase callout stays up.
 @export var banner_duration: float = 1.5
+## The phase captions. Data rather than literals in the match below, and
+## Italian like the rest of what the player reads.
+@export var phase_1_text: String = "FASE 1"
+@export var phase_2_text: String = "FASE 2"
 
 var _health: HealthComponent = null
 var _banner_tween: Tween = null
@@ -65,13 +69,13 @@ func is_banner_showing() -> bool:
 func _on_phase_changed(phase: DungeonBoss.BossPhase) -> void:
 	match phase:
 		DungeonBoss.BossPhase.PHASE_1:
-			phase_label.text = "PHASE 1"
+			phase_label.text = phase_1_text
 		DungeonBoss.BossPhase.TRANSITION:
 			# The callout announces what is coming, during the beat itself.
-			phase_label.text = "PHASE 2"
+			phase_label.text = phase_2_text
 			_flash_banner()
 		DungeonBoss.BossPhase.PHASE_2:
-			phase_label.text = "PHASE 2"
+			phase_label.text = phase_2_text
 
 
 func _flash_banner() -> void:

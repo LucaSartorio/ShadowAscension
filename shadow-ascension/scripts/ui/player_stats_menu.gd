@@ -23,7 +23,7 @@ const PAUSE_MENU_GROUP: StringName = &"pause_menu"
 @onready var rows: VBoxContainer = $Root/Panel/Content/Rows
 
 @export var points_format: String = "Punti disponibili: %d"
-@export var level_format: String = "Level %d"
+@export var level_format: String = "Livello %d"
 
 var _progression: PlayerProgression = null
 var _open: bool = false

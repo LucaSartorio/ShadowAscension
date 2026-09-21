@@ -21,6 +21,8 @@ const GROUP: StringName = &"progression_hud"
 @export var level_format: String = "LV. %d"
 @export var xp_format: String = "%d / %d"
 @export var max_level_text: String = "MAX"
+## Level reached, then the points it paid.
+@export var level_up_format: String = "SALITO DI LIVELLO!\n\nLivello %d\n\n+%d Punti Statistica"
 
 var _progression: PlayerProgression = null
 var _banner_tween: Tween = null
@@ -87,7 +89,7 @@ func _on_xp_changed(current: int, required: int) -> void:
 
 
 func _on_level_up(level: int, points_gained: int) -> void:
-	banner.text = "LEVEL UP!\n\nLevel %d\n\n+%d Stat Points" % [level, points_gained]
+	banner.text = level_up_format % [level, points_gained]
 	if _banner_tween != null and _banner_tween.is_running():
 		_banner_tween.kill()
 	banner.visible = true

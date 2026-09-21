@@ -71,11 +71,11 @@ theme_override_constants/separation = 10
 [node name="Title" type="Label" parent="Root/Panel/Content"]
 theme_override_font_sizes/font_size = 22
 theme_override_colors/font_color = Color(1, 0.88, 0.55, 1)
-text = "CHARACTER"
+text = "PERSONAGGIO"
 
 [node name="LevelLabel" type="Label" parent="Root/Panel/Content"]
 theme_override_font_sizes/font_size = 15
-text = "Level 1"
+text = "Livello 1"
 
 [node name="PointsLabel" type="Label" parent="Root/Panel/Content"]
 theme_override_font_sizes/font_size = 15
