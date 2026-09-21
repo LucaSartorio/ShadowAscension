@@ -6,90 +6,59 @@
 
 ## Current Milestone
 
-**M8 — Shadow System** (In Progress)
+**M9 — Vertical Slice** (Not started)
 
-M8.3 delivered: the shadow now takes orders. Two command modes, an aimed attack
-command, a tactical recall, a leash, progress-based stuck recovery, and a panel that says
-what it is doing.
-
-M8.3 deliverable status (verified by `command_test.tscn` 91/91 and `command_run.gd` 22/22, the
-latter with real scene changes):
-
-- Shadow command modes — implemented
-- FOLLOW — implemented
-- AGGRESSIVE — implemented
-- Quick Recall — implemented
-- Manual Attack Command — implemented
-- Manual Target Priority — implemented
-- Target indicator — implemented
-- Combat leash — implemented
-- Stuck recovery — implemented
-- Active Shadow HUD — implemented
-- Shadow health feedback — implemented
-- Command hints — implemented
-- Target switching polish — implemented
-
-**M8.3 is complete.** M8 stays In Progress.
-
-**Inputs.** `shadow_recall` = Q, `shadow_mode_toggle` = T, `shadow_attack_command` = middle mouse
-button. All three were free; nothing existing was rebound. A test asserts that no two gameplay
-actions share a binding, so the next addition cannot quietly collide.
-
-**Who owns what.** `PlayerShadowCollection` owns what is held, `PlayerShadowSummoner` what is out,
-and the new `PlayerShadowCommander` what it is told. The shadow never reads input — it is given
-orders through methods, which is what lets the suite drive it without faking keys, and lets the
-same order come from the HUD, a key, or a test.
-
-**Target priority is one rule in one place.** Manual order first, then what it found itself in
-AGGRESSIVE, then nothing. `is_valid_target()` is the single answer to "may it act on this" — alive,
-in the tree, and inside the leash — and every state asks it rather than repeating the checks.
-
-**The leash is measured from the player, not from the shadow**, because the point is to keep the
-fight near whoever is being guarded. A target already outside it refuses the order outright rather
-than starting a chase that gets abandoned.
-
-**Stuck recovery escalates rather than teleporting.** No progress for 1.75s triggers a repath —
-a stale path is far more common than a trapped shadow. Only a shadow that is *still* stuck after
-that AND more than 13m from the player is repositioned, once, behind a 6s cooldown. Standing still
-in melee is explicitly not stuck, and the tests assert the order of escalation, not just the
-outcome.
-
-**Three real bugs were found and fixed while building, all by tests that failed for the right
-reason:**
-
-- *The shadow froze when chasing.* It asked the NavigationAgent for a moving target's exact centre,
-  which is off the navmesh more often than not, and an agent given an unreachable point returns no
-  path at all. It now asks for the nearest navigable point and steers directly as a last resort.
-  This was also why a recalled shadow sometimes never arrived.
-- *An enemy could pin the shadow.* The shadow's body collided with enemy bodies while enemies
-  passed straight through it — solid in one direction only. An enemy walking at the player wedged
-  the shadow against nothing. Its body now collides with the world only, which is what the enemies
-  already did to it.
-- *A wall behind the player ate the attack order.* The aim ray started at the camera, so the boss
-  room's own door — which shuts behind the player — blocked commands from inside the room. The ray
-  now starts at the player and keeps the camera's direction.
-
-**One design call worth knowing about.** A quick recall in AGGRESSIVE was undone within a second:
-the shadow came back, re-acquired the nearest enemy and left again. It now holds off from picking
-its own fights for `recall_hold_duration` (3s) after a recall. It is a hold, not a mode change —
-the mode stays the player's to set, an order overrides the hold immediately, and it expires on its
-own. Making the recall switch the shadow to FOLLOW would be the other reasonable answer.
-
-**Mode persistence policy.** The command mode lives on the entity and is mirrored into
-`PlayerRuntimeState` as a plain int. A shadow that re-summons itself after a scene change comes
-back in the mode it was fighting in. Any path that leaves no shadow out — a despawn, the shadow's
-death, the player's death — forgets the mode, so the next summon starts from AGGRESSIVE. Nothing
-survives closing the game, which M8.3 does not require.
-
-**Menu safety needs no special case.** The commander is a pausable node reading `_unhandled_input`,
-and every menu pauses the tree, so shadow commands cannot fire behind a UI. Tested with real key
-presses, not by reasoning about it.
-
-Next iteration: **M8.4**, per ROADMAP.
+M8 closed on review. Nothing of M9 is implemented; see ROADMAP for its deliverables.
 
 ---
 
 ## Done
+
+- **M8 — Shadow System** (Completed). Milestone review passed. All four ROADMAP exit criteria were
+  verified by walking the whole system end to end with real scene changes rather than by reading it
+  (`m8_review_run.gd`, 89/89, stable across three consecutive runs):
+    - *Killing an enemy triggers an extraction check using the configured probability* — driven from
+      the real asset in both directions: at 0.00 the attempt fails and the remnant is spent, at 1.00
+      the next one succeeds, and the shipped 0.70 is restored and asserted.
+    - *Successful extraction adds a shadow to the collection* — one remnant per corpse, Lv.1 with
+      0 XP, stats read from the asset, and the session recorded it for the next scene.
+    - *Player can summon a collected shadow; it engages enemies and dies correctly* — summoned into
+      the scene rather than onto the player, it took an order and fought, and when killed the entity
+      died and cleaned up while the shadow kept its level and XP and could be summoned again.
+    - *Summon respects limits and cleans up on despawn* — summoning a second recalls the first,
+      exactly one is ever in the world, and a despawn leaves nothing behind.
+
+    The review also covered the full loop the brief asked for: test world, gate, kill, extraction,
+    collection, summon, FOLLOW, manual order, a kill the shadow finished, the 70/30 split,
+    AGGRESSIVE, multi-enemy combat, a level-up, recall, the boss, dungeon completion, the exit
+    portal, back to the test world with level and XP intact, a second run with a fresh id, and a
+    player death followed by a restart with the collection untouched and summoning working again.
+
+    **No code bugs were found.** Two review-time failures both turned out to be the harness, not the
+    system, and are recorded here because the distinction matters: the test helper stands the player
+    at 1.6m to swing, which is exactly `BasicMeleeEnemy.preferred_combat_distance`, so a live enemy
+    sidesteps a player that teleports onto it and 53 swings landed one hit — enemy AI doing its job.
+    And an aimed order in a room with several live enemies often finds a different one standing in
+    the way, which is the command working rather than failing. Both assertions were rewritten to
+    test the rule they claimed to test.
+
+    M8.1 delivered extraction, remnants and the collection; M8.2 summoning, shadow AI, combat,
+    levels and the XP split; M8.3 command modes, orders, the recall, the leash, stuck recovery and
+    the Active Shadow HUD. Each sub-milestone's own record is below.
+
+    Whole-project state at review: **1051 assertions across 27 suites, zero failures**, zero parser
+    errors, zero runtime errors, zero warnings.
+
+- **M8.3 — Shadow Commands and Combat Polish** (Completed). Two command modes on the summoned
+  entity (FOLLOW never starts a fight, AGGRESSIVE does, both obey an order), an aimed attack order
+  resolved by raycast, a tactical recall distinct from the menu's despawn, one target-priority rule,
+  a world-space marker, a leash measured from the player, progress-based stuck recovery that
+  repaths before it ever repositions, and an Active Shadow HUD carrying name, level, health, mode
+  and the command hints. Inputs Q / T / middle mouse, none of them rebinding anything.
+  Three real bugs were found and fixed while building: the shadow froze when asked to path to an
+  off-navmesh point, an enemy could pin it because their bodies collided in one direction only, and
+  a wall behind the player ate the attack order because the ray started at the camera. Verified by
+  `command_test.tscn` 91/91 and `command_run.gd` 22/22.
 
 - **M8.2 — Shadow Summoning, Combat and Progression** (Completed). A shadow could be put into the
   world, fought on its own, levelled from the kills it finished, and re-summoned itself after a
@@ -922,15 +891,16 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-No milestone in flight. M7 has not been started. Two definitions stay open by design:
+No milestone in flight. M8 closed on review; M9 has not been started. Two definitions stay open by
+design:
 
 - Game design definition — foundations defined:
     - third-person camera
     - WASD camera-relative movement
     - mouse-controlled aim
     - combat feel direction
-  Still in progress: loot, shadow mechanic, dungeon structure, UI, etc. Progression is
-  settled as of M6 and recorded in GAME_DESIGN.md.
+  Still in progress: dungeon structure and UI. Progression is settled as of M6, loot and
+  equipment as of M7, and the shadow mechanic as of M8 — all recorded in GAME_DESIGN.md.
 - Technical architecture definition — grows as systems land.
 
 ---
