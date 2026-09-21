@@ -1,5 +1,9 @@
 extends Node3D
 
+## The hub: where a run starts and ends. Player spawn, the gate into the dungeon,
+## and a training corner. It bakes its own navigation mesh so the enemies and a
+## summoned shadow can path here as they do in the dungeon.
+
 @onready var nav_region: NavigationRegion3D = $NavigationRegion3D
 
 

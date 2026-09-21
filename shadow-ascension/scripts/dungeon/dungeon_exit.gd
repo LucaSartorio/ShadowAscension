@@ -6,7 +6,7 @@ extends Area3D
 
 signal exit_activated(target_scene: String)
 
-@export_file("*.tscn") var target_scene: String = "res://scenes/core/test_world.tscn"
+@export_file("*.tscn") var target_scene: String = "res://scenes/core/hub.tscn"
 @export var prompt_text: String = "Esci dal Dungeon"
 @export var interact_key_label: String = "E"
 @export var disabled_color: Color = Color(0.2, 0.22, 0.25)

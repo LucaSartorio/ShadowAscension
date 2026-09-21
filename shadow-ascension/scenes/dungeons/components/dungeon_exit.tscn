@@ -41,4 +41,4 @@ pixel_size = 0.0045
 font_size = 24
 outline_size = 3
 modulate = Color(0.4, 1, 0.65, 1)
-text = "Press E to leave Dungeon"
+text = "[E] Esci dal Dungeon"

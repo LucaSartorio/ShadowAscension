@@ -16,7 +16,17 @@ signal gate_activated(target_scene: String)
 ## the scene change to whoever is listening.
 @export var change_scene_on_activate: bool = true
 
+@export_group("Presentation")
+## The gate is the one thing in the hub the player must find, so it moves and
+## breathes rather than sitting there as another coloured box.
+@export var spin_speed_degrees: float = 26.0
+@export var pulse_period: float = 2.4
+@export var pulse_energy_low: float = 1.6
+@export var pulse_energy_high: float = 3.2
+
 @onready var prompt: Label3D = $Prompt
+@onready var visual_root: Node3D = $VisualRoot
+@onready var gate_light: OmniLight3D = $GateLight
 
 var _player_in_range: bool = false
 var _used: bool = false
@@ -29,6 +39,24 @@ func _ready() -> void:
 		prompt.visible = false
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	_start_idle_animation()
+
+
+## A slow spin and a slow pulse, on tweens bound to this node so leaving the
+## scene cannot strand them. Presentation only — nothing here is read back.
+func _start_idle_animation() -> void:
+	if gate_light != null:
+		var pulse: Tween = create_tween()
+		pulse.set_loops()
+		pulse.tween_property(gate_light, "light_energy", pulse_energy_high,
+			pulse_period * 0.5).set_trans(Tween.TRANS_SINE)
+		pulse.tween_property(gate_light, "light_energy", pulse_energy_low,
+			pulse_period * 0.5).set_trans(Tween.TRANS_SINE)
+
+
+func _process(delta: float) -> void:
+	if visual_root != null:
+		visual_root.rotation.y += deg_to_rad(spin_speed_degrees) * delta
 
 
 func is_player_in_range() -> bool:

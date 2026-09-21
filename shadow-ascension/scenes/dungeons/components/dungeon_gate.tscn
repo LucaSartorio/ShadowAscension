@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_gate.gd" id="1_gate"]
 
@@ -13,7 +13,21 @@ outer_radius = 2.0
 albedo_color = Color(0.45, 0.25, 0.85, 1)
 emission_enabled = true
 emission = Color(0.5, 0.3, 0.95, 1)
-emission_energy_multiplier = 1.5
+emission_energy_multiplier = 3.0
+rim_enabled = true
+
+[sub_resource type="CylinderMesh" id="portal_mesh"]
+top_radius = 1.45
+bottom_radius = 1.45
+height = 0.06
+
+[sub_resource type="StandardMaterial3D" id="portal_mat"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.3, 0.14, 0.62, 0.45)
+emission_enabled = true
+emission = Color(0.62, 0.42, 1, 1)
+emission_energy_multiplier = 2.2
 
 [node name="DungeonGate" type="Area3D"]
 collision_layer = 0
@@ -33,6 +47,19 @@ transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 2.2, 0)
 mesh = SubResource("gate_mesh")
 surface_material_override/0 = SubResource("gate_mat")
 
+[node name="Portal" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 2.2, 0)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("portal_mesh")
+surface_material_override/0 = SubResource("portal_mat")
+
+[node name="GateLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
+light_color = Color(0.62, 0.42, 1, 1)
+light_energy = 2.4
+omni_range = 12.0
+
 [node name="Prompt" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.6, 0)
 billboard = 1
@@ -41,4 +68,4 @@ fixed_size = true
 pixel_size = 0.0045
 font_size = 24
 outline_size = 3
-text = "Press E to enter Gate"
+text = "[E] Entra nel Gate"
