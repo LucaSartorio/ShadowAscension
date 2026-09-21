@@ -8,7 +8,7 @@ extends SceneTree
 ## faked: the gate and the exit portal really swap the running scene, and the
 ## player on the far side is a different instance every time.
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -32,7 +32,7 @@ func _initialize() -> void:
 		"AUTO2) exactly one instance of it exists")
 	state.reset_runtime_state()
 
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
 
 	# --- 1) a fresh session starts clean
@@ -91,7 +91,7 @@ func _initialize() -> void:
 		"16) the HUD shows it without prompting: '%s  %s'" % [
 			hud.get_level_text(), hud.get_xp_text()])
 	menu.open()
-	_record(menu.get_level_text() == "Level 2"
+	_record(menu.get_level_text() == menu.level_format % 2
 			and menu.get_stat_value_text("STR") == "12"
 			and menu.get_stat_value_text("VIT") == "12",
 		"17) so does the stats menu, first time it is opened")
@@ -135,7 +135,7 @@ func _initialize() -> void:
 	await _pause(0.4)
 	dungeon.exit_portal.activate()
 	await _pause(1.2)
-	_record(current_scene.scene_file_path == TEST_WORLD, "20) the portal returned to the test world")
+	_record(current_scene.scene_file_path == HUB, "20) the portal returned to the test world")
 	var player3: Player = current_scene.get_node("Player")
 	var after_exit: Dictionary = _snapshot(player3)
 	print("[AFTER EXIT ] %s" % [after_exit])
@@ -204,7 +204,11 @@ func _initialize() -> void:
 	quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 

@@ -3,7 +3,7 @@ extends Node3D
 ## M4.1 Dungeon Foundation — gate, room lifecycle, door locking, sequential
 ## progression, dungeon completion.
 
-const TEST_WORLD: PackedScene = preload("res://scenes/core/test_world.tscn")
+const HUB: PackedScene = preload("res://scenes/core/hub.tscn")
 const DUNGEON: PackedScene = preload("res://scenes/dungeons/dungeon_test.tscn")
 
 # world-space anchors, derived from the room transforms in dungeon_test.tscn
@@ -54,7 +54,7 @@ func _record(passed: bool, description: String) -> void:
 # --- gate ---------------------------------------------------------------------
 
 func _gate_tests() -> void:
-	var world: Node3D = TEST_WORLD.instantiate() as Node3D
+	var world: Node3D = HUB.instantiate() as Node3D
 	add_child(world)
 	await _wait(0.5)
 
@@ -65,7 +65,7 @@ func _gate_tests() -> void:
 	var activations: Array[String] = []
 	gate.gate_activated.connect(func(target: String) -> void: activations.append(target))
 
-	_record(player != null and gate != null, "1) test_world instantiates with player and gate")
+	_record(player != null and gate != null, "1) the hub instantiates with player and gate")
 	var ui_idle: InteractionPrompt = get_tree().get_first_node_in_group(InteractionPrompt.GROUP) as InteractionPrompt
 	_record(gate.visible and ui_idle != null and not ui_idle.is_showing(),
 		"2) gate is visible, prompt hidden until the player is close")
@@ -273,8 +273,12 @@ func _dungeon_tests() -> void:
 	_record(_dungeon.get_state() == DungeonController.DungeonState.COMPLETED and _completed_count == 1,
 		"24) dungeon reaches COMPLETED exactly once (state=%d signals=%d)" % [
 			_dungeon.get_state(), _completed_count])
-	_record(_dungeon.status_label.visible and _dungeon.status_label.text == "DUNGEON COMPLETE",
-		"25) DUNGEON COMPLETE feedback is visible ('%s')" % _dungeon.status_label.text)
+	# M9.1 gave completion its own run summary; the banner is now the death one.
+	var summary: RunSummary = _dungeon.get_node("RunSummary")
+	_record(summary.is_open() and not _dungeon.status_label.visible,
+		"25) completion feedback is the run summary, not a banner")
+	summary.press_continue()
+	await _wait(0.2)
 
 	# progression order
 	_record(",".join(_cleared_events) == "CombatRoom1,CombatRoom2,BossRoom",

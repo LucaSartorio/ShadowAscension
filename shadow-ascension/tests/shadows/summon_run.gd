@@ -5,7 +5,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/shadows/summon_run.gd
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -27,7 +27,7 @@ func _initialize() -> void:
 	# Forced so the run does not hinge on a 70% roll. Restored at the end.
 	_shadow_data.extraction_chance = 1.0
 
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
 	var player: Player = current_scene.get_node("Player")
 	_record(player.shadow_summoner != null, "1) the player carries a summoner")
@@ -97,7 +97,7 @@ func _initialize() -> void:
 	await _pause(0.4)
 	dungeon.exit_portal.activate()
 	await _pause(1.4)
-	_record(current_scene.scene_file_path == TEST_WORLD, "10) the portal returned home")
+	_record(current_scene.scene_file_path == HUB, "10) the portal returned home")
 	var p2: Player = current_scene.get_node("Player")
 	_record(p2 != p, "11) on a different Player instance")
 	var back: BasicMeleeShadow = p2.shadow_summoner.get_active_node()
@@ -160,7 +160,11 @@ func _initialize() -> void:
 	quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 

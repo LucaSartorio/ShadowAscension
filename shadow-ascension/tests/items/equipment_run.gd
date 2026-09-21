@@ -5,7 +5,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/items/equipment_run.gd
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const SWORD: ItemData = preload("res://resources/items/training_sword.tres")
 const JACKET: ItemData = preload("res://resources/items/hunter_jacket.tres")
@@ -26,7 +26,7 @@ func _initialize() -> void:
 	var state: Node = root.get_node_or_null("PlayerRuntimeState")
 	state.reset_runtime_state()
 
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
 
 	var player: Player = current_scene.get_node("Player")
@@ -97,7 +97,7 @@ func _initialize() -> void:
 	await _pause(0.4)
 	(current_scene as DungeonController).exit_portal.activate()
 	await _pause(1.2)
-	_record(current_scene.scene_file_path == TEST_WORLD, "39) the portal returned home")
+	_record(current_scene.scene_file_path == HUB, "39) the portal returned home")
 	var p3: Player = current_scene.get_node("Player")
 	var home: Dictionary = _snapshot(p3)
 	print("[BACK HOME  ] %s" % [home])
@@ -144,7 +144,11 @@ func _initialize() -> void:
 	quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 

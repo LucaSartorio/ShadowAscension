@@ -237,7 +237,7 @@ func _walk_player_to(target: Vector3, budget: float) -> bool:
 func _phase_1_tests() -> void:
 	_record(_boss.get_phase() == DungeonBoss.BossPhase.PHASE_1,
 		"1) the boss starts in PHASE_1 (phase=%d)" % _boss.get_phase())
-	_record(_bar.get_phase_text() == "PHASE 1",
+	_record(_bar.get_phase_text() == _bar.phase_1_text,
 		"1b) the UI reads '%s'" % _bar.get_phase_text())
 
 	# 2) phase 1 offers exactly the three original attacks
@@ -293,7 +293,7 @@ func _transition_tests() -> void:
 		if hitbox != null and hitbox.is_active():
 			any_live = true
 	_record(not any_live, "6) every attack hitbox is off during the transition")
-	_record(_bar.is_banner_showing() and _bar.get_phase_text() == "PHASE 2",
+	_record(_bar.is_banner_showing() and _bar.get_phase_text() == _bar.phase_2_text,
 		"7/10) the UI flashes the phase callout and reads '%s'" % _bar.get_phase_text())
 
 	# 8) harmless and still for the whole beat

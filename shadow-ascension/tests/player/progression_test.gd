@@ -240,9 +240,9 @@ func _dungeon_reward_tests() -> void:
 			_prog.current_level, _prog.current_xp])
 	_record(_prog.available_stat_points == 5,
 		"15b) +5 stat points (%d)" % _prog.available_stat_points)
-	_record(_hud.is_banner_showing() and _hud.get_banner_text().begins_with("LEVEL UP!")
-			and _hud.get_banner_text().contains("Level 2")
-			and _hud.get_banner_text().contains("+5 Stat Points"),
+	_record(_hud.is_banner_showing() and _hud.get_banner_text().begins_with("SALITO DI LIVELLO!")
+			and _hud.get_banner_text().contains("Livello 2")
+			and _hud.get_banner_text().contains("+5 Punti"),
 		"17) the level-up callout appears: %s" % _hud.get_banner_text().replace("\n", " "))
 	_record(_hud.get_level_text() == "LV. 2" and _hud.get_xp_text() == "0 / 125",
 		"18) the HUD reads '%s  %s' after levelling" % [_hud.get_level_text(), _hud.get_xp_text()])

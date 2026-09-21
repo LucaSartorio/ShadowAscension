@@ -11,7 +11,7 @@ extends SceneTree
 ## change_scene_to_file / reload_current_scene calls land, and that repeating the
 ## loop does not accumulate nodes.
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -27,9 +27,9 @@ func _initialize() -> void:
 	var state: Node = root.get_node_or_null("PlayerRuntimeState")
 	if state != null:
 		state.reset_runtime_state()
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
-	_record(current_scene.scene_file_path == TEST_WORLD, "1) test world is the running scene")
+	_record(current_scene.scene_file_path == HUB, "1) test world is the running scene")
 
 	var after_run_1: Dictionary = await _full_run(1)
 	var after_run_2: Dictionary = await _full_run(2)
@@ -91,16 +91,17 @@ func _full_run(n: int) -> Dictionary:
 		if not room.is_cleared() or room.exit_door.is_locked():
 			all_ok = false
 	_record(all_ok, "RUN %d/2) all three rooms arm, gate progression, clear and open in order" % n)
+	# The completion banner became the run summary in M9.1, and _pause() has
+	# already dismissed it by here — what has to hold is the state and the portal.
 	_record(dungeon.get_state() == DungeonController.DungeonState.COMPLETED
-			and dungeon.exit_portal.is_enabled()
-			and dungeon.status_label.text == "DUNGEON COMPLETE",
-		"RUN %d/2) COMPLETED, banner shown, exit portal live" % n)
+			and dungeon.exit_portal.is_enabled(),
+		"RUN %d/2) COMPLETED and the exit portal is live" % n)
 
 	player.global_position = EXIT_POS
 	await _pause(0.4)
 	_record(dungeon.exit_portal.activate(), "RUN %d/2) the live exit accepts interact" % n)
 	await _pause(1.0)
-	_record(current_scene.scene_file_path == TEST_WORLD,
+	_record(current_scene.scene_file_path == HUB,
 		"RUN %d/2) the exit really returned to the test world" % n)
 
 	var back: Player = current_scene.get_node("Player")
@@ -125,7 +126,7 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 		return false
 	_record(bar.is_showing(), "RUN %d/2) boss health bar appears when the encounter starts" % n)
 
-	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_1 and bar.get_phase_text() == "PHASE 1",
+	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_1 and bar.get_phase_text() == bar.phase_1_text,
 		"RUN %d/2) the fight opens in phase 1" % n)
 
 	player.hurtbox.set_invulnerable(true)
@@ -177,9 +178,9 @@ func _death_and_restart() -> void:
 	var doomed_id: int = current_scene.get_instance_id()
 	player.health_component.receive_damage(1000.0)
 	await _pause(0.3)
-	_record(dungeon.status_label.text == "YOU DIED"
+	_record(dungeon.status_label.text == dungeon.death_message
 			and dungeon.get_state() == DungeonController.DungeonState.FAILED,
-		"15) death shows YOU DIED and marks the run FAILED")
+		"15) a death shows the banner and marks the run FAILED")
 
 	await _pause(2.5)
 	var restarted: DungeonController = current_scene as DungeonController
@@ -206,7 +207,11 @@ func _record(passed: bool, description: String) -> void:
 
 ## Real time, not frame counts: headless runs frames far faster than wall clock,
 ## so frame counting would skip past timers like death_restart_delay.
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(seconds: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(seconds).timeout
 
 

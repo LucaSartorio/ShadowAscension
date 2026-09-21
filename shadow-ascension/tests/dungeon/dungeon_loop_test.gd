@@ -4,7 +4,7 @@ extends Node3D
 ## portal, return trip, death restart, double-interaction safety.
 ## M4.1 room/door/progression coverage lives in dungeon_test_suite.tscn.
 
-const TEST_WORLD: PackedScene = preload("res://scenes/core/test_world.tscn")
+const HUB: PackedScene = preload("res://scenes/core/hub.tscn")
 const DUNGEON: PackedScene = preload("res://scenes/dungeons/dungeon_test.tscn")
 
 const ROOM1_TRIGGER: Vector3 = Vector3(0, 0.1, -13)
@@ -62,7 +62,7 @@ func _clear_scene(scene: Node3D) -> void:
 # --- gate, fade, spam protection ----------------------------------------------
 
 func _gate_and_fade() -> void:
-	var world: Node3D = _spawn(TEST_WORLD)
+	var world: Node3D = _spawn(HUB)
 	await _wait(0.8)  # let the opening fade-in settle
 
 	var player: Player = world.get_node("Player")
@@ -143,15 +143,23 @@ func _full_dungeon_loop() -> void:
 	_record(dungeon.get_state() == DungeonController.DungeonState.COMPLETED and completions.size() == 1,
 		"12) dungeon reaches COMPLETED exactly once (state=%d signals=%d)" % [
 			dungeon.get_state(), completions.size()])
-	_record(dungeon.status_label.visible and dungeon.status_label.text == "DUNGEON COMPLETE",
-		"13) DUNGEON COMPLETE banner is visible")
+	# M9.1 replaced the completion banner with the run summary: two things
+	# announcing the same moment over each other is what made it read as a test
+	# scene. The banner is still what a death gets.
+	var summary: RunSummary = dungeon.get_node("RunSummary")
+	_record(summary.is_open() and not dungeon.status_label.visible,
+		"13) the run summary opens on completion, with no banner behind it")
 	_record(exit_portal.is_enabled() and exit_portal.monitoring,
 		"15) exit portal goes live on completion")
 
-	# banner auto-hides, portal does not
-	await _wait(dungeon.completion_message_duration + 0.4)
-	_record(not dungeon.status_label.visible and exit_portal.is_enabled(),
-		"13b) banner clears after %.1fs while the portal stays live" % dungeon.completion_message_duration)
+	# The summary holds until dismissed, and the portal stays live either way.
+	await _wait(2.4)
+	_record(summary.is_open() and exit_portal.is_enabled(),
+		"13b) the summary waits for the player rather than timing out")
+	summary.press_continue()
+	await _wait(0.3)
+	_record(not summary.is_open() and not get_tree().paused,
+		"13c) [Continua] closes it and hands the dungeon back")
 
 	# 17) prompt on entry
 	player.global_position = EXIT_POS
@@ -167,7 +175,7 @@ func _full_dungeon_loop() -> void:
 		if exit_portal.activate():
 			extra_exits += 1
 	_record(first_exit and extra_exits == 0 and starts.size() == 1
-			and starts[0] == "res://scenes/core/test_world.tscn",
+			and starts[0] == "res://scenes/core/hub.tscn",
 		"18) exit starts exactly one transition back to the test world (extra=%d target=%s)" % [
 			extra_exits, starts[0] if starts.size() > 0 else "<none>"])
 
@@ -187,7 +195,7 @@ func _full_dungeon_loop() -> void:
 # --- a second run starts clean -------------------------------------------------
 
 func _fresh_run_state() -> void:
-	var world: Node3D = _spawn(TEST_WORLD)
+	var world: Node3D = _spawn(HUB)
 	await _wait(0.6)
 	var world_player: Player = world.get_node("Player")
 	var gate: DungeonGate = world.get_node("DungeonGate")
@@ -249,8 +257,8 @@ func _death_restart() -> void:
 
 	player.health_component.receive_damage(1000.0)
 	await _wait(0.3)
-	_record(dungeon.status_label.visible and dungeon.status_label.text == "YOU DIED",
-		"27) player death shows YOU DIED ('%s')" % dungeon.status_label.text)
+	_record(dungeon.status_label.visible and dungeon.status_label.text == dungeon.death_message,
+		"27) a player death shows the death banner ('%s')" % dungeon.status_label.text)
 	_record(dungeon.get_state() == DungeonController.DungeonState.FAILED and failures.size() == 1,
 		"27b) the run is marked FAILED exactly once (state=%d signals=%d)" % [dungeon.get_state(), failures.size()])
 

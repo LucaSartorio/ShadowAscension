@@ -6,7 +6,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/shadows/m8_review_run.gd
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -34,7 +34,7 @@ func _initialize() -> void:
 	_state.reset_runtime_state()
 	_real_chance = _data.extraction_chance
 
-	await _phase_test_world()
+	await _phase_hub()
 	await _phase_extraction()
 	await _phase_summon_and_follow()
 	await _phase_manual_kill_split()
@@ -63,8 +63,8 @@ func _initialize() -> void:
 
 # --- 1. the world ----------------------------------------------------------------------
 
-func _phase_test_world() -> void:
-	change_scene_to_file(TEST_WORLD)
+func _phase_hub() -> void:
+	change_scene_to_file(HUB)
 	await _pause(0.7)
 	var player: Player = current_scene.get_node("Player")
 	_record(player.shadows != null and player.shadows.is_empty(),
@@ -459,7 +459,7 @@ func _phase_exit_and_return() -> void:
 	await _pause(0.4)
 	(current_scene as DungeonController).exit_portal.activate()
 	await _pause(1.4)
-	_record(current_scene.scene_file_path == TEST_WORLD, "69) the portal returned home")
+	_record(current_scene.scene_file_path == HUB, "69) the portal returned home")
 	var p2: Player = current_scene.get_node("Player")
 	await _pause(0.5)
 	_record(p2 != p, "70) on a different Player instance")
@@ -548,7 +548,11 @@ func _phase_player_death() -> void:
 
 # --- helpers ---------------------------------------------------------------------------------------------
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 

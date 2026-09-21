@@ -8,7 +8,7 @@ extends SceneTree
 ## The detail of each sub-milestone lives in its own suite; this walks the whole
 ## thing end to end the way a player would and checks the criteria hold.
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -29,7 +29,7 @@ func _initialize() -> void:
 		return
 	state.reset_runtime_state()
 
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
 
 	# ========== EXIT CRITERION 1: kills award XP, thresholds level up ==========
@@ -144,7 +144,7 @@ func _initialize() -> void:
 	await _pause(0.4)
 	dungeon.exit_portal.activate()
 	await _pause(1.2)
-	_record(current_scene.scene_file_path == TEST_WORLD, "flow) the portal returned home")
+	_record(current_scene.scene_file_path == HUB, "flow) the portal returned home")
 	var p3: Player = current_scene.get_node("Player")
 	var back_home: Dictionary = _snapshot(p3)
 	print("[BACK HOME  ] %s" % [back_home])
@@ -184,7 +184,11 @@ func _initialize() -> void:
 	quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 

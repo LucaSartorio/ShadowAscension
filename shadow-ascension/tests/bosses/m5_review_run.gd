@@ -10,7 +10,7 @@ extends SceneTree
 ## Three passes: a full boss fight, a death in phase 2 with the restart it forces,
 ## and a second full fight on the reloaded dungeon.
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -27,7 +27,7 @@ func _initialize() -> void:
 	var state: Node = root.get_node_or_null("PlayerRuntimeState")
 	if state != null:
 		state.reset_runtime_state()
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
 
 	await _fight(1, false)
@@ -41,7 +41,11 @@ func _initialize() -> void:
 	quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 
@@ -99,7 +103,7 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 	_record(boss != null and bar.is_showing() and boss.combat_enabled,
 		"F%d) the encounter starts: boss awake, health bar up" % n)
 	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_1
-			and bar.get_phase_text() == "PHASE 1",
+			and bar.get_phase_text() == bar.phase_1_text,
 		"F%d) it opens in phase 1, UI reads '%s'" % [n, bar.get_phase_text()])
 	_record(objective.get_objective() == "Sconfiggi il Boss",
 		"F%d) objective reads '%s'" % [n, objective.get_objective()])
@@ -223,7 +227,7 @@ func _exit_dungeon(n: int) -> void:
 	await _pause(0.4)
 	var used: bool = dungeon.exit_portal.activate()
 	await _pause(1.2)
-	_record(used and current_scene.scene_file_path == TEST_WORLD,
+	_record(used and current_scene.scene_file_path == HUB,
 		"F%d) the exit portal really returns to the test world" % n)
 
 

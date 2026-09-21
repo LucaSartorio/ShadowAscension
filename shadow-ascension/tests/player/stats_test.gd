@@ -119,7 +119,7 @@ func _menu_tests() -> void:
 func _allocation_tests() -> void:
 	await _press_action("character_stats")
 
-	_record(_menu.get_level_text() == "Level 1", "9) level shown: '%s'" % _menu.get_level_text())
+	_record(_menu.get_level_text() == _menu.level_format % 1, "9) level shown: '%s'" % _menu.get_level_text())
 	_record(_menu.get_points_text() == "Punti disponibili: 0",
 		"10) points shown: '%s'" % _menu.get_points_text())
 	_record(_menu.get_stat_value_text("STR") == "10" and _menu.get_stat_value_text("AGI") == "10"

@@ -5,7 +5,7 @@ extends Node3D
 ## catch (the boss room sealed by its own door) was invisible to every test that
 ## teleported past the doorway.
 
-const TEST_WORLD: PackedScene = preload("res://scenes/core/test_world.tscn")
+const HUB: PackedScene = preload("res://scenes/core/hub.tscn")
 const DUNGEON: PackedScene = preload("res://scenes/dungeons/dungeon_test.tscn")
 
 const WALK_SPEED: float = 6.0
@@ -28,7 +28,11 @@ func _run() -> void:
 	get_tree().quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A scripted walk has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _wait(t: float) -> void:
+	RunSummary.dismiss_open(get_tree())
 	await get_tree().create_timer(t).timeout
 
 
@@ -91,7 +95,7 @@ func _kill_room(room: RoomController) -> void:
 # --- gate prompt ----------------------------------------------------------------
 
 func _gate_prompt_tests() -> void:
-	var world: Node3D = _spawn(TEST_WORLD)
+	var world: Node3D = _spawn(HUB)
 	await _wait(0.7)
 	var player: Player = world.get_node("Player")
 	var gate: DungeonGate = world.get_node("DungeonGate")

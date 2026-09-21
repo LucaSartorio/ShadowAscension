@@ -7,7 +7,7 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/player/progression_run.gd
 
-const TEST_WORLD: String = "res://scenes/core/test_world.tscn"
+const HUB: String = "res://scenes/core/hub.tscn"
 const DUNGEON: String = "res://scenes/dungeons/dungeon_test.tscn"
 const ROOM_ANCHORS: Array[Vector3] = [
 	Vector3(0, 0.1, -13), Vector3(0, 0.1, -33), Vector3(0, 0.1, -53)
@@ -24,9 +24,9 @@ func _initialize() -> void:
 	var state: Node = root.get_node_or_null("PlayerRuntimeState")
 	if state != null:
 		state.reset_runtime_state()
-	change_scene_to_file(TEST_WORLD)
+	change_scene_to_file(HUB)
 	await _pause(0.6)
-	_record(current_scene.scene_file_path == TEST_WORLD, "1) test world is running")
+	_record(current_scene.scene_file_path == HUB, "1) test world is running")
 
 	var player_out: Player = current_scene.get_node("Player")
 	var gate: DungeonGate = current_scene.get_node("DungeonGate")
@@ -104,7 +104,11 @@ func _initialize() -> void:
 	quit()
 
 
+## M9.1: completing the dungeon opens the run summary, which pauses the tree
+## until the player dismisses it. A headless flow has no player, so it does
+## what one would — the summary itself is covered by vertical_slice_run.gd.
 func _pause(t: float) -> void:
+	RunSummary.dismiss_open(self)
 	await create_timer(t).timeout
 
 
