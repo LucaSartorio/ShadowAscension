@@ -227,16 +227,21 @@ adds a script while the editor is open leaves that cache stale, and the next run
 Parse Error: Could not find type "<SomeClass>" in the current scope
 ```
 
-This is **not** a code error, and the named class is just the first one that failed — on a fully
-cold cache every `class_name` in the project fails the same way. Fix it with one of:
+This is **not** a code error, and the named class is just the first one that failed — on a stale
+cache every `class_name` in the project fails the same way, so the name in the message says nothing
+about where the problem is.
+
+Close Godot, then run **from the repository root** (the project is in `shadow-ascension/`, not
+there):
 
 ```powershell
-godot --headless --path . --import     # fastest, no editor needed
+Remove-Item -Recurse -Force shadow-ascension\.godot
+godot --headless --path shadow-ascension --import
 ```
 
-or, in the editor, **Project → Reload Current Project**. Deleting `shadow-ascension/.godot/` and
-reopening works too, and is the safe option when in doubt: the folder is generated and regenerates
-itself on the next launch.
+Deleting the folder first is what makes this reliable: an import on top of a stale cache can leave
+the old entries in place. The folder is generated and rebuilds itself on the next launch anyway.
+The same steps are in the repository README, which is where someone looks after a pull.
 
 Do not work around this by weakening a type annotation. The cache is the problem, not the code.
 
