@@ -334,20 +334,23 @@ inventory panel also hosts the equipment slots, so equipping is one screen rathe
 ## Shadows
 
 **`ShadowData`** (`scripts/shadows/shadow_data.gd`, instances in `resources/shadows/`) — the
-definition of one kind of shadow: id, name, description, accent colour, and the probability that one
-extraction attempt succeeds. Pure data, and the only place that probability exists — the extraction
-logic never hardcodes it.
+definition of one kind of shadow: id, name, description, accent colour, the probability that one
+extraction attempt succeeds, the scene it is summoned as, and every number its level scales. Pure
+data, and the only place any of it exists — no script hardcodes a chance, a curve or a stat.
+`health_at_level()`, `damage_at_level()` and `xp_required_for_level()` are derived getters on the
+asset, so the curve is defined once and read everywhere.
 
 **`ShadowInstance`** (`scripts/shadows/shadow_instance.gd`, a `RefCounted`) — one extracted shadow
-as opposed to the type it belongs to: a unique instance id and the `ShadowData` it came from.
-Deliberately thin. It exists in M8.1 so that level, XP and rank have somewhere to live in M8.2
-without reworking the collection out of a count-per-type model.
+as opposed to the type it belongs to: a unique instance id, the `ShadowData` it came from, and the
+level and XP it has earned. It asks the data for its health, damage and next requirement rather
+than storing them, so tuning an asset retunes every shadow already held. `add_xp()` applies as many
+levels as the award pays for and returns how many, so one award is one level-up.
 
 **`ShadowSource`** (`scripts/shadows/shadow_source.gd`) — a component that declares a combatant
 leaves a shadow and spawns its remnant on death, the same shape as `LootDropper`. Nothing anywhere
 branches on an enemy's class to decide which shadow it yields. It hangs off
 `RoomCombatant.enemy_died`, which fires once however the death was reached, and latches as well.
-The boss deliberately has no `ShadowSource` in M8.1.
+The boss deliberately has no `ShadowSource` yet.
 
 **`ShadowRemnant`** (`scripts/shadows/shadow_remnant.gd`, `scenes/shadows/shadow_remnant.tscn`) —
 what a corpse leaves behind, and one chance to tear the shadow loose. The roll happens once, the
@@ -359,7 +362,45 @@ standing on the floor.
 player holding `ShadowInstance` objects rather than a count per type. It mints the ids; the session
 remembers only where the counter got to, so two scenes can never hand out the same number.
 Contents survive a scene change through `PlayerRuntimeState`, which stores them and interprets
-nothing.
+nothing. `award_xp()` pays one named shadow — only the one that struck the killing blow earns
+anything.
+
+**`BasicMeleeShadow`** (`scripts/shadows/basic_melee_shadow.gd`,
+`scenes/shadows/basic_melee_shadow.tscn`) — the summoned entity. It shares the combat components
+with the enemies (`HealthComponent`, `Hurtbox`, `Hitbox`, `NavigationAgent3D`) and none of their AI:
+`FOLLOW → ACQUIRE_TARGET → CHASE_TARGET → ATTACK → RETURN_TO_PLAYER → DEAD`, with a leash that
+breaks off a chase rather than being dragged away from the player. Targets come from its own
+`DetectionArea` rather than a scene scan. Health and damage are read from its `ShadowInstance`'s
+level, recomputed rather than adjusted so a level-up can never compound. Its death frees the entity
+and leaves the instance untouched.
+
+**`PlayerShadowSummoner`** (`scripts/player/player_shadow_summoner.gd`) — a component on the player,
+beside the collection: the collection owns what is *held*, this owns what is *out*. One at a time,
+enforced here rather than by every caller — summoning a second recalls the first. The entity is
+parented to the scene, not to the player, so it moves under its own power. The active instance id
+lives in `PlayerRuntimeState`, which is what makes a shadow re-summon itself after a scene change;
+a recall, a shadow's death and the player's own death all clear it, so none of those come back by
+themselves.
+
+### Kill attribution
+
+`HealthComponent` records `last_damage_source` and emits `died_from(source)` alongside the unchanged
+`died`; `Hurtbox` passes the source through instead of discarding it; `RoomCombatant.report_death()`
+records the killer and exposes `get_killer()`. The `enemy_died(combatant)` signature did not change
+— whoever cares about the killer asks the combatant. `PlayerProgression` reads it to split the
+reward: the player keeps the whole of its own kills, and the shadow takes
+`PlayerProgression.SHADOW_KILL_SHARE` (70%) of a kill it finished, with the player taking the
+remainder rather than a second rounded share, so the two halves always sum to the full reward.
+
+### Collision layers
+
+Named in `project.godot`. 1 world, 2 player body, 4 enemy body, 8 player hitbox, 16 enemy hurtbox,
+32 enemy hitbox, 64 player hurtbox, 128 shadow body, 256 shadow hurtbox, 512 shadow hitbox.
+
+There is no friendly-fire check anywhere, because the masks make it unrepresentable: the shadow's
+hitbox sees layer 16 only (enemy hurtboxes) and the player's hitbox likewise, so neither can reach
+the other's hurtbox. Enemy and boss hitboxes mask 320 (player hurtbox + shadow hurtbox), so their
+swings reach both.
 
 ### Interaction ownership
 
