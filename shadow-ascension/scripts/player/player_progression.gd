@@ -152,6 +152,16 @@ func get_xp_ratio() -> float:
 	return clampf(float(current_xp) / float(required), 0.0, 1.0)
 
 
+## Every point of XP this character has ever earned, levels included. `current_xp`
+## alone resets on each level-up, so it cannot be differenced across a stretch of
+## play — this can, which is how a run reports what it was worth.
+func get_total_xp() -> int:
+	var total: int = current_xp
+	for level in range(1, current_level):
+		total += xp_required_for_level(level)
+	return total
+
+
 # --- earning ------------------------------------------------------------------
 
 ## Adds XP and levels up as many times as the amount allows. The loop is bounded

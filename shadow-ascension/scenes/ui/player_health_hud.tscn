@@ -1,0 +1,69 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/player_health_hud.gd" id="1_hp"]
+
+[sub_resource type="StyleBoxFlat" id="bar_bg"]
+bg_color = Color(0.08, 0.08, 0.11, 0.8)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="bar_fill"]
+bg_color = Color(0.35, 0.82, 0.38, 0.95)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="PlayerHealthHUD" type="CanvasLayer"]
+layer = 44
+script = ExtResource("1_hp")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 264.0
+offset_bottom = 62.0
+mouse_filter = 2
+
+[node name="Caption" type="Label" parent="Root"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 15.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.72, 0.76, 0.84, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+text = "VITA"
+
+[node name="HealthBar" type="ProgressBar" parent="Root"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 17.0
+offset_bottom = 34.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("bar_fill")
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="HealthLabel" type="Label" parent="Root"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 17.0
+offset_bottom = 34.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+text = "100 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1

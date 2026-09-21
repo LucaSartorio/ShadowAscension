@@ -21,14 +21,11 @@ layer = 45
 script = ExtResource("1_hud")
 
 [node name="Root" type="Control" parent="."]
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = -78.0
-offset_right = 250.0
-offset_bottom = -20.0
-grow_vertical = 0
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 66.0
+offset_right = 264.0
+offset_bottom = 124.0
 mouse_filter = 2
 
 [node name="LevelLabel" type="Label" parent="Root"]
@@ -83,7 +80,7 @@ theme_override_font_sizes/font_size = 26
 theme_override_colors/font_color = Color(1, 0.86, 0.4, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
-text = "LEVEL UP!"
+text = "SALITO DI LIVELLO!"
 horizontal_alignment = 1
 vertical_alignment = 1
 visible = false
