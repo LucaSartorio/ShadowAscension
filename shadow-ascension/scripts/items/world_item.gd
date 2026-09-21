@@ -100,7 +100,10 @@ func _on_body_exited(body: Node3D) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("interact"):
 		return
-	pick_up()
+	# Consumed on success, so one press cannot also reach whatever inherits the
+	# prompt when this item releases it.
+	if pick_up():
+		get_viewport().set_input_as_handled()
 
 
 ## Public so tests and a future router can drive it. Takes only what the
@@ -108,6 +111,10 @@ func _unhandled_input(event: InputEvent) -> void:
 ## quietly destroying it.
 func pick_up() -> bool:
 	if _claimed or not _player_in_range or item == null:
+		return false
+	# Another interactable may be overlapping this one — a shadow remnant from
+	# the same corpse, typically. Only whoever holds the prompt acts.
+	if not InteractionPrompt.should_act(self):
 		return false
 	var inventory: PlayerInventory = _find_inventory()
 	if inventory == null:

@@ -51,6 +51,13 @@ var inventory: Dictionary = {}
 ## two can never drift apart.
 var equipment: Dictionary = {}
 
+## Extracted shadows, as [{ instance_id, shadow_data }]. Kept flat and dumb: the
+## collection rebuilds its ShadowInstance objects from these. The counter lives
+## here too, because a new scene builds a new collection and would otherwise
+## start numbering from one again and collide with what is already held.
+var shadows: Array[Dictionary] = []
+var next_shadow_index: int = 1
+
 
 ## Called by the first player of the session, with the values its own resources
 ## gave it. Later players restore instead. Health is deliberately not a parameter:
@@ -102,6 +109,17 @@ func get_equipment_copy() -> Dictionary:
 	return equipment.duplicate()
 
 
+func sync_shadows(rows: Array[Dictionary]) -> void:
+	shadows = rows.duplicate()
+
+
+## Hands out the next number and moves on, so no two extractions can share one.
+func take_next_shadow_index() -> int:
+	var index: int = next_shadow_index
+	next_shadow_index += 1
+	return index
+
+
 func _copy_stacks(source: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	for id in source:
@@ -135,4 +153,6 @@ func reset_runtime_state() -> void:
 	current_health = -1.0
 	inventory.clear()
 	equipment.clear()
+	shadows.clear()
+	next_shadow_index = 1
 	runtime_state_reset.emit()

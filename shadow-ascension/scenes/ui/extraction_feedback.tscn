@@ -1,0 +1,48 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/extraction_feedback.gd" id="1_feedback"]
+
+[sub_resource type="StyleBoxFlat" id="banner_style"]
+bg_color = Color(0.06, 0.05, 0.1, 0.78)
+border_width_left = 2
+border_color = Color(0.55, 0.35, 0.95, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[node name="ExtractionFeedback" type="CanvasLayer"]
+layer = 58
+script = ExtResource("1_feedback")
+
+[node name="Root" type="PanelContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -170.0
+offset_top = 110.0
+offset_right = 170.0
+offset_bottom = 172.0
+grow_horizontal = 2
+mouse_filter = 2
+visible = false
+theme_override_styles/panel = SubResource("banner_style")
+
+[node name="Title" type="Label" parent="Root"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+text = "ESTRAZIONE..."
+horizontal_alignment = 1
+
+[node name="Detail" type="Label" parent="Root"]
+mouse_filter = 2
+offset_top = 26.0
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.85, 0.87, 0.94, 1)
+horizontal_alignment = 1

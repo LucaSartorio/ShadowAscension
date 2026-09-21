@@ -5,16 +5,26 @@ extends CanvasLayer
 ## One per scene, found through the `interaction_prompt` group — it dies with the
 ## scene, so a prompt can never survive a transition.
 ##
-## Ownership is explicit: whoever shows a prompt must be the one to hide it, so
-## two overlapping interactables cannot clear each other's text.
+## It holds a small stack of everything currently in reach and shows one of them:
+## the highest priority, most recently raised. That gives interactables a single
+## shared answer to "who does E act on right now", which matters as soon as two
+## of them overlap — a dropped item and a shadow remnant from the same corpse, for
+## instance. Each one checks `is_current()` before acting, so one key press can
+## only ever do one thing, and when the winner goes away the runner-up takes the
+## prompt over instead of leaving the player staring at nothing.
 
 const GROUP: StringName = &"interaction_prompt"
+## Higher wins. A remnant sits above ordinary loot because it is the rarer, more
+## deliberate action of the two.
+const PRIORITY_DEFAULT: int = 0
+const PRIORITY_SHADOW: int = 10
 
 @onready var root: Control = $Root
 @onready var key_label: Label = $Root/Panel/Row/KeyLabel
 @onready var text_label: Label = $Root/Panel/Row/TextLabel
 
-var _owner_node: Node = null
+## [{ node, key, text, priority }], in the order they were raised.
+var _requests: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -30,35 +40,91 @@ func get_text() -> String:
 	return text_label.text
 
 
-func show_prompt(owner_node: Node, action_key: String, text: String) -> void:
-	_owner_node = owner_node
-	key_label.text = "[%s]" % action_key
-	text_label.text = text
-	root.visible = true
+## Whether E would act on this node right now. An interactable that is in range
+## but not showing must not react.
+func is_current(node: Node) -> bool:
+	var winner: Dictionary = _winner()
+	return not winner.is_empty() and winner["node"] == node
 
 
-## Only the node that raised the prompt may take it down.
+func get_current_owner() -> Node:
+	var winner: Dictionary = _winner()
+	return winner["node"] if not winner.is_empty() else null
+
+
+func show_prompt(owner_node: Node, action_key: String, text: String,
+		priority: int = PRIORITY_DEFAULT) -> void:
+	for request in _requests:
+		if request["node"] == owner_node:
+			request["key"] = action_key
+			request["text"] = text
+			request["priority"] = priority
+			_redraw()
+			return
+	_requests.append({
+		"node": owner_node, "key": action_key, "text": text, "priority": priority,
+	})
+	_redraw()
+
+
+## Takes this node's request out. Whatever else is still in reach takes over, so
+## walking off one thing while standing on another does not blank the prompt.
 func hide_prompt(owner_node: Node) -> void:
-	if _owner_node != null and _owner_node != owner_node:
+	for i in range(_requests.size() - 1, -1, -1):
+		if _requests[i]["node"] == owner_node:
+			_requests.remove_at(i)
+	_redraw()
+
+
+## Highest priority, and among equals the most recently raised. Freed nodes are
+## dropped on the way, so a prompt cannot outlive the thing that asked for it.
+func _winner() -> Dictionary:
+	for i in range(_requests.size() - 1, -1, -1):
+		if not is_instance_valid(_requests[i]["node"]):
+			_requests.remove_at(i)
+	var best: Dictionary = {}
+	for request in _requests:
+		if best.is_empty() or request["priority"] >= best["priority"]:
+			best = request
+	return best
+
+
+func _redraw() -> void:
+	var winner: Dictionary = _winner()
+	if winner.is_empty():
+		root.visible = false
 		return
-	_owner_node = null
-	root.visible = false
+	key_label.text = "[%s]" % winner["key"]
+	text_label.text = winner["text"]
+	root.visible = true
 
 
 ## Convenience for interactables: use the on-screen prompt when the scene has
 ## one, otherwise fall back to the object's own world label. Kept here so the
 ## rule lives in one place instead of in every interactable.
-static func raise(source: Node, action_key: String, text: String, fallback: Label3D) -> void:
-	var ui: InteractionPrompt = source.get_tree().get_first_node_in_group(GROUP) as InteractionPrompt
+static func raise(source: Node, action_key: String, text: String, fallback: Label3D,
+		priority: int = PRIORITY_DEFAULT) -> void:
+	var ui: InteractionPrompt = _find(source)
 	if ui != null:
-		ui.show_prompt(source, action_key, text)
+		ui.show_prompt(source, action_key, text, priority)
 	elif fallback != null:
 		fallback.visible = true
 
 
 static func clear(source: Node, fallback: Label3D) -> void:
-	var ui: InteractionPrompt = source.get_tree().get_first_node_in_group(GROUP) as InteractionPrompt
+	var ui: InteractionPrompt = _find(source)
 	if ui != null:
 		ui.hide_prompt(source)
 	if fallback != null:
 		fallback.visible = false
+
+
+## True when E should act on `source`. With no prompt in the scene — a bare test
+## bench — everything in range is allowed, which is the old behaviour.
+static func should_act(source: Node) -> bool:
+	var ui: InteractionPrompt = _find(source)
+	return ui == null or ui.is_current(source)
+
+
+static func _find(source: Node) -> InteractionPrompt:
+	return source.get_tree().get_first_node_in_group(GROUP) as InteractionPrompt

@@ -328,3 +328,46 @@ combat works unarmed.
 **Pause menus** — the character sheet and the inventory both join the `pause_menu` group, and
 opening one closes the others. Only one is ever up, so C and I always do what they say. The
 inventory panel also hosts the equipment slots, so equipping is one screen rather than two.
+
+---
+
+## Shadows
+
+**`ShadowData`** (`scripts/shadows/shadow_data.gd`, instances in `resources/shadows/`) — the
+definition of one kind of shadow: id, name, description, accent colour, and the probability that one
+extraction attempt succeeds. Pure data, and the only place that probability exists — the extraction
+logic never hardcodes it.
+
+**`ShadowInstance`** (`scripts/shadows/shadow_instance.gd`, a `RefCounted`) — one extracted shadow
+as opposed to the type it belongs to: a unique instance id and the `ShadowData` it came from.
+Deliberately thin. It exists in M8.1 so that level, XP and rank have somewhere to live in M8.2
+without reworking the collection out of a count-per-type model.
+
+**`ShadowSource`** (`scripts/shadows/shadow_source.gd`) — a component that declares a combatant
+leaves a shadow and spawns its remnant on death, the same shape as `LootDropper`. Nothing anywhere
+branches on an enemy's class to decide which shadow it yields. It hangs off
+`RoomCombatant.enemy_died`, which fires once however the death was reached, and latches as well.
+The boss deliberately has no `ShadowSource` in M8.1.
+
+**`ShadowRemnant`** (`scripts/shadows/shadow_remnant.gd`, `scenes/shadows/shadow_remnant.tscn`) —
+what a corpse leaves behind, and one chance to tear the shadow loose. The roll happens once, the
+result shows briefly, and the remnant goes whether it worked or not. A remnant is **not** an enemy:
+a room clears and its doors open the moment the last enemy dies, regardless of what is still
+standing on the floor.
+
+**`PlayerShadowCollection`** (`scripts/player/player_shadow_collection.gd`) — a component on the
+player holding `ShadowInstance` objects rather than a count per type. It mints the ids; the session
+remembers only where the counter got to, so two scenes can never hand out the same number.
+Contents survive a scene change through `PlayerRuntimeState`, which stores them and interprets
+nothing.
+
+### Interaction ownership
+
+`InteractionPrompt` is now a small stack rather than a single owner. Everything in reach registers,
+and the prompt shows the highest priority, most recently raised — a shadow remnant outranks ordinary
+loot. Each interactable checks `InteractionPrompt.should_act()` before acting, so the prompt is a
+single shared answer to "what does E do right now", and whoever acts consumes the input event. Both
+halves are needed: acting also releases the prompt, which the next interactable in range would
+inherit within the same frame, so without consuming the event one press would reach two of them.
+When the winner goes away the runner-up takes the prompt over instead of leaving the player with
+nothing to press.

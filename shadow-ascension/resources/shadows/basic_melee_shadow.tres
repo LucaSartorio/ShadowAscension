@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ShadowData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/shadows/shadow_data.gd" id="1_shadow"]
+
+[resource]
+script = ExtResource("1_shadow")
+id = &"basic_melee_shadow"
+display_name = "Basic Melee Shadow"
+description = "L'ombra di un soldato caduto. Ricorda come si impugna un'arma, e poco altro."
+extraction_chance = 0.7
+accent_color = Color(0.55, 0.35, 0.95, 1)

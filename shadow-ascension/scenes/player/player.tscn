@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_camera"]
@@ -10,6 +10,7 @@
 [ext_resource type="Resource" path="res://resources/characters/player_progression.tres" id="10_progstats"]
 [ext_resource type="Script" path="res://scripts/player/player_inventory.gd" id="11_inv"]
 [ext_resource type="Script" path="res://scripts/player/player_equipment.gd" id="12_equip"]
+[ext_resource type="Script" path="res://scripts/player/player_shadow_collection.gd" id="13_shadows"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 radius = 0.4
@@ -125,6 +126,9 @@ script = ExtResource("11_inv")
 
 [node name="PlayerEquipment" type="Node" parent="."]
 script = ExtResource("12_equip")
+
+[node name="PlayerShadowCollection" type="Node" parent="."]
+script = ExtResource("13_shadows")
 
 [node name="CameraRig" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

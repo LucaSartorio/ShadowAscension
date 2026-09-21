@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/basic_melee_enemy.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
@@ -9,6 +9,9 @@
 [ext_resource type="Script" path="res://scripts/items/loot_dropper.gd" id="21_loot"]
 [ext_resource type="Resource" path="res://resources/items/loot/basic_melee_enemy_loot.tres" id="22_table"]
 [ext_resource type="PackedScene" path="res://scenes/items/world_item.tscn" id="23_worlditem"]
+[ext_resource type="Script" path="res://scripts/shadows/shadow_source.gd" id="30_shadow"]
+[ext_resource type="Resource" path="res://resources/shadows/basic_melee_shadow.tres" id="31_shadowdata"]
+[ext_resource type="PackedScene" path="res://scenes/shadows/shadow_remnant.tscn" id="32_remnant"]
 
 [sub_resource type="CapsuleShape3D" id="body_shape"]
 radius = 0.45
@@ -108,3 +111,9 @@ shape = SubResource("hurtbox_shape")
 script = ExtResource("21_loot")
 loot_table = ExtResource("22_table")
 world_item_scene = ExtResource("23_worlditem")
+
+[node name="ShadowSource" type="Node" parent="."]
+script = ExtResource("30_shadow")
+shadow_extractable = true
+shadow_data = ExtResource("31_shadowdata")
+remnant_scene = ExtResource("32_remnant")

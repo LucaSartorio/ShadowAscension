@@ -1,0 +1,48 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/shadows/shadow_remnant.gd" id="1_remnant"]
+
+[sub_resource type="SphereShape3D" id="reach_shape"]
+radius = 1.5
+
+[sub_resource type="PrismMesh" id="remnant_mesh"]
+size = Vector3(0.5, 0.85, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="remnant_mat"]
+transparency = 1
+albedo_color = Color(0.55, 0.35, 0.95, 0.75)
+emission_enabled = true
+emission = Color(0.55, 0.35, 0.95, 1)
+emission_energy_multiplier = 1.4
+rim_enabled = true
+
+[sub_resource type="TorusMesh" id="ring_mesh"]
+inner_radius = 0.42
+outer_radius = 0.52
+
+[node name="ShadowRemnant" type="Area3D"]
+collision_layer = 0
+collision_mask = 2
+monitoring = true
+monitorable = false
+script = ExtResource("1_remnant")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("reach_shape")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="VisualRoot"]
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("remnant_mesh")
+surface_material_override/0 = SubResource("remnant_mat")
+
+[node name="Ring" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("ring_mesh")
+surface_material_override/0 = SubResource("remnant_mat")

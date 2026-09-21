@@ -162,6 +162,33 @@ inventory capacity, and whether consumables are used from the inventory.
 
 ---
 
+## Shadows
+
+Confirmed in M8.1. Only what is listed here is decided.
+
+A fallen enemy may leave a **remnant**: one chance, and only one, to tear its shadow loose. The
+attempt either works or it does not, and either way the remnant is spent and gone. There is no
+retry, no second remnant, and no way to bank one for later.
+
+**Extraction chance is data**: each `ShadowData` declares its own, and the basic melee shadow sits
+at **0.70**. Nothing in the extraction logic knows that number.
+
+Every successful extraction produces an **individual shadow**, not a tally. Two extractions of the
+same type are two separate things with their own ids, which is what lets them diverge later.
+
+A shadow collection **persists for the session** — across gates, exits, further runs and the
+player's own death — and is lost when the game closes. That is the same rule as progression and the
+inventory, and for the same reason: there is no save system yet.
+
+A remnant is not an enemy. A room clears the moment its last enemy dies, whether or not anything is
+still standing on the floor waiting to be extracted.
+
+**Not decided**: summoning, shadow AI or combat, shadow levels, XP, ranks or evolution, how many may
+be active at once, any cost to summon, whether bosses yield shadows, and what happens to a
+collection between sessions.
+
+---
+
 ## Future Combat Features
 
 The following features are **future direction, not yet defined or implemented**. They are listed here so architecture and data schemas can leave room for them, but no numeric values, timing windows, or interactions are committed.

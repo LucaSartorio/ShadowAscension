@@ -6,103 +6,54 @@
 
 ## Current Milestone
 
-**M7 — Loot and Equipment** (In Progress)
+**M8 — Shadow System** (In Progress)
 
-M7.1 delivered: enemy health bars, item data, loot tables, world drops, an inventory and its UI,
-all of it surviving a scene change. No equipping and no stat modifiers — those are M7.2.
+M8.1 delivered: enemies leave remnants, a remnant grants one attempt, and what comes out is an
+individual shadow the player keeps for the session. No summoning, no shadow AI, no shadow
+progression — those are M8.2 and later.
 
-M7.1 deliverable status (verified by `loot_test.tscn` 51/51 and `loot_run.gd` 21/21, the latter with
-real scene changes and real combat):
+M8.1 deliverable status (verified by `shadow_test.tscn` 52/52 and `shadow_run.gd` 20/20, the latter
+with real scene changes):
 
-- Enemy health bars — implemented
-- ItemData — implemented
-- rarity foundation — implemented
-- loot tables — implemented
-- world loot — implemented
-- item interaction — implemented
-- PlayerInventory — implemented
-- Inventory UI — implemented
-- runtime inventory persistence — implemented
+- ShadowData — implemented
+- Shadow Instance foundation — implemented
+- Shadow Remnant — implemented
+- extraction chance — implemented
+- extraction success/failure — implemented
+- PlayerShadowCollection — implemented
+- Shadow Collection UI — implemented
+- runtime Shadow persistence — implemented
 
-`EnemyHealthBar3D` is two unshaded quads and a small label turned to face the camera — no
-CanvasLayer and no viewport per enemy. It redraws on `health_changed` and never reads health per
-frame; the only per-frame work is facing the camera, and that stops whenever the bar hides. It is
-hidden at full health out of combat, shown once the enemy engages or takes a hit, and gone the
-moment it dies. The boss deliberately does not get one: it already has its own bar, and a second
-would only compete with it. Engagement is a new `BasicMeleeEnemy.engagement_changed` signal that
-emits only on a real change.
+The extraction chance lives only on the `ShadowData` asset, and an instance is a real object rather
+than a tally, so M8.2 can give each shadow its own level and XP without reworking the collection.
+Ids are minted by the collection but counted by the session, which is what stops a new scene from
+restarting the numbering and colliding: a shadow extracted on the second run came back `#000006`
+after five from the first.
 
-Loot is data all the way down. A `LootDropper` component rolls its table once on death — the roll
-is guarded both by `report_death()` firing once and by the dropper's own latch, so a duplicated
-signal, a phase transition, a room clearing and a dungeon completing were each tested and roll
-nothing. The basic enemy's table comes to a 45% chance of at least one drop; the boss's guarantees
-one and its best is Rare or better in practice.
+A remnant is not an enemy. Both combat rooms cleared and opened their doors with remnants still
+standing, which the tests assert directly.
 
-`PlayerInventory` is a component on the player, and `PlayerRuntimeState` stores its contents without
-interpreting them. Measured across the full loop — gate, both combat rooms, boss, exit, second gate,
-death — `{shadow_essence: 2, iron_shard: 5, training_sword: 1}` held unchanged through every
-transition, and dying cost nothing. Items left on a floor do not follow a scene change, which is
-intended here.
+**One real bug was found and fixed while building, and it is the one the brief warned about.** A
+single press on a corpse that left several things reached all of them: the acting interactable
+releases the prompt, the next one in range inherits it within the same frame, and its own
+`_unhandled_input` then fires too — two shadows from one key. Whoever acts now consumes the event.
+The fix needed both halves of the design: the prompt stack decides *who* may act, and consuming the
+input stops the rest of the frame from asking again. Found by driving a real key press rather than
+calling the method, which is exactly where the earlier version of the test was blind.
 
-Two bugs were found and fixed while building. Every `LootDropper` shared one exported seed, so an
-entire room rolled identically — deterministic in the degenerate sense rather than the useful one;
-the seed is now mixed with the dropper's own scene path. And the health bar's background material is
-a shared sub-resource, so without isolating it a whole room's bars would have faded and recoloured
-as one; the pivot now gives every mesh under it its own copy, in `_ready()`, which runs before the
-bar above reads the fill material.
+`InteractionPrompt` grew from a single owner into a small priority stack to make that possible —
+documented in ARCHITECTURE.md. A remnant outranks ordinary loot, and when the winner goes away the
+runner-up takes the prompt over rather than leaving the player with nothing to press. Both are
+tested with a dropped item and a remnant on the same spot.
 
-Documented limit: the inventory holds one stack per item with no capacity cap. A stackable item is
-capped at its own `max_stack` and the overflow is reported back rather than swallowed, so a drop
-leaves its remainder on the floor. Multi-slot stacks, durability and affixes are out of scope.
+Measured across a real loop — gate, both combat rooms, boss, exit, second gate, one more extraction,
+then a death — five shadows carried through every transition, a sixth joined them on the second run
+with a fresh id, and dying cost none of them.
 
-UX: the character sheet and the inventory both join a `pause_menu` group and opening one closes the
-other, so C and I always do what they say instead of stacking panels.
+The tests force the extraction chance to 1.0 and 0.0 rather than hoping for a 70% roll, and restore
+it afterwards; both suites assert the restore.
 
-M7.2 delivered: two equipment slots, items that change what the player is worth, and a panel to
-drive it. No durability, affixes, sockets, set bonuses or further slots.
-
-M7.2 deliverable status (verified by `equipment_test.tscn` 56/56 and `equipment_run.gd` 22/22, the
-latter with real scene changes):
-
-- Equipment foundation — implemented
-- Main Hand — implemented
-- Chest — implemented
-- Equip — implemented
-- Unequip — implemented
-- Swap — implemented
-- Equipment modifiers — implemented
-- Effective stats — implemented
-- Weapon Attack Power — implemented
-- Equipment UI — implemented
-- Runtime equipment persistence — implemented
-
-The split that matters: `PlayerProgression` keeps the **allocated** stats and `PlayerEquipment`
-keeps the **bonuses**, and the two are never merged. Progression stays the stats layer and holds
-every formula — it asks equipment for its contribution and exposes `get_effective_strength()` and
-friends, which is what every derived value now reads. Because nothing is ever added to an allocated
-stat, taking a piece off cannot leave one inflated; there is nothing to subtract.
-
-Items move rather than copy. Equipping removes one from the inventory *before* placing it, and a
-displaced piece goes straight back, so no path loses or duplicates one — checked by counting each
-weapon across bag and slots after every swap.
-
-Health behaves as M6.3 established: equipping +2 VIT took the ceiling 100 → 116 and left a wounded
-player at 50/116 rather than healing them; unequipping at 116/116 dropped the ceiling to 100 and
-clamped current health to 100/100.
-
-Damage is `round((base + main-hand attack power) * STR multiplier)`, applied when a swing is
-prepared. The brief's worked example checks out both through the formula and through a real swing at
-an enemy: 13 allocated STR plus the Training Sword's +2 gives 15 effective and ×1.15, and
-`round((20 + 5) × 1.15) = 29` — the enemy took exactly 29, and the combo step still holds its base
-20 afterwards. An empty hand contributes 0 and the player still fights.
-
-Measured across a full loop — gate, dungeon, a swap inside it, boss, exit, second gate, death —
-`swift_blade` in the main hand and `hunter_jacket` on the chest held through every transition, along
-with STR 12 / AGI 13 / VIT 12, 8 attack power and a 116 ceiling. Dying kept the kit and restored
-health only.
-
-Next iteration: **M7.3 — the M7 milestone review**, or whatever the roadmap's remaining M7 scope
-calls for.
+Next iteration: **M8.2 — Shadow Summoning and Combat**.
 
 ---
 
