@@ -251,6 +251,36 @@ persist across a full restart.
 
 ---
 
+## The run loop
+
+Confirmed in M9.1. Only what is listed here is decided.
+
+**The game opens on a menu**, not in a world: title, GIOCA, ESCI. There is no settings screen, no
+load, and no character creation in the slice.
+
+**The hub is where a run starts and ends.** It is a walled courtyard with a lit path to the gate and
+a training corner with dummies. It states one objective — *Entra nel Gate* — and it is not a combat
+arena: nothing hostile lives there.
+
+**One gate, one dungeon.** The gate is the brightest thing in the hub, and it is the only way on.
+
+**A run ends with a summary, not a scene change.** When the boss falls the dungeon pauses and says
+what the run was worth: enemies, boss, the XP the player earned, items taken, shadows extracted.
+Dismissing it hands the dungeon back — walking to the exit portal is still the player's move, in
+their own time.
+
+**The XP a summary reports is the player's own.** A kill the shadow finished pays the player 30%,
+and 30% is what the summary shows. The number on the panel is what the character gained, never what
+the enemy was worth.
+
+**Dying costs the run, never the character.** The dungeon restarts fresh — enemies alive, doors
+locked, the tally back to zero — and level, XP, stats, inventory, equipment and shadows all carry
+over. Health is restored for the new attempt.
+
+**A second run is a clean run.** Nothing survives from the last one but the character.
+
+---
+
 ## Future Combat Features
 
 The following features are **future direction, not yet defined or implemented**. They are listed here so architecture and data schemas can leave room for them, but no numeric values, timing windows, or interactions are committed.

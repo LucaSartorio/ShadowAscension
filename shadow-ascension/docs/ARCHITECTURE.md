@@ -232,6 +232,76 @@ Regressions caught during play are the priority signal until automation exists.
 
 ---
 
+## Boot flow and scenes
+
+`Main.tscn` is the project's `run/main_scene` and stays a bootstrap router, never a gameplay scene:
+it holds the main menu and a `SceneTransition`, nothing else. The route is
+
+```
+Main.tscn (MainMenu)  --GIOCA-->  scenes/core/hub.tscn  --DungeonGate-->  scenes/dungeons/dungeon_test.tscn
+                                        ^                                          |
+                                        +---------------- DungeonExit -------------+
+```
+
+**`MainMenu`** (`scripts/ui/main_menu.gd`) is a router with no state. It emits `quit_requested`
+before asking the application to close, and `quit_on_request` turns the closing off — a headless run
+can then watch the choice without the process going away underneath it.
+
+**The hub** (`scenes/core/hub.tscn`) is the former test world, renamed rather than duplicated. It is
+where a run starts and ends, and it owns the same UI stack the dungeon does, minus the
+dungeon-specific pieces.
+
+## HUD layout
+
+One rule: no two panels share pixels, and `vertical_slice_run.gd` asserts it by comparing the actual
+control rectangles rather than by eye.
+
+| Corner | What |
+| --- | --- |
+| top-left | `PlayerHealthHUD`, then `ProgressionHUD` (level and XP) |
+| top-centre | `BossHealthBar`, band y 24–88, only during the encounter |
+| top-right | `DungeonObjectiveUI`, deliberately below the boss bar's band |
+| bottom-centre | `InteractionPrompt` |
+| bottom-right | `ActiveShadowHUD`, then the three menu hints |
+
+The objective sits below the boss bar's band rather than beside it because "beside" depends on the
+window width: centred and right-anchored rectangles that clear each other at one size overlap at
+another.
+
+**`PlayerHealthHUD`** (`scripts/ui/player_health_hud.gd`) is its own node rather than another block
+inside `ProgressionHUD`, because health is not progression and the two are driven by different
+components. It is driven by `health_changed` alone — which also fires when the ceiling moves, so a
+point spent on VIT or a swapped chestpiece reaches the bar without this node knowing either system
+exists.
+
+**`DungeonObjectiveUI`** shows `default_text` when there is no `DungeonController` above it, which
+is how the hub says "Entra nel Gate" without a second UI doing the same job in a different place.
+
+## Run stats and the summary
+
+**`DungeonRunStats`** (`scripts/dungeon/dungeon_run_stats.gd`) is a component on the
+`DungeonController` counting five things about one run: enemies defeated, bosses defeated, items
+picked up, shadows extracted, and the player's XP. It is deliberately not an analytics service —
+nothing global reads it, it keeps no history, and a new dungeon scene builds a new one, which is
+what "reset on entry" means here. Everything comes from signals the systems already emit; no system
+was changed to report to it.
+
+Two of its rules are worth stating:
+
+- **XP is the player's own share.** It differences `PlayerProgression.get_total_xp()` across the run
+  rather than adding up enemy rewards, so a kill the shadow finished contributes the player's 30%.
+- **Items are counted as they leave the floor**, through `WorldItem.picked_up`. Counting
+  `PlayerInventory.item_added` instead would also count a piece of equipment being taken off.
+
+**`RunSummary`** (`scripts/ui/run_summary.gd`) opens on `dungeon_completed`, pauses the tree, frees
+the cursor, and waits for `[Continua]`. It changes no scene: the walk to the exit portal stays the
+player's move. It refreshes on `stats_changed` as well as on open, because the kill that ends the
+run and the tally of it are two handlers on the same signal and nothing orders them.
+
+Its static `dismiss_open(tree)` is what anything driving the game without a player uses — the
+dungeon is paused while the summary is up, so a headless flow that does not dismiss it waits forever
+on the next physics frame.
+
 ## PlayerRuntimeState (autoload)
 
 `scripts/core/player_runtime_state.gd`, registered as the autoload `PlayerRuntimeState`.

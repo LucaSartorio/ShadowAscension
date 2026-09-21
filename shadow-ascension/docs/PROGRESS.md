@@ -6,9 +6,77 @@
 
 ## Current Milestone
 
-**M9 — Vertical Slice** (Not started)
+**M9 — Vertical Slice** (In Progress)
 
-M8 closed on review. Nothing of M9 is implemented; see ROADMAP for its deliverables.
+M9.1 delivered: the systems M1–M8 built are now a game you can start from a menu and play to the
+end of a run and back. No system was rewritten; what changed is where the player meets them.
+
+M9.1 deliverable status (verified by `vertical_slice_run.gd` 74/74, which boots from `Main.tscn`
+and drives the whole loop through real scene changes):
+
+- Main Menu — implemented
+- Boot flow — implemented
+- Hub presentation — implemented
+- Complete Player HUD — implemented
+- Coherent UI layout — implemented
+- Gate presentation — implemented
+- Dungeon flow and objectives — verified
+- Boss encounter presentation — verified
+- Run Summary — implemented
+- Return to hub — verified
+- Second run and death restart — verified
+- Development-only presentation removed — implemented
+
+**M9.1 is complete.** M9 stays In Progress.
+
+**The game now starts where a player starts it.** `Main.tscn` stays the bootstrap router CLAUDE.md
+says it is, but it routes to the main menu instead of straight into a world. GIOCA fades to the
+hub through the existing `SceneTransition`; ESCI closes the application, and says so through a
+signal first so a headless run can watch the choice without the process going away underneath it.
+
+**Test World became the Hub**, renamed rather than duplicated: `scenes/core/hub.tscn`. It is a
+walled courtyard with a lit path to the gate, a training corner, and no combat sandbox lying around
+— the debug damage zone and the six loose enemies are gone, and the two training dummies stayed
+because a dummy in a hub is a feature rather than a leftover. The gate spins, pulses and carries its
+own light, so the one thing the player has to find is the brightest thing in the room.
+
+**The HUD stopped competing with itself.** Health (new) and level/XP moved into one top-left status
+corner, the objective moved to the top right and below the boss bar's band, and the shadow panel and
+menu hints keep the bottom right. The one real overlap was the objective against the boss health
+bar, found by a test that compares the actual control rectangles rather than by looking at a
+screenshot — and fixed by moving the objective out of that band entirely, so it cannot come back at
+a different window width.
+
+**`DungeonRunStats`** counts five things about one run and nothing else, from signals the systems
+already emit; no system was changed to report to it. It lives on the DungeonController, so a new
+dungeon scene builds a new one and "reset on entry" needs no code. The XP it reports is the
+**player's own share**: a kill the shadow finished pays the player 30%, and 30% is what the summary
+shows, because it reads the player's total rather than the enemy's reward.
+
+**The Run Summary** opens on completion, pauses the dungeon, frees the cursor and waits. `[Continua]`
+hands the dungeon back without changing scene, so the walk to the exit portal stays the player's
+move. It replaced the 40-point "DUNGEON COMPLETE" banner: two things announcing the same moment over
+each other was a large part of what made the dungeon read as a test scene.
+
+**One real bug was found and fixed while building.** The summary could render before the kill that
+ended the run had been tallied — the tally and the completion are two handlers on the same
+`enemy_died` signal and nothing orders them, so the panel showed "Boss sconfitti: 0" on the run that
+had just killed one. The panel now follows the tally rather than reading it once and hoping it was
+last.
+
+**Language.** Player-facing text that was still English — `CHARACTER`, `Level %d`, `PHASE 1/2`,
+`LEVEL UP!`, `YOU DIED`, `Press E to leave Dungeon` — is Italian like the rest of the UI, and the
+phase captions became exported data rather than literals inside a match. The tests follow the
+exported values now, so the wording and the assertions cannot drift apart again.
+
+**Test-side consequence worth knowing:** the summary pauses the tree, so every headless flow that
+completes a dungeon now dismisses it in its own wait helper, exactly as a player would. Without
+that, any `await physics_frame` after completion waits forever.
+
+Whole-project state: **1126 assertions across 28 suites, zero failures**, zero parser errors, zero
+runtime errors, zero warnings, from a cold class cache.
+
+Next: **M9.2 — Balance, QA and Release Candidate**.
 
 ---
 
