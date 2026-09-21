@@ -1,0 +1,105 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/active_shadow_hud.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="panel_style"]
+bg_color = Color(0.07, 0.06, 0.11, 0.82)
+border_width_left = 2
+border_color = Color(0.55, 0.35, 0.95, 0.9)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+content_margin_left = 12.0
+content_margin_top = 9.0
+content_margin_right = 12.0
+content_margin_bottom = 9.0
+
+[sub_resource type="StyleBoxFlat" id="bar_bg"]
+bg_color = Color(0.08, 0.08, 0.11, 0.8)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="bar_fill"]
+bg_color = Color(0.62, 0.42, 1, 0.95)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="ActiveShadowHUD" type="CanvasLayer"]
+layer = 46
+script = ExtResource("1_hud")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -244.0
+offset_top = -310.0
+offset_right = -20.0
+offset_bottom = -108.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+visible = false
+
+[node name="Panel" type="PanelContainer" parent="Root"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("panel_style")
+
+[node name="Content" type="VBoxContainer" parent="Root/Panel"]
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="NameLabel" type="Label" parent="Root/Panel/Content"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.82, 0.74, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+text = "OMBRA"
+
+[node name="LevelLabel" type="Label" parent="Root/Panel/Content"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(1, 0.88, 0.55, 1)
+text = "Lv. 1"
+
+[node name="HealthBar" type="ProgressBar" parent="Root/Panel/Content"]
+custom_minimum_size = Vector2(0, 13)
+mouse_filter = 2
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("bar_fill")
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="HealthLabel" type="Label" parent="Root/Panel/Content"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.82, 0.86, 0.94, 1)
+text = "100 / 100"
+
+[node name="ModeLabel" type="Label" parent="Root/Panel/Content"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.95, 0.7, 0.45, 1)
+text = "Modalità: AGGRESSIVE"
+
+[node name="Separator" type="HSeparator" parent="Root/Panel/Content"]
+
+[node name="Hints" type="Label" parent="Root/Panel/Content"]
+mouse_filter = 2
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.72, 0.74, 0.82, 1)
+text = "[Q] Torna da me"

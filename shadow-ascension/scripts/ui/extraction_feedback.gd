@@ -21,6 +21,9 @@ const GROUP: StringName = &"extraction_feedback"
 @export var recall_text: String = "OMBRA RICHIAMATA"
 @export var defeat_text: String = "OMBRA SCONFITTA"
 @export var level_up_format: String = "OMBRA LIVELLO %d"
+@export var mode_format: String = "OMBRA: %s"
+@export var follow_text: String = "FOLLOW"
+@export var aggressive_text: String = "AGGRESSIVE"
 @export var summon_color: Color = Color(0.72, 0.58, 1.0)
 @export var level_up_color: Color = Color(1.0, 0.85, 0.45)
 @export var banner_duration: float = 1.6
@@ -55,14 +58,32 @@ func _subscribe() -> void:
 	summoner.shadow_summoned.connect(_on_shadow_summoned)
 	summoner.shadow_recalled.connect(_on_shadow_recalled)
 	summoner.shadow_defeated.connect(_on_shadow_defeated)
+	var commander: PlayerShadowCommander = player.shadow_commander
+	if commander != null:
+		# An order that found nothing is worth one line. The commander decides
+		# there is nothing to act on; saying so is this layer's job.
+		commander.command_rejected.connect(_on_command_rejected)
 
 
 func _on_shadow_leveled_up(shadow: ShadowInstance, _levels: int) -> void:
 	show_message(level_up_format % shadow.level, _describe(shadow), level_up_color)
 
 
-func _on_shadow_summoned(shadow: ShadowInstance, _node: BasicMeleeShadow) -> void:
+func _on_shadow_summoned(shadow: ShadowInstance, node: BasicMeleeShadow) -> void:
 	show_message(summon_text, _describe(shadow), summon_color)
+	# Per node rather than through the commander: the mode belongs to the
+	# entity, and a re-summon brings a different one.
+	node.command_mode_changed.connect(_on_command_mode_changed)
+
+
+func _on_command_mode_changed(mode: BasicMeleeShadow.CommandMode) -> void:
+	show_message(mode_format % (follow_text
+		if mode == BasicMeleeShadow.CommandMode.FOLLOW else aggressive_text),
+		"", summon_color)
+
+
+func _on_command_rejected(reason: String) -> void:
+	show_message(reason, "", neutral_color)
 
 
 func _on_shadow_recalled(shadow: ShadowInstance) -> void:
