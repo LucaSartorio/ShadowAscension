@@ -20,6 +20,7 @@ signal enemy_died(combatant: RoomCombatant)
 
 var _died: bool = false
 var _xp_claimed: bool = false
+var _killer: Node = null
 
 
 ## Subclasses override to park or wake their own systems, then call super().
@@ -29,11 +30,19 @@ func set_combat_enabled(enabled: bool) -> void:
 
 ## Subclasses report death here rather than emitting enemy_died themselves, so
 ## "dies once" is guaranteed in one place no matter how the death was reached.
-func report_death() -> void:
+## `killer` is whoever dealt the final blow, taken from the health component.
+## Carried on the combatant rather than on `enemy_died` so every existing
+## listener keeps its signature; whoever cares asks for it.
+func report_death(killer: Node = null) -> void:
 	if _died:
 		return
 	_died = true
+	_killer = killer
 	enemy_died.emit(self)
+
+
+func get_killer() -> Node:
+	return _killer
 
 
 func has_died() -> bool:

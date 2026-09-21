@@ -51,12 +51,17 @@ var inventory: Dictionary = {}
 ## two can never drift apart.
 var equipment: Dictionary = {}
 
-## Extracted shadows, as [{ instance_id, shadow_data }]. Kept flat and dumb: the
-## collection rebuilds its ShadowInstance objects from these. The counter lives
-## here too, because a new scene builds a new collection and would otherwise
-## start numbering from one again and collide with what is already held.
+## Extracted shadows, as [{ instance_id, shadow_data, level, current_xp }]. Kept
+## flat and dumb: the collection rebuilds its ShadowInstance objects from these.
+## The counter lives here too, because a new scene builds a new collection and
+## would otherwise start numbering from one again and collide with what is
+## already held.
 var shadows: Array[Dictionary] = []
 var next_shadow_index: int = 1
+
+## Which shadow was out when the scene changed, so the next one re-summons it.
+## Empty means none — a shadow that died, or was recalled, stays recalled.
+var active_shadow_instance_id: StringName = &""
 
 
 ## Called by the first player of the session, with the values its own resources
@@ -114,6 +119,12 @@ func sync_shadows(rows: Array[Dictionary]) -> void:
 
 
 ## Hands out the next number and moves on, so no two extractions can share one.
+## Stored rather than derived: a shadow that died is no longer active, and the
+## collection alone cannot tell that apart from one that was never summoned.
+func sync_active_shadow(instance_id: StringName) -> void:
+	active_shadow_instance_id = instance_id
+
+
 func take_next_shadow_index() -> int:
 	var index: int = next_shadow_index
 	next_shadow_index += 1
@@ -155,4 +166,5 @@ func reset_runtime_state() -> void:
 	equipment.clear()
 	shadows.clear()
 	next_shadow_index = 1
+	active_shadow_instance_id = &""
 	runtime_state_reset.emit()

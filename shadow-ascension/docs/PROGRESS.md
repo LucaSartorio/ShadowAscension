@@ -8,56 +8,110 @@
 
 **M8 — Shadow System** (In Progress)
 
-M8.1 delivered: enemies leave remnants, a remnant grants one attempt, and what comes out is an
-individual shadow the player keeps for the session. No summoning, no shadow AI, no shadow
-progression — those are M8.2 and later.
+M8.2 delivered: a shadow can be put into the world, fights on its own, levels from the kills it
+finishes, and comes back after a scene change without being asked twice.
 
-M8.1 deliverable status (verified by `shadow_test.tscn` 52/52 and `shadow_run.gd` 20/20, the latter
+M8.2 deliverable status (verified by `summon_test.tscn` 72/72 and `summon_run.gd` 24/24, the latter
 with real scene changes):
 
-- ShadowData — implemented
-- Shadow Instance foundation — implemented
-- Shadow Remnant — implemented
-- extraction chance — implemented
-- extraction success/failure — implemented
-- PlayerShadowCollection — implemented
-- Shadow Collection UI — implemented
-- runtime Shadow persistence — implemented
+- Shadow level and XP — implemented
+- Shadow summon scene and AI — implemented
+- Summon / recall, max one active — implemented
+- Ally / enemy collision, no friendly fire — implemented
+- Player / shadow XP split — implemented
+- Shadow Collection UI with `[Evoca]` / `[Richiama]` — implemented
+- Runtime persistence of level, XP and the active shadow — implemented
 
-The extraction chance lives only on the `ShadowData` asset, and an instance is a real object rather
-than a tally, so M8.2 can give each shadow its own level and XP without reworking the collection.
-Ids are minted by the collection but counted by the session, which is what stops a new scene from
-restarting the numbering and colliding: a shadow extracted on the second run came back `#000006`
-after five from the first.
+**Level and XP are the shadow's own.** `ShadowData` carries the curve (50 XP at Lv.1, x1.2 per
+level) and the scaling (80 HP + 8/level, 12 damage + 2/level); a `ShadowInstance` carries where it
+has got to. The brief's worked example holds exactly: 70 XP onto a fresh shadow gives Lv.2 with
+20/60. One award covers as many levels as it pays for and is reported once, so a large reward is a
+single level-up rather than a burst.
 
-A remnant is not an enemy. Both combat rooms cleared and opened their doors with remnants still
-standing, which the tests assert directly.
+**A kill is split by who finished it.** The player keeps the whole reward for its own kills. When
+the shadow lands the killing blow the shadow takes 70% and the player takes the remainder — 25 XP
+splits 18/7, and the two halves always add back up to the full reward because the player's share is
+the remainder rather than a second rounded share. Attribution rides the damage pipeline:
+`HealthComponent` remembers the last source, `RoomCombatant` records the killer, and nothing about
+the existing `enemy_died` signature changed.
 
-**One real bug was found and fixed while building, and it is the one the brief warned about.** A
-single press on a corpse that left several things reached all of them: the acting interactable
-releases the prompt, the next one in range inherits it within the same frame, and its own
-`_unhandled_input` then fires too — two shadows from one key. Whoever acts now consumes the event.
-The fix needed both halves of the design: the prompt stack decides *who* may act, and consuming the
-input stops the rest of the frame from asking again. Found by driving a real key press rather than
-calling the method, which is exactly where the earlier version of the test was blind.
+**No friendly fire, by construction rather than by check.** The shadow's hitbox masks enemy
+hurtboxes only, so it can never see the player; the player's hitbox never sees the shadow's
+hurtbox. Enemy and boss hitbox masks were widened (64 → 320) so their swings can reach the shadow,
+without losing the player. Three new collision layers were added and every layer in the project is
+now named in `project.godot`.
 
-`InteractionPrompt` grew from a single owner into a small priority stack to make that possible —
-documented in ARCHITECTURE.md. A remnant outranks ordinary loot, and when the winner goes away the
-runner-up takes the prompt over rather than leaving the player with nothing to press. Both are
-tested with a dropped item and a remnant on the same spot.
+**One at a time, and it comes back on its own.** `PlayerShadowSummoner` owns what is out; summoning
+a second recalls the first, so "max one active" is a rule of one node rather than a check every
+caller repeats. The session stores which shadow was out, so walking through a gate re-summons it —
+the player asked once. A player death clears that id: the next run does not start with a shadow
+already standing there.
 
-Measured across a real loop — gate, both combat rooms, boss, exit, second gate, one more extraction,
-then a death — five shadows carried through every transition, a sixth joined them on the second run
-with a fresh id, and dying cost none of them.
+**A dead shadow is not a lost shadow.** The entity dies; the instance stays in the collection with
+its level and XP and can be summoned again. Measured across a real loop — gate, dungeon, a kill the
+shadow finished, exit portal, second gate, then a death — a Lv.4 shadow with 36 XP came back
+identical on a different `Player` instance, with the 104 HP its level buys.
 
-The tests force the extraction chance to 1.0 and 0.0 rather than hoping for a 70% roll, and restore
-it afterwards; both suites assert the restore.
+**One real bug was found and fixed while building.** A summoned shadow that walked off the level
+fell for as long as the stuck timer allowed — three seconds of gravity is ninety metres down. The
+distance fallback would have recovered it eventually, which is not the same as recovering it. A
+shadow more than six metres below the player is now returned at once. Found by a test that put the
+player outside the dungeon geometry; the test was wrong, the fall was real.
 
-Next iteration: **M8.2 — Shadow Summoning and Combat**.
+`ShadowCollectionMenu` lost its "coming in a later phase" note and gained the real control, so the
+M8.1 assertion that checked for that note was updated rather than deleted.
+
+Next iteration: **M8.3**, per ROADMAP.
 
 ---
 
 ## Done
+
+- **M8.1 — Shadow Extraction and Collection Foundation** (Completed).
+  M8.1 delivered: enemies leave remnants, a remnant grants one attempt, and what comes out is an
+  individual shadow the player keeps for the session. No summoning, no shadow AI, no shadow
+  progression — those are M8.2 and later.
+
+  M8.1 deliverable status (verified by `shadow_test.tscn` 52/52 and `shadow_run.gd` 20/20, the latter
+  with real scene changes):
+
+  - ShadowData — implemented
+  - Shadow Instance foundation — implemented
+  - Shadow Remnant — implemented
+  - extraction chance — implemented
+  - extraction success/failure — implemented
+  - PlayerShadowCollection — implemented
+  - Shadow Collection UI — implemented
+  - runtime Shadow persistence — implemented
+
+  The extraction chance lives only on the `ShadowData` asset, and an instance is a real object rather
+  than a tally, so M8.2 can give each shadow its own level and XP without reworking the collection.
+  Ids are minted by the collection but counted by the session, which is what stops a new scene from
+  restarting the numbering and colliding: a shadow extracted on the second run came back `#000006`
+  after five from the first.
+
+  A remnant is not an enemy. Both combat rooms cleared and opened their doors with remnants still
+  standing, which the tests assert directly.
+
+  **One real bug was found and fixed while building, and it is the one the brief warned about.** A
+  single press on a corpse that left several things reached all of them: the acting interactable
+  releases the prompt, the next one in range inherits it within the same frame, and its own
+  `_unhandled_input` then fires too — two shadows from one key. Whoever acts now consumes the event.
+  The fix needed both halves of the design: the prompt stack decides *who* may act, and consuming the
+  input stops the rest of the frame from asking again. Found by driving a real key press rather than
+  calling the method, which is exactly where the earlier version of the test was blind.
+
+  `InteractionPrompt` grew from a single owner into a small priority stack to make that possible —
+  documented in ARCHITECTURE.md. A remnant outranks ordinary loot, and when the winner goes away the
+  runner-up takes the prompt over rather than leaving the player with nothing to press. Both are
+  tested with a dropped item and a remnant on the same spot.
+
+  Measured across a real loop — gate, both combat rooms, boss, exit, second gate, one more extraction,
+  then a death — five shadows carried through every transition, a sixth joined them on the second run
+  with a fresh id, and dying cost none of them.
+
+  The tests force the extraction chance to 1.0 and 0.0 rather than hoping for a 70% roll, and restore
+  it afterwards; both suites assert the restore.
 
 - **M6 — Player Progression** (Completed). Milestone review passed; all four ROADMAP exit criteria
   verified by walking the whole thing end to end rather than by reading it:

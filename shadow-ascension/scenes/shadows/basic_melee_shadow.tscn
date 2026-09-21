@@ -1,0 +1,98 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/shadows/basic_melee_shadow.gd" id="1_shadow"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="4_health"]
+
+[sub_resource type="CapsuleShape3D" id="body_shape"]
+radius = 0.38
+height = 1.7
+
+[sub_resource type="CapsuleMesh" id="body_mesh"]
+radius = 0.38
+height = 1.7
+
+[sub_resource type="StandardMaterial3D" id="body_mat"]
+transparency = 1
+albedo_color = Color(0.32, 0.2, 0.62, 0.78)
+emission_enabled = true
+emission = Color(0.55, 0.35, 0.95, 1)
+emission_energy_multiplier = 1.1
+rim_enabled = true
+
+[sub_resource type="CapsuleShape3D" id="hurtbox_shape"]
+radius = 0.48
+height = 1.8
+
+[sub_resource type="BoxShape3D" id="hitbox_shape"]
+size = Vector3(1.2, 1.2, 1.4)
+
+[sub_resource type="SphereShape3D" id="detection_shape"]
+radius = 10.0
+
+[node name="BasicMeleeShadow" type="CharacterBody3D"]
+collision_layer = 128
+collision_mask = 5
+script = ExtResource("1_shadow")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("body_shape")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+cast_shadow = 0
+mesh = SubResource("body_mesh")
+surface_material_override/0 = SubResource("body_mat")
+
+[node name="AttackOrigin" type="Node3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, -1.1)
+
+[node name="Hitbox" type="Area3D" parent="VisualRoot/AttackOrigin"]
+collision_layer = 512
+collision_mask = 16
+monitoring = false
+monitorable = true
+script = ExtResource("2_hitbox")
+damage = 12.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigin/Hitbox"]
+shape = SubResource("hitbox_shape")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.4
+target_desired_distance = 0.25
+path_height_offset = 0.5
+avoidance_enabled = false
+height = 1.7
+radius = 0.6
+max_speed = 4.4
+use_3d_avoidance = false
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("4_health")
+max_health = 80.0
+
+[node name="Hurtbox" type="Area3D" parent="."]
+collision_layer = 256
+collision_mask = 0
+monitoring = false
+monitorable = true
+script = ExtResource("3_hurtbox")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("hurtbox_shape")
+
+[node name="DetectionArea" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 4
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DetectionArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("detection_shape")

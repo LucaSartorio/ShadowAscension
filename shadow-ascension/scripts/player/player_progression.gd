@@ -26,8 +26,16 @@ signal level_up(level: int, points_gained: int)
 ## stats recomputes once instead of polling. Carries nothing: listeners ask for
 ## the derived value they care about.
 signal stats_changed
+## A kill the summoned shadow finished. Carries both halves of the split so the
+## HUD can say where the XP went without recomputing the share.
+signal shadow_assisted_kill(shadow: ShadowInstance, shadow_xp: int, player_xp: int)
 
 enum Stat { STRENGTH, AGILITY, VITALITY, INTELLIGENCE }
+
+## The shadow's cut when it lands the killing blow. The player keeps the
+## remainder rather than a second rounded share, so the two always add back up
+## to the full reward.
+const SHADOW_KILL_SHARE: float = 0.70
 
 @export var stats: ProgressionStats
 ## The hitbox whose landed hits introduce combatants to this component. Left
@@ -74,6 +82,7 @@ var ability_power_per_point: float = 0.03
 
 ## Combatants already being watched, so one enemy is never subscribed twice.
 var _tracked: Dictionary = {}
+var _shadows: PlayerShadowCollection = null
 
 
 func _ready() -> void:
@@ -83,6 +92,13 @@ func _ready() -> void:
 		# Resolved here rather than read off the player's own @onready var: this
 		# node is a child, so its _ready() runs first and that var is still null.
 		attack_hitbox = get_parent().get_node_or_null("VisualRoot/AttackHitbox") as Hitbox
+	_shadows = get_parent().get_node_or_null("PlayerShadowCollection") as PlayerShadowCollection
+	var summoner: PlayerShadowSummoner = get_parent().get_node_or_null(
+		"PlayerShadowSummoner") as PlayerShadowSummoner
+	if summoner != null:
+		# The shadow's kills count too, so its hits introduce combatants the same
+		# way the player's do. Nothing else about it is watched.
+		summoner.shadow_summoned.connect(_on_shadow_summoned)
 	if attack_hitbox == null:
 		push_warning("%s found no attack hitbox; it will never receive XP." % name)
 		return
@@ -359,8 +375,40 @@ func _on_hit_landed(target: Node, _damage: float) -> void:
 	combatant.enemy_died.connect(_collect)
 
 
+func _on_shadow_summoned(_shadow: ShadowInstance, node: BasicMeleeShadow) -> void:
+	if node == null or node.attack_hitbox == null:
+		return
+	node.attack_hitbox.hit_landed.connect(_on_hit_landed)
+
+
 ## claim_xp() hands its reward out once and returns 0 forever after, so a
 ## duplicate signal, a room clearing, a phase transition or a dungeon completing
 ## cannot pay twice.
+##
+## Who struck last decides the split: the player keeps the whole reward for its
+## own kills, and shares it when the shadow finished the job.
 func _collect(combatant: RoomCombatant) -> void:
-	add_xp(combatant.claim_xp())
+	var total: int = combatant.claim_xp()
+	if total <= 0:
+		return
+	var killer: ShadowInstance = _shadow_killer(combatant)
+	if killer == null:
+		add_xp(total)
+		return
+	var shadow_xp: int = int(round(total * SHADOW_KILL_SHARE))
+	var player_xp: int = total - shadow_xp
+	_shadows.award_xp(killer.instance_id, shadow_xp)
+	add_xp(player_xp)
+	shadow_assisted_kill.emit(killer, shadow_xp, player_xp)
+
+
+## The shadow that landed the killing blow, or null when the player did. A
+## shadow that is no longer in the collection counts as null — the kill still
+## happened, but there is nothing left to pay.
+func _shadow_killer(combatant: RoomCombatant) -> ShadowInstance:
+	var node: BasicMeleeShadow = combatant.get_killer() as BasicMeleeShadow
+	if node == null or node.instance == null or _shadows == null:
+		return null
+	if not _shadows.has_shadow(node.instance.instance_id):
+		return null
+	return node.instance

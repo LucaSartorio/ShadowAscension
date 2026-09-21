@@ -164,7 +164,7 @@ inventory capacity, and whether consumables are used from the inventory.
 
 ## Shadows
 
-Confirmed in M8.1. Only what is listed here is decided.
+Confirmed in M8.1 and M8.2. Only what is listed here is decided.
 
 A fallen enemy may leave a **remnant**: one chance, and only one, to tear its shadow loose. The
 attempt either works or it does not, and either way the remnant is spent and gone. There is no
@@ -183,9 +183,44 @@ inventory, and for the same reason: there is no save system yet.
 A remnant is not an enemy. A room clears the moment its last enemy dies, whether or not anything is
 still standing on the floor waiting to be extracted.
 
-**Not decided**: summoning, shadow AI or combat, shadow levels, XP, ranks or evolution, how many may
-be active at once, any cost to summon, whether bosses yield shadows, and what happens to a
-collection between sessions.
+### Summoning
+
+**One shadow at a time.** Summoning a second takes the first back. The limit is deliberate: the
+shadow is a companion the player commits to, not a stable they field.
+
+**Summoning is free.** There is no cost, no cooldown and no resource — the decision is which shadow,
+not whether the player can afford one.
+
+**It comes back on its own.** A shadow that was out when the player changed scene is standing there
+again in the next one. The player asked for it once; a gate is not a reason to ask again.
+
+**A death is a recall.** When the player dies the next run starts with nothing summoned. When the
+*shadow* dies, the shadow itself is unharmed — it keeps its level and XP and can be summoned again.
+Dying costs the run, never the collection.
+
+### Shadow behaviour
+
+The shadow follows the player at about **2 m**, and breaks off a fight rather than being dragged
+past its **8 m** leash. It picks the nearest enemy within **10 m** on its own — the player never
+points it at anything. It commits to its swing exactly as the player and the enemies do: startup,
+active, recovery, and an enemy that steps aside is genuinely missed.
+
+**No friendly fire, in either direction.** The shadow cannot hit the player and the player cannot
+hit the shadow. Enemies can hit both.
+
+### Shadow progression
+
+A shadow has its own **level and XP**, separate from the player's. The curve is **50 XP at Lv.1,
+x1.2 per level** — 50, 60, 72, 86, 104. Each level adds **+8 max health** and **+2 damage** to its
+base of 80 and 12.
+
+**Who lands the killing blow decides the reward.** The player keeps the whole of its own kills. A
+kill the shadow finishes pays the shadow **70%** and the player the rest: a 25 XP enemy splits
+**18 to the shadow, 7 to the player**. The reward is never inflated — the two halves always add back
+up to what the enemy was worth.
+
+**Not decided**: ranks or evolution, summoning more than one, any cost to summon, whether bosses
+yield shadows, and what happens to a collection between sessions.
 
 ---
 

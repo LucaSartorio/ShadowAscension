@@ -88,3 +88,15 @@ shadow_collection={
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+
+[layer_names]
+3d_physics/layer_1="World"
+3d_physics/layer_2="PlayerBody"
+3d_physics/layer_3="EnemyBody"
+3d_physics/layer_4="PlayerHitbox"
+3d_physics/layer_5="EnemyHurtbox"
+3d_physics/layer_6="EnemyHitbox"
+3d_physics/layer_7="PlayerHurtbox"
+3d_physics/layer_8="ShadowBody"
+3d_physics/layer_9="ShadowHurtbox"
+3d_physics/layer_10="ShadowHitbox"

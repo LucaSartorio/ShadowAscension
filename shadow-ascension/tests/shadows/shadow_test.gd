@@ -374,8 +374,10 @@ func _menu_tests() -> void:
 	_record(_menu.get_detail_text().contains("Basic Melee Shadow")
 			and _menu.get_detail_text().contains("#"),
 		"16c) selecting one shows its name and id")
-	_record(_menu.get_detail_text().contains("fase successiva"),
-		"16d) and says summoning comes later, with no dead button")
+	# M8.1 shipped this pane with a "coming later" note and no button. M8.2
+	# replaced the note with the real control, so that is what is checked now.
+	_record(_menu.is_summon_button_visible() and _menu.get_summon_button_text() == "[Evoca]",
+		"16d) and offers '%s' to put it in the world" % _menu.get_summon_button_text())
 
 	_menu.close()
 	_record(not _menu.is_open() and not get_tree().paused, "15e) O closes it and play resumes")

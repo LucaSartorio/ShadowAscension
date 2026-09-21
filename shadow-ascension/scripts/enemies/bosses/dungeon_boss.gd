@@ -756,4 +756,4 @@ func _on_died() -> void:
 	t.tween_property(visual_root, "rotation:x", deg_to_rad(90.0), death_topple_duration)
 
 	# The room counts this; nothing here knows about rooms or the dungeon.
-	report_death()
+	report_death(health_component.last_damage_source)

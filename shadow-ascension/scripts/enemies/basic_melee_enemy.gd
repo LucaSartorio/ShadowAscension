@@ -607,4 +607,4 @@ func _on_died() -> void:
 	var t: Tween = create_tween()
 	t.tween_property(visual_root, "rotation:x", deg_to_rad(90.0), 0.4)
 
-	report_death()
+	report_death(health_component.last_damage_source)
