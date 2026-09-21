@@ -33,6 +33,9 @@ func _ready() -> void:
 	if _collection != null:
 		# A shadow that is dismissed from the collection cannot stay in the world.
 		_collection.shadow_removed.connect(_on_shadow_removed)
+		# A level earned mid-fight has to reach the entity that is fighting, or
+		# the health it just bought would only appear on the next summon.
+		_collection.shadow_leveled_up.connect(_on_shadow_leveled_up)
 	# The player's own _ready() has not run yet — it is our parent — so the
 	# health component is resolved directly rather than through `player.health`.
 	var health: HealthComponent = _player.get_node_or_null("HealthComponent") as HealthComponent if _player != null else null
@@ -185,6 +188,14 @@ func _on_shadow_node_died(node: BasicMeleeShadow) -> void:
 func _on_player_died() -> void:
 	recall()
 	_set_active_id(&"")
+
+
+## Only the one that is out, and only through apply_level(), which recomputes
+## from the level rather than adding to what is already there.
+func _on_shadow_leveled_up(shadow: ShadowInstance, _levels: int) -> void:
+	if shadow == null or not is_active(shadow.instance_id):
+		return
+	_active_node.apply_level()
 
 
 func _on_shadow_removed(shadow: ShadowInstance) -> void:

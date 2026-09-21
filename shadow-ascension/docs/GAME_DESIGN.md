@@ -164,7 +164,7 @@ inventory capacity, and whether consumables are used from the inventory.
 
 ## Shadows
 
-Confirmed in M8.1 and M8.2. Only what is listed here is decided.
+Confirmed in M8.1, M8.2 and M8.3. Only what is listed here is decided.
 
 A fallen enemy may leave a **remnant**: one chance, and only one, to tear its shadow loose. The
 attempt either works or it does not, and either way the remnant is spent and gone. There is no
@@ -219,8 +219,35 @@ kill the shadow finishes pays the shadow **70%** and the player the rest: a 25 X
 **18 to the shadow, 7 to the player**. The reward is never inflated — the two halves always add back
 up to what the enemy was worth.
 
+### Commanding it
+
+**One shadow, and the player commands it directly.** There are no formations, no tactical pause and
+no unit selection. Every order is one key and applies to the one shadow that is out.
+
+**Two modes, toggled with [T].** In **FOLLOW** the shadow never starts a fight: it stays with the
+player and walks past enemies. In **AGGRESSIVE** it picks the nearest enemy in range and engages on
+its own. A shadow is summoned in AGGRESSIVE — the player switches it *down*, not up.
+
+**An order outranks the mode.** Aiming at an enemy and pressing **[MMB]** sends the shadow at that
+enemy, in either mode: FOLLOW means "do not pick fights", not "do not fight". A marker sits over the
+ordered target until it dies or the order is dropped. Aiming at nothing, or at a wall, changes
+nothing.
+
+**[Q] is "come back to me"**, and is not the same as the collection menu's *Richiama*, which
+dismisses the shadow. The quick recall breaks off the fight and brings the shadow home; it stays
+summoned and keeps its level and XP. For a few seconds afterwards it will not pick a new fight of
+its own — otherwise recalling it next to an enemy would be undone the moment it arrived.
+
+**The leash.** A fight may not travel more than **18 m from the player**. The shadow breaks off and
+comes back rather than being led across the level, and an order aimed at something already past that
+distance is refused rather than started and abandoned.
+
+**Friendly fire, restated:** an order can never be given against the player, and the shadow and the
+player cannot hit each other by any route.
+
 **Not decided**: ranks or evolution, summoning more than one, any cost to summon, whether bosses
-yield shadows, and what happens to a collection between sessions.
+yield shadows, what happens to a collection between sessions, and whether the command mode should
+persist across a full restart.
 
 ---
 

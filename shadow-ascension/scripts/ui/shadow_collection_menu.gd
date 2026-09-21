@@ -27,6 +27,8 @@ const PAUSE_MENU_GROUP: StringName = &"pause_menu"
 @export var recall_text: String = "[Richiama]"
 ## Marks the row that is currently in the world.
 @export var active_marker: String = "ATTIVA"
+@export var summon_tooltip: String = "Evoca l'Ombra nel mondo."
+@export var despawn_tooltip: String = "Congeda l'Ombra. Resta nella collezione."
 @export var level_format: String = "Livello %d"
 @export var xp_format: String = "XP: %d/%d"
 
@@ -223,7 +225,11 @@ func _update_detail() -> void:
 		shadow.shadow_data.description if shadow.shadow_data != null else "",
 	])
 	summon_button.visible = _summoner != null
-	summon_button.text = recall_text if _is_active(shadow) else summon_text
+	var active: bool = _is_active(shadow)
+	summon_button.text = recall_text if active else summon_text
+	# The one place the two recalls can be confused: this button DESPAWNS. The
+	# quick recall only tells the shadow to come back.
+	summon_button.tooltip_text = despawn_tooltip if active else summon_tooltip
 
 
 func _is_active(shadow: ShadowInstance) -> bool:

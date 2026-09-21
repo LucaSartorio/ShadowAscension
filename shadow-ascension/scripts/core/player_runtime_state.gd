@@ -20,6 +20,9 @@ extends Node
 signal runtime_state_reset
 
 const DEFAULT_LEVEL: int = 1
+## AGGRESSIVE, matching BasicMeleeShadow.CommandMode. A plain int so this
+## autoload keeps no dependency on the shadow scene.
+const DEFAULT_SHADOW_MODE: int = 1
 const DEFAULT_STAT: int = 10
 
 ## False until the first player of the session hands over its starting values.
@@ -62,6 +65,11 @@ var next_shadow_index: int = 1
 ## Which shadow was out when the scene changed, so the next one re-summons it.
 ## Empty means none — a shadow that died, or was recalled, stays recalled.
 var active_shadow_instance_id: StringName = &""
+## The command mode it was fighting in, as a plain int: this autoload stores and
+## never interprets, so it does not know BasicMeleeShadow.CommandMode. Reset to
+## the default whenever there is no active shadow, so a fresh summon starts from
+## the default rather than from whatever the last one was doing.
+var active_shadow_mode: int = DEFAULT_SHADOW_MODE
 
 
 ## Called by the first player of the session, with the values its own resources
@@ -123,6 +131,15 @@ func sync_shadows(rows: Array[Dictionary]) -> void:
 ## collection alone cannot tell that apart from one that was never summoned.
 func sync_active_shadow(instance_id: StringName) -> void:
 	active_shadow_instance_id = instance_id
+	if instance_id == &"":
+		# No shadow out, nothing to remember. This is what makes the next summon
+		# — after a recall, a shadow's death or the player's own — start from
+		# the default mode instead of inheriting the last one.
+		active_shadow_mode = DEFAULT_SHADOW_MODE
+
+
+func sync_active_shadow_mode(mode: int) -> void:
+	active_shadow_mode = mode
 
 
 func take_next_shadow_index() -> int:
@@ -167,4 +184,5 @@ func reset_runtime_state() -> void:
 	shadows.clear()
 	next_shadow_index = 1
 	active_shadow_instance_id = &""
+	active_shadow_mode = DEFAULT_SHADOW_MODE
 	runtime_state_reset.emit()

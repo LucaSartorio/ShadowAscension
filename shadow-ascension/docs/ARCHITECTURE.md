@@ -382,6 +382,73 @@ lives in `PlayerRuntimeState`, which is what makes a shadow re-summon itself aft
 a recall, a shadow's death and the player's own death all clear it, so none of those come back by
 themselves.
 
+### Command and target ownership
+
+Three components, three questions, no overlap:
+
+| Component | Owns |
+| --- | --- |
+| `PlayerShadowCollection` | what is **held** |
+| `PlayerShadowSummoner` | what is **out** |
+| `PlayerShadowCommander` | what it is **told** |
+
+**`PlayerShadowCommander`** (`scripts/player/player_shadow_commander.gd`) is the only thing in the
+shadow system that reads input. It owns the three bindings (`shadow_recall` = Q,
+`shadow_mode_toggle` = T, `shadow_attack_command` = middle mouse), the aim raycast, and the target
+marker. Orders reach the shadow as method calls, never as events it has to interpret — so the same
+order can come from a key, from the HUD, or from a test, and the shadow is drivable without faking
+input.
+
+It is a pausable node using `_unhandled_input`. Every menu pauses the tree, so shadow commands
+cannot fire behind an open UI; that is the whole mechanism, and there is no second guard for it.
+
+**Command mode** (`BasicMeleeShadow.CommandMode`) belongs to the summoned entity, not to
+`ShadowData` — it is how one shadow is being used right now, not what that kind of shadow is.
+`FOLLOW` never picks a fight; `AGGRESSIVE` does. Both obey an order. It is mirrored into
+`PlayerRuntimeState.active_shadow_mode` as a plain int so a shadow that re-summons itself after a
+scene change comes back in the mode it was fighting in; anything that leaves no shadow out clears
+it back to the default.
+
+**Target priority** is resolved in one place, `BasicMeleeShadow.get_target()`: the manual order
+first, then the automatic target in `AGGRESSIVE`, then nothing. `is_valid_target()` is the single
+answer to "may it act on this" — valid, in the tree, alive, and inside the leash — and every state
+asks it rather than repeating the checks. `_validate_targets()` runs once per frame before any
+state looks at a target, so no state ever sees a corpse.
+
+**The leash** (`max_combat_distance_from_player`, 18m) is measured from the **player**, not from
+the shadow: the point is to keep the fight near whoever is being guarded. A target already outside
+it refuses the order rather than starting a chase that gets abandoned.
+
+**Quick recall** is tactical and is not the collection menu's *Richiama*, which despawns. It clears
+both targets, lets an active attack window finish before it walks (a hitbox cut off inside its own
+frame is a live hitbox on a walking shadow), and holds the shadow off from picking its own fights
+for `recall_hold_duration`. Without that hold an `AGGRESSIVE` shadow re-acquires the moment it gets
+home and the order is undone within a second of being given.
+
+**The aim ray** uses the camera's direction and the **player's** position. Starting it at the
+camera meant a wall close behind the player ate the order — a third-person camera artefact, not
+something the player did. Its mask is world plus enemy bodies: the world is in there on purpose, so
+a wall between the player and an enemy is a miss rather than a hit on what is behind it.
+
+**`ShadowTargetMarker`** (`scripts/shadows/shadow_target_marker.gd`) is feedback for one command,
+not a lock-on: it points at a target already chosen and nothing reads it back. One marker exists and
+is moved between targets, because a marker parented to its subject would be freed with it.
+
+### Stuck recovery
+
+Progress, not position, decides that a shadow is stuck: one standing still because it has arrived
+is fine, one that should be walking and is not is not. No progress for `stuck_check_duration`
+triggers a **repath** — a stale path is far more common than a trapped shadow. Only a shadow still
+stuck after that AND further than `hard_recovery_distance` from the player is repositioned, behind
+`recovery_cooldown`, to the follow offset beside the player — a spot that is walkable by definition,
+because the player is standing there. Standing still inside `attack_range` of a target is fighting,
+not being stuck, and is excluded. Falling out of the level is the one case handled immediately,
+since every extra second of it is another ten metres down.
+
+The shadow asks the NavigationAgent for the nearest **navigable** point rather than a raw one: a
+moving target's exact centre is off the navmesh more often than not, and an agent given an
+unreachable point returns no path at all — which reads as a shadow that simply stops.
+
 ### Kill attribution
 
 `HealthComponent` records `last_damage_source` and emits `died_from(source)` alongside the unchanged
@@ -396,6 +463,11 @@ remainder rather than a second rounded share, so the two halves always sum to th
 
 Named in `project.godot`. 1 world, 2 player body, 4 enemy body, 8 player hitbox, 16 enemy hurtbox,
 32 enemy hitbox, 64 player hurtbox, 128 shadow body, 256 shadow hurtbox, 512 shadow hitbox.
+
+The shadow's **body** masks the world only. Enemies never had its layer in their mask, so making it
+solid to them in one direction only meant an enemy walking at the player could pin the shadow
+against nothing. Who stands where in a fight is decided by attack ranges, not by bodies shoving
+each other.
 
 There is no friendly-fire check anywhere, because the masks make it unrepresentable: the shadow's
 hitbox sees layer 16 only (enemy hurtboxes) and the player's hitbox likewise, so neither can reach
