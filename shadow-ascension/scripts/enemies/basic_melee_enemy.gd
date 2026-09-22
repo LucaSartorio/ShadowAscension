@@ -98,7 +98,9 @@ const AVOIDANCE_FALLBACK_FRAMES: int = 10
 
 func _ready() -> void:
 	_apply_stats()
-	health_component.max_health = max_health
+	# reset_to rather than a bare write: this component filled itself from the
+	# scene's placeholder in its own _ready(), before this one ran.
+	health_component.reset_to(max_health)
 	_last_health = max_health
 	hitbox.damage = attack_damage
 	hitbox.source = self

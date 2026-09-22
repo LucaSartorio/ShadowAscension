@@ -104,7 +104,9 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	_apply_stats()
 	_rng.seed = decision_seed
-	health_component.max_health = max_health
+	# reset_to rather than a bare write: this component filled itself from the
+	# scene's placeholder in its own _ready(), before this one ran.
+	health_component.reset_to(max_health)
 	_last_health = max_health
 	_phase_1_movement_speed = movement_speed
 	_phase_1_reposition_timeout = reposition_timeout

@@ -46,6 +46,24 @@ func set_max_health(value: float) -> void:
 	health_changed.emit(current_health, max_health)
 
 
+## Sets the ceiling and fills to it.
+##
+## For an entity that learns its maximum only after this component has already
+## readied at whatever its scene happened to carry: this node fills to
+## `max_health` in its own _ready(), which runs BEFORE its parent's, so a parent
+## that later writes `max_health` alone leaves the thing standing at the old
+## number. Raising a boss from 600 to 900 in its stats asset did exactly that —
+## it started the fight at 600 of 900.
+func reset_to(maximum: float) -> void:
+	if maximum <= 0.0:
+		return
+	max_health = maximum
+	current_health = maximum
+	is_dead = false
+	last_damage_source = null
+	health_changed.emit(current_health, max_health)
+
+
 func heal(amount: float) -> void:
 	if is_dead:
 		return
