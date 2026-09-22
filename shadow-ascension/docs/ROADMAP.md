@@ -2,6 +2,8 @@
 
 Milestone plan for the Action RPG 3D. Each milestone is scoped, sequential, and closed by explicit exit criteria. No milestone extends the scope of the next.
 
+**M0–M9 are complete.** The vertical slice is at RC1; see `PROGRESS.md` for the record of each milestone and for the Future Work left deliberately unstarted.
+
 ---
 
 ## M0 — Project Foundation

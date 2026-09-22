@@ -6,81 +6,76 @@
 
 ## Current Milestone
 
-**M9 — Vertical Slice** (In Progress)
+**None — the M0–M9 roadmap is complete.**
 
-M9.1 delivered: the systems M1–M8 built are now a game you can start from a menu and play to the
-end of a run and back. No system was rewritten; what changed is where the player meets them.
+**Vertical Slice status: RC1.**
 
-M9.1 deliverable status (verified by `vertical_slice_run.gd` 74/74, which boots from `Main.tscn`
-and drives the whole loop through real scene changes):
-
-- Main Menu — implemented
-- Boot flow — implemented
-- Hub presentation — implemented
-- Complete Player HUD — implemented
-- Coherent UI layout — implemented
-- Gate presentation — implemented
-- Dungeon flow and objectives — verified
-- Boss encounter presentation — verified
-- Run Summary — implemented
-- Return to hub — verified
-- Second run and death restart — verified
-- Development-only presentation removed — implemented
-
-**M9.1 is complete.** M9 stays In Progress.
-
-**The game now starts where a player starts it.** `Main.tscn` stays the bootstrap router CLAUDE.md
-says it is, but it routes to the main menu instead of straight into a world. GIOCA fades to the
-hub through the existing `SceneTransition`; ESCI closes the application, and says so through a
-signal first so a headless run can watch the choice without the process going away underneath it.
-
-**Test World became the Hub**, renamed rather than duplicated: `scenes/core/hub.tscn`. It is a
-walled courtyard with a lit path to the gate, a training corner, and no combat sandbox lying around
-— the debug damage zone and the six loose enemies are gone, and the two training dummies stayed
-because a dummy in a hub is a feature rather than a leftover. The gate spins, pulses and carries its
-own light, so the one thing the player has to find is the brightest thing in the room.
-
-**The HUD stopped competing with itself.** Health (new) and level/XP moved into one top-left status
-corner, the objective moved to the top right and below the boss bar's band, and the shadow panel and
-menu hints keep the bottom right. The one real overlap was the objective against the boss health
-bar, found by a test that compares the actual control rectangles rather than by looking at a
-screenshot — and fixed by moving the objective out of that band entirely, so it cannot come back at
-a different window width.
-
-**`DungeonRunStats`** counts five things about one run and nothing else, from signals the systems
-already emit; no system was changed to report to it. It lives on the DungeonController, so a new
-dungeon scene builds a new one and "reset on entry" needs no code. The XP it reports is the
-**player's own share**: a kill the shadow finished pays the player 30%, and 30% is what the summary
-shows, because it reads the player's total rather than the enemy's reward.
-
-**The Run Summary** opens on completion, pauses the dungeon, frees the cursor and waits. `[Continua]`
-hands the dungeon back without changing scene, so the walk to the exit portal stays the player's
-move. It replaced the 40-point "DUNGEON COMPLETE" banner: two things announcing the same moment over
-each other was a large part of what made the dungeon read as a test scene.
-
-**One real bug was found and fixed while building.** The summary could render before the kill that
-ended the run had been tallied — the tally and the completion are two handlers on the same
-`enemy_died` signal and nothing orders them, so the panel showed "Boss sconfitti: 0" on the run that
-had just killed one. The panel now follows the tally rather than reading it once and hoping it was
-last.
-
-**Language.** Player-facing text that was still English — `CHARACTER`, `Level %d`, `PHASE 1/2`,
-`LEVEL UP!`, `YOU DIED`, `Press E to leave Dungeon` — is Italian like the rest of the UI, and the
-phase captions became exported data rather than literals inside a match. The tests follow the
-exported values now, so the wording and the assertions cannot drift apart again.
-
-**Test-side consequence worth knowing:** the summary pauses the tree, so every headless flow that
-completes a dungeon now dismisses it in its own wait helper, exactly as a player would. Without
-that, any `await physics_frame` after completion waits forever.
-
-Whole-project state: **1126 assertions across 28 suites, zero failures**, zero parser errors, zero
-runtime errors, zero warnings, from a cold class cache.
-
-Next: **M9.2 — Balance, QA and Release Candidate**.
+M9 closed on M9.2, which measured the game before touching it, changed one number, fixed four
+bugs, and ran the loop end to end three ways. See *Done* below for the milestone record and
+*Future Work* for what was deliberately left alone.
 
 ---
 
 ## Done
+
+- **M9 — Vertical Slice** (Completed). Closed on M9.2: balance, QA and release candidate.
+
+    **Measurement came first, and it changed the conclusions.** A baseline harness
+    (`balance_baseline_run.gd`) reported what the game actually does before a single number moved.
+    Most of it was already on target: a basic enemy takes **4 light attacks** (target 3–5), the
+    player survives **7 enemy hits** (target 5–7), a normal enemy drops something **45%** of the
+    time (target 40–50%), the boss always drops, extraction is **0.70**, and a full player-led
+    clear gives **2 level-ups** (target ~2). None of those were touched.
+
+    **Two measurements were wrong until the harness was.** A boss fight first read as 9 seconds,
+    because the simulated player snapped back into melee the instant each active window ended.
+    Making it pay for the ground it gave up — 3.4m at its own speed — put the same fight at 48s.
+    And the shadow first read as "cannot clear a room in 180 seconds" because the phase before it
+    had killed the player and restarted the dungeon underneath it.
+
+    **One balance change: boss health 600 → 900.** At 600 the fight measured 48s against an
+    indicative 90–180s; at 900 it measures **120s**, because phase 2 begins later and its faster
+    attacks cost the player more uptime. The increase is not linear with health for that reason.
+    Raising health is the lever the brief cautions against, and it is the only one that does not
+    regress something already on target — the normal-enemy numbers or the pattern readability,
+    which is the criterion that matters more and which all four attacks still satisfy in a
+    measured fight.
+
+    **Four bugs found and fixed:**
+    - *The boss did not start at full health.* `HealthComponent` fills to `max_health` in its own
+      `_ready()`, which runs before its parent's, so a boss that then wrote `max_health` alone
+      began the fight at the scene's old value — 600 of 900. `reset_to()` sets the ceiling and
+      fills to it, and both the boss and the basic enemy use it. This was latent for as long as
+      the two numbers happened to agree.
+    - *The run summary could report another run's XP.* `DungeonRunStats` found the player through
+      the global group, and during a scene change the outgoing scene is still in the tree — so it
+      could take its baseline from the player about to be freed. It now looks inside its own
+      dungeon. Symptom: a full clear reporting 0 XP of 325.
+    - *The kill tally was not latched.* XP and remnants are both latched at their source, so a
+      death announced twice pays nothing twice; the tally was not, and counted it. It is now.
+    - *The M9.1 summary could render before the last kill was counted* — fixed in M9.1 and
+      re-verified here.
+
+    **QA: 100 checks, all passing** (`qa_run.gd`). Duplicate rewards (XP, loot, remnants,
+    extraction, room clear, dungeon completion, equipment stacking, inventory), rapid input on
+    every interactable and every menu, one prompt for overlapping interactions, menus during
+    combat, shadow commands against corpses and leashes, health bars, deaths in each room and in
+    boss phase 2, and three hub→dungeon→hub cycles with nothing accumulating.
+
+    **Three full runs** (`full_runs_run.gd`, 24/24): player-led, shadow-led and failure/recovery.
+    Measured in simulated combat time, excluding the walking and reading a person does:
+
+    | Run | To the summary | Boss | Result |
+    | --- | --- | --- | --- |
+    | A — player takes the kills | 212s | 186s | 325/325 XP, Lv.3, 4 shadows extracted |
+    | B — shadow takes the kills | 204s | 186s | 5 shadow final blows, shadow Lv.1→2, player 235 XP |
+    | C — failure and recovery | 30s (after the death) | — | failed extraction, dead shadow, dead player, then a clean clear |
+
+    Run B is the 70/30 rule end to end: five shadow-finished kills paid the player 7 each, and the
+    summary reported the player's share rather than what the enemies were worth.
+
+    **Whole-project state: 1265 assertions across 31 suites, zero failures**, zero parser errors,
+    zero runtime errors, zero warnings, from a cold class cache.
 
 - **M8 — Shadow System** (Completed). Milestone review passed. All four ROADMAP exit criteria were
   verified by walking the whole system end to end with real scene changes rather than by reading it
@@ -959,8 +954,8 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-No milestone in flight. M8 closed on review; M9 has not been started. Two definitions stay open by
-design:
+No milestone in flight: the M0–M9 roadmap is complete and the slice is at RC1. Two definitions stay
+open by design:
 
 - Game design definition — foundations defined:
     - third-person camera
@@ -988,6 +983,30 @@ design:
 - Return the player to the gate rather than the test world's default spawn — needs a real hub
 - Optional M3 polish, non-blocking: additional enemy archetypes as new `EnemyStats` assets,
   more expressive telegraph
+
+---
+
+## Future Work
+
+Out of scope by decision, not by oversight. Nothing here is started.
+
+- **Enemies never target the summoned shadow.** It can be damaged and killed — the masks allow it
+  and the boss does hit it — but normal enemies aim only at the player, so in a measured room the
+  shadow took **0 damage in 60 seconds**. Making enemies choose between the two is target
+  selection, a system M9.2 was explicitly not allowed to add.
+- **The shadow's offensive share.** At Lv.1 it is ~19% of the player's peak DPS against an
+  indicative ~50%. Measured in practice the gap is much smaller, because the shadow fights
+  continuously while the player spends most of a fight repositioning — it clears a two-enemy room
+  alone in 26s. Left alone: both inequalities the design asks for hold, and closing the gap on
+  paper would make the shadow rival the player.
+- **Boss fight length.** 120s measured with a cautious defender. Reaching the top of the
+  indicative band would need either far more health or a faster player, and neither is a change
+  worth making blind.
+- **A save system.** Progression is in memory for the length of a session, by design since M6.
+- **No export preset.** `export_presets.cfg` does not exist and the roadmap never asked for a
+  build, so RC1 is a scope statement rather than an artifact. Adding one means choosing a target
+  platform, which is the user's call.
+- **INT does nothing yet.** It scales an ability power that no ability reads, as designed in M6.2.
 
 ---
 

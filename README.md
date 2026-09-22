@@ -2,6 +2,67 @@
 
 Action RPG 3D in Godot 4.7 (GDScript). The Godot project lives in `shadow-ascension/`.
 
+**Status: Vertical Slice — RC1.** The M0–M9 roadmap is complete: the slice runs from the main menu
+through a hub, a dungeon and a boss, and back, with progression, loot, equipment and the shadow
+mechanic all live. There is no versioning convention in the project and no export preset; "RC1"
+here is a statement about scope, not a build artifact.
+
+## The loop
+
+```
+Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub
+                 ^                                                                           |
+                 +-------------------------------------------------------------------------+
+```
+
+The dungeon is Start → Combat Room 1 → Combat Room 2 → Boss Room. Doors open as rooms clear.
+Enemies drop loot and leave **remnants** you can try to extract a shadow from; the shadow you
+collect can be summoned, commanded and levelled. Dying restarts the dungeon and costs the run —
+never the character.
+
+## Controls
+
+| Action | Binding |
+| --- | --- |
+| Move | `W` `A` `S` `D` |
+| Camera | mouse |
+| Light attack (3-hit combo) | left mouse button |
+| Dodge (i-frames) | `Space` |
+| Interact — gate, exit, loot, remnant | `E` |
+| Character sheet | `C` |
+| Inventory and equipment | `I` |
+| Shadow collection | `O` |
+| Shadow: come back to me | `Q` |
+| Shadow: FOLLOW / AGGRESSIVE | `T` |
+| Shadow: attack what I am aiming at | middle mouse button |
+| Close a menu / release the cursor | `Esc` |
+
+The shadow bindings only do anything while a shadow is summoned, and the on-screen hints appear
+with it.
+
+## Systems
+
+Player movement and a camera-relative third-person camera · a three-hit light combo with a dodge
+that cancels late recovery and grants i-frames · enemies that perceive, space themselves and
+telegraph · a three-room dungeon with a four-pattern, two-phase boss · XP, levels and five
+allocatable stat points per level (STR/AGI/VIT/INT) · loot with rarities, an inventory and two
+equipment slots · shadow extraction, a collection, summoning, ally AI, shadow levels and a 70/30
+kill split · a run summary · everything above surviving scene changes and a death for the length
+of a session.
+
+Progression is in memory only: there is no save system, so closing the game starts a fresh
+character.
+
+## Running the project
+
+From `shadow-ascension/`:
+
+```powershell
+godot -e --path .                      # open the editor
+godot --path .                         # run the game (starts at the main menu)
+godot --headless --path . --quit       # headless smoke test
+```
+
 ## After every `git pull`: rebuild the class cache
 
 Godot resolves every `class_name` through `shadow-ascension/.godot/global_script_class_cache.cfg`.
@@ -41,16 +102,6 @@ The two things that go wrong most often:
 - leaving the editor open while pulling, which is what leaves the cache stale in the first place.
 
 Never work around this by weakening a type annotation. The cache is the problem, not the code.
-
-## Running the project
-
-From `shadow-ascension/`:
-
-```powershell
-godot -e --path .                      # open the editor
-godot --path .                         # run Main.tscn
-godot --headless --path . --quit       # headless smoke test
-```
 
 ## Tests
 
