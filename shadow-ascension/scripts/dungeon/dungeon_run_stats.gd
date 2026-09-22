@@ -24,6 +24,10 @@ var shadows_extracted: int = 0
 ## enemy's reward.
 var _player_xp_at_start: int = 0
 var _progression: PlayerProgression = null
+## Combatants already counted. The XP and the remnant are both latched at their
+## own source, so a death announced twice pays nothing twice — this keeps the
+## tally as honest as they are rather than trusting the signal to fire once.
+var _counted: Dictionary = {}
 
 
 func _ready() -> void:
@@ -32,7 +36,12 @@ func _ready() -> void:
 
 
 func _subscribe() -> void:
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var controller: DungeonController = get_parent() as DungeonController
+	# The player is looked up inside THIS dungeon rather than through the global
+	# group: during a scene change the outgoing scene is still in the tree, and a
+	# group lookup can hand back the player that is about to be freed — whose XP
+	# total then reads as the baseline for a run it is not in.
+	var player: Player = _find_player(controller if controller != null else self)
 	if player != null:
 		_progression = player.progression
 		if _progression != null:
@@ -41,7 +50,6 @@ func _subscribe() -> void:
 			# Only a successful extraction adds to the collection, so a failed
 			# attempt cannot reach this.
 			player.shadows.shadow_added.connect(_on_shadow_added)
-	var controller: DungeonController = get_parent() as DungeonController
 	if controller != null:
 		for room in controller.get_rooms():
 			for combatant in room.get_enemies():
@@ -53,9 +61,22 @@ func _subscribe() -> void:
 
 
 func get_player_xp_earned() -> int:
-	if _progression == null:
+	if _progression == null or not is_instance_valid(_progression):
 		return 0
 	return maxi(0, _progression.get_total_xp() - _player_xp_at_start)
+
+
+## The player belonging to this dungeon, found by walking it rather than by
+## asking the tree at large.
+func _find_player(from: Node) -> Player:
+	var player: Player = from as Player
+	if player != null:
+		return player
+	for child in from.get_children():
+		var found: Player = _find_player(child)
+		if found != null:
+			return found
+	return null
 
 
 func get_total_kills() -> int:
@@ -63,6 +84,9 @@ func get_total_kills() -> int:
 
 
 func _on_enemy_died(combatant: RoomCombatant) -> void:
+	if combatant == null or _counted.has(combatant):
+		return
+	_counted[combatant] = true
 	if combatant is DungeonBoss:
 		bosses_defeated += 1
 	else:
