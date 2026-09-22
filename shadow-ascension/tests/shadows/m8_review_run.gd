@@ -631,7 +631,18 @@ func _aim_at(player: Player, target: Node3D) -> void:
 ## whatever was actually ordered rather than insisting on one particular body.
 func _order_attack(player: Player, preferred: RoomCombatant,
 		attempts: int = 24) -> RoomCombatant:
-	for _i in attempts:
+	# Room 2 has cover in it, and an order through a wall is correctly refused —
+	# so this walks around the target looking for a clear line rather than
+	# clicking from one spot and calling it a failure.
+	var offsets: Array[Vector3] = [
+		Vector3(0, 0, 3.5), Vector3(3.5, 0, 0), Vector3(-3.5, 0, 0),
+		Vector3(0, 0, -3.5), Vector3(2.4, 0, 2.4), Vector3(-2.4, 0, -2.4),
+	]
+	for i in attempts:
+		if is_instance_valid(preferred) and not preferred.has_died():
+			player.global_position = preferred.global_position + offsets[i % offsets.size()]
+			# One physics step, so the ray is cast against where things now are.
+			await physics_frame
 		_aim_at(player, preferred)
 		var found: RoomCombatant = player.shadow_commander.issue_attack_command()
 		if found != null:

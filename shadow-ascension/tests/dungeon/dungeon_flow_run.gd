@@ -130,13 +130,19 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 		"RUN %d/2) the fight opens in phase 1" % n)
 
 	player.hurtbox.set_invulnerable(true)
+	# Derived from the boss's own maximum rather than written down here: the
+	# point is that the bar tracks and the transition lands at half, not what
+	# the boss happens to be tuned to.
+	const HIT: float = 20.0
+	var to_fell: int = ceili(boss.health_component.max_health / HIT)
+	var half_at: int = ceili(boss.health_component.max_health * 0.5 / HIT)
 	var swings: int = 0
 	var bar_tracked: bool = true
 	var saw_transition: bool = false
 	var transition_at: int = -1
-	while not boss.health_component.is_dead and swings < 40:
+	while not boss.health_component.is_dead and swings < to_fell + 10:
 		player.global_position = boss.global_position + Vector3(0, 0, 2.0)
-		boss.hurtbox.receive_hit(20.0, null)
+		boss.hurtbox.receive_hit(HIT, null)
 		swings += 1
 		await _pause(0.12)
 		if boss.get_phase() == DungeonBoss.BossPhase.TRANSITION and not saw_transition:
@@ -148,12 +154,14 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 	player.hurtbox.set_invulnerable(false)
 	await _pause(0.5)
 
-	_record(saw_transition and transition_at == 15,
-		"RUN %d/2) the phase transition fired at half health, on swing %d of 30" % [n, transition_at])
+	_record(saw_transition and transition_at == half_at,
+		"RUN %d/2) the phase transition fired at half health, on swing %d of %d" % [
+			n, transition_at, to_fell])
 	_record(boss.phase_transition_spent(),
 		"RUN %d/2) and it is spent, so it cannot run again this life" % n)
 
-	_record(swings == 30, "RUN %d/2) the boss took %d hits of 20 to fell (600 HP)" % [n, swings])
+	_record(swings == to_fell, "RUN %d/2) the boss took %d hits of %.0f to fell (%.0f HP)" % [
+		n, swings, HIT, boss.health_component.max_health])
 	_record(bar_tracked, "RUN %d/2) the health bar tracked the whole fight" % n)
 	_record(boss.get_state() == DungeonBoss.State.DEAD and not bar.is_showing(),
 		"RUN %d/2) boss dead, health bar gone" % n)

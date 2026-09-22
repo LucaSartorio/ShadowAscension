@@ -121,8 +121,11 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 	var swings: int = 0
 	var elapsed: float = 0.0
 
-	if not die_in_phase_2:
-		player.hurtbox.set_invulnerable(true)
+	# Shielded to begin with in both runs. The death run drops the shield the
+	# moment phase 2 starts: standing in melee and trading without dodging now
+	# kills the player before the boss is halfway down, and this test is about
+	# dying IN phase 2, not about winning that race.
+	player.hurtbox.set_invulnerable(true)
 
 	while elapsed < 90.0:
 		if boss.health_component.is_dead:
@@ -151,6 +154,8 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 		# swing is fired and the loop goes straight on: pausing here would skip
 		# whole wind-ups, and Double Strike's is only 0.22s long.
 		var stop_swinging: bool = die_in_phase_2 and boss.get_phase() == DungeonBoss.BossPhase.PHASE_2
+		if stop_swinging and player.hurtbox.is_invulnerable:
+			player.hurtbox.set_invulnerable(false)
 		if not stop_swinging and player.get("_attack_state") == Player.AttackState.IDLE:
 			_swing(player, boss)
 			swings += 1
