@@ -8,12 +8,19 @@ Operational rules for Claude Code (claude.ai/code) when working in this reposito
 
 **ShadowAscension** — Action RPG 3D built with Godot 4.7.x and GDScript.
 
-Core pillars (design intent, not yet implemented):
-- Player-driven combat with shadow/soul mechanics
-- Procedural or curated dungeon runs
-- Data-driven progression: enemies, skills, items, shadows defined as `Resource` assets
+Core pillars:
+- Player-driven combat with shadow/soul mechanics — **implemented** (M2, M8)
+- Curated dungeon runs — **implemented** (M4); semi-procedural composition is M18
+- Data-driven progression: enemies, skills, items, shadows as `Resource` assets — **partly
+  implemented**; completed across every domain at M10
 
-Current state: project skeleton only. No gameplay code yet.
+**Current state: M0–M9 complete — playable vertical slice at RC1.** Main menu, hub, gate, a
+three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
+shadow mechanic (extraction, collection, summoning, ally AI, commands, levels). Everything visible
+is a **placeholder**: definitive art production starts at M13.
+
+Next: **M10 — Core Refactor & Game Architecture**. See `shadow-ascension/docs/ROADMAP.md` for the
+M10–M20 plan and `shadow-ascension/docs/PROGRESS.md` for what shipped.
 
 ---
 
@@ -81,7 +88,7 @@ resources/                 # custom Resource (.tres) data
     shadows/
 
 docs/                      # architecture notes, design docs
-tests/                     # test scenes/scripts (framework TBD)
+tests/                     # test scenes + SceneTree flow scripts, grouped by system
 ```
 
 Every new feature MUST live in the correct directory. Do not create parallel/ad-hoc folders.
@@ -196,8 +203,14 @@ Style:
 
 ## 12. Testing and validation
 
-- No test framework wired yet. When one is added (GUT or similar), document the runner in this file.
-- Tests live under `tests/` (test scenes + scripts).
+- No third-party test framework. The project uses its own harnesses, and they are the runner:
+  **scene suites** (`tests/<area>/<suite>.tscn`, run by passing the scene to Godot) and **flow
+  scripts** (`tests/<area>/<name>_run.gd`, `extends SceneTree`, run with `--script`) for anything
+  that needs real scene changes. Each prints `[PASS]` / `[FAIL]` lines and a `[SUMMARY]`. The
+  invocations are in the repository README.
+- Tests live under `tests/`, grouped by system, plus `tests/core/` for whole-game runs.
+- A change that touches a system runs that system's suite **and** the end-to-end runs before it is
+  called done.
 - After significant changes: **launch the project** and confirm zero runtime errors and zero parser warnings before declaring the task done.
 
 Manual validation commands (run from `shadow-ascension/`):

@@ -1,6 +1,15 @@
 # ShadowAscension — Technical Architecture
 
-Initial architecture reference for the project. Describes structure, principles, and forward direction. Does **not** commit to unimplemented features or undocumented game-design choices.
+Architecture reference for the project. Describes structure, principles, and forward direction.
+Does **not** commit to unimplemented features or undocumented game-design choices.
+
+This file owns **how the systems are built**: data-driven architecture, state separation, the
+content pipeline, and the gameplay/visual split. Milestone order lives in `ROADMAP.md`, design
+decisions in `GAME_DESIGN.md`.
+
+Sections 1–10 are the standing principles. The sections after them describe **what exists today**,
+milestone by milestone. *Direction for M10+* at the end describes what is planned and is explicitly
+not yet built.
 
 **Stack**
 - Engine: Godot 4.7.x
@@ -75,7 +84,7 @@ shadow-ascension/
         shadows/
 
     docs/                    # architecture, design, roadmap, progress
-    tests/                   # test scenes/scripts (framework TBD)
+    tests/                   # test scenes + SceneTree flow scripts, grouped by system
 ```
 
 Rules:
@@ -115,15 +124,21 @@ Systems are built from small, composable components attached to a scene root (e.
 - Communicates outward through signals and inward through direct method calls from its owner.
 - Reads tuning data from an injected `Resource`, not from hardcoded constants.
 
-**Planned component directions** (architectural intent, **not implemented yet**):
+**Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
-- **HealthComponent** — tracks current/max HP; emits `health_changed`, `died`. Reads max HP from a stats or health Resource.
-- **StatsComponent** — holds derived and base stats for an actor; recomputes derived stats when base stats or equipment change.
-- **HitboxComponent** — active during attack frames; emits `hit_landed` with damage payload when it overlaps a `HurtboxComponent`.
-- **HurtboxComponent** — receives hits; forwards damage payload to owner (typically to `HealthComponent`).
-- **MovementComponent** — encapsulates movement math (input → velocity → `move_and_slide`), reads speed / accel from a Resource.
+- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; emits `health_changed(current, maximum)`, `died`, `died_from(source)`. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
+- **`Hitbox`** (`Area3D`) — active only during attack frames via `activate()` / `deactivate()`; emits `hit_landed(target, damage)`, and will not hit the same target twice within one activation.
+- **`Hurtbox`** (`Area3D`) — receives hits, honours `is_invulnerable` (dodge i-frames), and forwards damage to the `HealthComponent` it is wired to.
+- **`AttackStep`** (`Resource`) — one step of a combo as data: timings, damage and the window in which the next step can be buffered.
 
-These are directions, not commitments. Exact API and boundaries are finalized when the owning milestone starts (M1 for movement, M2 for hit/hurt/health, M6 for stats, etc.). The direction is documented here so future implementations converge rather than diverge.
+Progression stats live in `scripts/player/` (`PlayerProgression`, `ProgressionStats`) rather than in a generic stats component, because so far only the player has allocatable stats.
+
+**Still direction, not built:**
+
+- **A stats component shared by every actor** — enemies read their numbers from their own Resource today. Generalising this is part of the data-driven pass in **M10**.
+- **A movement component** — movement math currently lives in the actor scripts. Extracting it is **M10** work, and **M11** is what will need it (sprint, stamina, dodge variants).
+
+These two are directions, not commitments; the API is settled when the owning milestone starts. They are documented here so future implementations converge rather than diverge.
 
 Communication rules for components:
 - Components never reach across the tree to poke other components on other actors. Interaction happens through hitboxes/hurtboxes, signals, or an event bus.
@@ -179,9 +194,11 @@ Acceptable candidates (added when a milestone actually requires them):
 - Input remapper (if runtime rebinding is added)
 
 Forbidden uses of autoload:
-- Storing gameplay state (player HP, inventory contents, current room). This belongs in scene-owned components.
+- Storing *scene-scoped* gameplay state (the current room, the enemy being fought, what a hitbox has hit this swing). This belongs in scene-owned components.
 - Shortcut access to nodes that could be reached via injection.
 - "Managers" that mix unrelated concerns.
+
+**The project has exactly one autoload today: `PlayerRuntimeState`**, documented in full below. It is the deliberate edge of the rule above: a scene change destroys the player, so the values that belong to the *session* rather than to any one scene — level, XP, allocated stats, current health, inventory, equipment, the shadow collection — have to live somewhere that outlives it. It is a store, not a manager: it holds and returns data and owns no formula. M10 formalises this as the **Persistent Player State** category (see *Direction for M10+*).
 
 Every autoload is documented (what it owns, its public API, its lifetime) at introduction.
 
@@ -189,7 +206,7 @@ Every autoload is documented (what it owns, its public API, its lifetime) at int
 
 ## 8. Save System Direction
 
-Not implemented. Direction only, so future work converges:
+Not implemented. **Scheduled for M19**; until then this is direction only, so the work converges:
 
 - Save format: JSON or Godot Resource (`.tres`) — decision deferred until the first save/load milestone.
 - Save is a snapshot of *definitions in use* + *runtime state*, not of scene instances. Scenes are rebuilt from saved state on load.
@@ -197,7 +214,7 @@ Not implemented. Direction only, so future work converges:
 - Versioned save format from day one (a `version` field), with a migration hook for future format changes.
 - No save/load calls per frame. Explicit save points (hub return, boss cleared, manual save) only.
 
-Concrete decisions are made when the save milestone is scheduled; nothing above binds gameplay-design choices.
+Concrete decisions are made at M19; nothing above binds gameplay-design choices.
 
 ---
 
@@ -216,19 +233,33 @@ Concrete decisions are made when the save milestone is scheduled; nothing above 
 
 ## 10. Testing Strategy
 
-Testing is minimal today and grows with the project.
+The project has no third-party test framework and does not need one: the harnesses are written in
+GDScript and Godot runs them headless. They grew with the systems they cover, and by the close of
+M9 there were **31 suites and 1265 assertions**.
 
-Current state:
-- No test framework wired.
-- `tests/` directory reserved for test scenes/scripts.
+Two shapes, because two different things need testing:
 
-Direction:
-- **Manual validation** is mandatory after any significant change: run `godot --path .` (or `--headless --quit` for a smoke check), confirm zero runtime errors, zero parser warnings.
-- **Test scenes** land in `tests/` — small, focused scenes that exercise one system in isolation (e.g. `tests/combat/hitbox_smoke.tscn`).
-- **Automated tests** (GUT or equivalent) will be introduced when a system's complexity justifies it. When introduced, the runner command is documented in `CLAUDE.md`.
-- **Definition of Done** (from `CLAUDE.md`) is the acceptance bar for every task: project launches, zero runtime errors, zero parser errors, coherent structure, feature verifiable, docs updated.
+- **Scene suites** — `tests/<area>/<suite>.tscn`, one scene that builds a system in isolation and
+  asserts against it. This is most of the suite count: combat, enemies, bosses, items, player,
+  dungeon, shadows.
+- **Flow scripts** — `tests/<area>/<name>_run.gd`, `extends SceneTree`, for anything that must
+  actually change scene: the whole-game runs in `tests/core/` (vertical slice, QA, repeated full
+  runs, balance baseline) live here, because a scene suite cannot survive the scene being swapped.
 
-Regressions caught during play are the priority signal until automation exists.
+Both print `[PASS]` / `[FAIL]` lines and a closing `[SUMMARY]`; the invocations are in the
+repository README.
+
+Rules that hold regardless:
+- **Manual validation** is still mandatory after any significant change: run `godot --path .` (or
+  `--headless --quit` for a smoke check), confirm zero runtime errors, zero parser warnings.
+- A change that touches a system runs **that system's suite and the end-to-end runs** before it is
+  called done. Several of the bugs closed in M9.2 were only visible end to end.
+- **Write the test against the rule, not against the observation.** More than one apparent bug in
+  M8–M9 turned out to be the harness: measuring speed in m/s where headless physics outruns wall
+  clock, or placing an actor outside the level geometry. A failing assertion is a claim about the
+  game that has to be checked in both directions.
+- **Definition of Done** (from `CLAUDE.md`) is the acceptance bar for every task: project launches,
+  zero runtime errors, zero parser errors, coherent structure, feature verifiable, docs updated.
 
 ---
 
@@ -554,3 +585,104 @@ halves are needed: acting also releases the prompt, which the next interactable 
 inherit within the same frame, so without consuming the event one press would reach two of them.
 When the winner goes away the runner-up takes the prompt over instead of leaving the player with
 nothing to press.
+
+---
+
+# Direction for M10+
+
+Everything above this line describes what exists. Everything below is **planned and not yet
+built** — direction for the Core Production Foundation phase and what follows it. Nothing here
+should be read as a description of the current code.
+
+## Data-driven architecture (M10)
+
+The vertical slice is already partly data-driven: `EnemyStats`, `ProgressionStats`, `ItemData`,
+`LootTable`, `AttackStep`, `BossAttack` and `ShadowData` are all `Resource` assets today. M10
+finishes the job and gives every domain one named definition resource:
+
+| Resource | Owns |
+| --- | --- |
+| `PlayerData` / `PlayerStats` | the player's definition and its stat rules |
+| `EnemyData` | an enemy archetype's definition |
+| `SkillData` | one skill: cost, cooldown, range, area, effects |
+| `ItemData` | one item (exists today; extended for the M16 slot set) |
+| `ShadowData` | one kind of shadow (exists today; extended for rank and skills) |
+| `DungeonData` | a dungeon's composition rules |
+| `GateData` | a gate: rank, contents, rewards |
+
+The rule that already governs resources still holds: definitions are pure data with minimal derived
+getters, instance state lives in components, and `.tres` is preferred over `.res` for diff-ability.
+
+## State separation (M10)
+
+Today there is one autoload, `PlayerRuntimeState`, holding everything that has to survive a scene
+change. That works for a slice and will not survive a save system. M10 separates it into six
+categories with no system reading or writing outside its own:
+
+| Category | What it holds | Lifetime |
+| --- | --- | --- |
+| **Persistent Player State** | level, XP, allocated stats, inventory, equipment, shadows, skills | the character |
+| **Run State** | the current dungeon run: tally, temporary buffs, what the run has consumed | one run |
+| **Dungeon State** | the current dungeon instance: rooms cleared, doors, spawned contents | one dungeon |
+| **World State** | hub state, gate availability, world-level flags | the world |
+| **Settings** | resolution, audio, controls, graphics | the installation |
+| **Save Data** | the serialised form of the above that is written to disk | across sessions |
+
+**The hard requirement:** persistent data must never be reinitialised by a scene change. That class
+of bug has been hit and fixed twice already — once in M6.3 (level and XP resetting through a gate)
+and once in M9.2 (run stats taking their XP baseline from the player being freed during a
+transition). M10 closes it structurally rather than case by case, and a test has to prove it across
+repeated transitions.
+
+## Gameplay logic and visual representation stay separate
+
+The principle that makes M13 possible without a rewrite. A placeholder is replaced by a finished
+model as a **scene-level change** that touches no behaviour.
+
+```
+Player
+├── gameplay controller      <- input, movement, state
+├── combat controller        <- combo, dodge, commitment windows
+├── stats / progression      <- numbers
+├── skills
+├── hitboxes / hurtbox       <- collision shapes, owned by gameplay
+└── visual model             <- the only thing M13 replaces
+```
+
+The same split applies to **Enemy**, **Boss**, **Shadow**, **Weapon** and **NPC**. The project
+already works this way in the small — every combatant keeps its mesh under a `VisualRoot` that the
+controller rotates, while collision shapes and hitboxes hang off the body — and M10 makes it
+explicit and uniform.
+
+Two consequences worth stating, because they are easy to lose:
+
+- **Hitboxes belong to gameplay, not to the model.** A hitbox that is a bone attachment on an
+  artist-authored rig makes combat reach an art decision.
+- **Animation drives presentation, not truth.** Damage windows come from the combat controller's
+  timings, not from an animation's frame events, so retiming an animation cannot silently retune
+  combat.
+
+## Content pipeline (M13+)
+
+Godot is the engine and the runtime. Blender is a content-pipeline tool — it is not where the game
+is assembled.
+
+```
+concept / reference
+      -> 3D asset
+      -> Blender:  modelling, mesh edits, UVs, base materials, rigging, skeleton,
+                   animation prep, retargeting, optimisation
+      -> GLB
+      -> Godot:    gameplay wiring, shaders, VFX, lighting, level composition
+```
+
+**Environments are modular kits, not monolithic levels.** A dungeon kit — wall, floor, arch,
+column, door, stairs, statue, props — is authored in Blender and *assembled in Godot*. This is what
+gives reuse, better performance, simpler edits, more than one dungeon, and eventually
+semi-procedural composition (M18).
+
+**Toolchain.** The pipeline may come to include Godot, Blender, asset libraries, animation
+libraries, Mixamo or equivalents where appropriate, AI-assisted tools where legally and technically
+appropriate, Python scripting for Blender, and import/export automation. Deliberately **no hard
+dependency on any specific service that has not been chosen yet** — the pipeline is described by
+its stages, and a stage can be filled by a different tool without the rest moving.

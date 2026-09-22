@@ -6,9 +6,24 @@
 
 ## Current Milestone
 
-**None — the M0–M9 roadmap is complete.**
+**M10 — Core Refactor & Game Architecture** (Not started)
 
-**Vertical Slice status: RC1.**
+First milestone of the **Core Production Foundation** phase. Nothing of it is implemented; see
+`ROADMAP.md` for its deliverables and exit criteria.
+
+## Where the project is
+
+| Phase | Milestones | State |
+| --- | --- | --- |
+| Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
+| Core Production Foundation | M10–M12 | Not started |
+| Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
+| RPG & Content Production | M16–M19 | Not started |
+| Alpha 1 | M20 | Not started |
+
+**Everything visible in the game is a placeholder.** That is the plan, not a shortfall: definitive
+assets are produced from M13, once combat, hitboxes, skeleton and animation requirements, AI,
+movement, interaction and architecture have stopped moving. `ROADMAP.md` explains why.
 
 M9 closed on M9.2, which measured the game before touching it, changed one number, fixed four
 bugs, and ran the loop end to end three ways. See *Done* below for the milestone record and
@@ -954,46 +969,46 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-No milestone in flight: the M0–M9 roadmap is complete and the slice is at RC1. Two definitions stay
-open by design:
+Nothing in flight. M0–M9 are complete and the slice is at RC1; **M10 has not been started.**
 
-- Game design definition — foundations defined:
-    - third-person camera
-    - WASD camera-relative movement
-    - mouse-controlled aim
-    - combat feel direction
-  Still in progress: dungeon structure and UI. Progression is settled as of M6, loot and
-  equipment as of M7, and the shadow mechanic as of M8 — all recorded in GAME_DESIGN.md.
-- Technical architecture definition — grows as systems land.
+One definition stays deliberately open: the **definitive art direction**, which is decided at M13
+and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —
+camera, movement, aim, combat feel, progression, loot and equipment, the shadow mechanic, the run
+loop — is settled and recorded.
+
+`GAME_DESIGN.md` and `ARCHITECTURE.md` are living documents that grow with each milestone; that is
+their normal condition, not an outstanding task.
 
 ---
 
 ## Todo
 
-- Complete `GAME_DESIGN.md` (systems beyond camera/movement/aim/combat feel)
-- Complete `ARCHITECTURE.md` (fill out as systems land)
-- Manual editor playtest of M1 + M2 + M3 (feel-tuning: numbers only, not blocking)
-- Player-side death reaction (input lockout, visual state) — polish, deferred
-- Playtest-tune M3 enemy parameters — now edited in `resources/enemies/basic_melee_enemy_stats.tres`, not in code
-- M5.2 — Boss Phase 2 and Encounter Polish (HP-threshold phase swap, real boss health UI,
-  encounter pacing, telegraph polish)
-- Boss balance is untuned: 600 HP against 20/25/35 combo damage is 30+ swings, deliberately not
-  adjusted yet
-- Dungeon layout pass: the grey-box is functional, not shaped for play
-- Return the player to the gate rather than the test world's default spawn — needs a real hub
-- Optional M3 polish, non-blocking: additional enemy archetypes as new `EnemyStats` assets,
-  more expressive telegraph
+Carried forward from the prototype phase. Each item names where it now belongs.
+
+- **Manual editor playtest of the whole slice** — feel-tuning by hand, which no headless run can
+  do. Not blocking, and the one kind of validation the automated suites cannot replace.
+- **Playtest-tune the enemy parameters** in `resources/enemies/basic_melee_enemy_stats.tres`. The
+  M9.2 baseline says the numbers are in target on paper; how they feel is a different question.
+- **Player-side death reaction** — input lockout and a visual state. Folds into hit reactions and
+  stagger at **M11**.
+- **Dungeon layout pass.** The grey-box is functional, not shaped for play. Belongs with the
+  modular environment kits at **M15** and the room types at **M18**.
+- **Return the player to the gate on exit**, rather than to the hub's default spawn. Small, and
+  best done alongside the hub build-out at **M15**.
+- **More enemy archetypes.** Now a deliverable of the archetype framework at **M12**, rather than
+  one-off `EnemyStats` assets.
 
 ---
 
 ## Future Work
 
-Out of scope by decision, not by oversight. Nothing here is started.
+Findings and decisions from the prototype phase that were deliberately left alone. Several are now
+**scheduled** by the M10–M20 roadmap; each note says where. Nothing here is started.
 
 - **Enemies never target the summoned shadow.** It can be damaged and killed — the masks allow it
   and the boss does hit it — but normal enemies aim only at the player, so in a measured room the
-  shadow took **0 damage in 60 seconds**. Making enemies choose between the two is target
-  selection, a system M9.2 was explicitly not allowed to add.
+  shadow took **0 damage in 60 seconds**. → **M12**, which makes target selection between the
+  player and the shadow an explicit deliverable.
 - **The shadow's offensive share.** At Lv.1 it is ~19% of the player's peak DPS against an
   indicative ~50%. Measured in practice the gap is much smaller, because the shadow fights
   continuously while the player spends most of a fight repositioning — it clears a two-enemy room
@@ -1002,11 +1017,15 @@ Out of scope by decision, not by oversight. Nothing here is started.
 - **Boss fight length.** 120s measured with a cautious defender. Reaching the top of the
   indicative band would need either far more health or a faster player, and neither is a change
   worth making blind.
-- **A save system.** Progression is in memory for the length of a session, by design since M6.
+- **A save system.** → **M19**. Progression is in memory for the length of a session, by design
+  since M6.
 - **No export preset.** `export_presets.cfg` does not exist and the roadmap never asked for a
   build, so RC1 is a scope statement rather than an artifact. Adding one means choosing a target
   platform, which is the user's call.
-- **INT does nothing yet.** It scales an ability power that no ability reads, as designed in M6.2.
+- **INT does nothing yet.** → **M17**, when skills arrive to read the ability power it scales.
+  As designed in M6.2.
+- **The shadow has no art of its own.** → **M13.7**, as a material and shader pass over the source
+  enemy's mesh rather than a second model. See `GAME_DESIGN.md`, *Shadow visual system*.
 
 ---
 

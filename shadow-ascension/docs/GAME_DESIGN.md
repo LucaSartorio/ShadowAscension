@@ -1,6 +1,11 @@
 # ShadowAscension — Game Design Document
 
-Documents the design decisions taken so far. Only decisions explicitly agreed are recorded here; unresolved mechanics are marked as future / to-be-decided.
+Documents the design decisions taken so far. Only decisions explicitly agreed are recorded here;
+unresolved mechanics are marked as future / to-be-decided, and anything already scheduled names the
+milestone that will decide it.
+
+This file owns **gameplay design**: the loop, progression, shadows, gates, the RPG layer and art
+direction. Milestone order lives in `ROADMAP.md`, system structure in `ARCHITECTURE.md`.
 
 > **Note on numeric values.** All numeric values referenced in this document — movement speed, acceleration, camera FOV, sensitivity, distance, height, attack timings, damage, cooldowns — are **placeholders / initial targets only**. Final values are determined through playtesting and are **not** considered definitive design decisions. Numbers in this document may change without affecting the design intent around them.
 
@@ -245,9 +250,32 @@ distance is refused rather than started and abandoned.
 **Friendly fire, restated:** an order can never be given against the player, and the shadow and the
 player cannot hit each other by any route.
 
-**Not decided**: ranks or evolution, summoning more than one, any cost to summon, whether bosses
-yield shadows, what happens to a collection between sessions, and whether the command mode should
-persist across a full restart.
+### Shadow visual system
+
+**A shadow does not need its own model.** The intended pipeline reuses the mesh of the enemy it was
+taken from and changes what covers it:
+
+```
+enemy mesh + shadow material + shadow shader + emission + VFX + particles + aura
+            ( + eye / material variations where they read )
+```
+
+This is what makes the mechanic scale: any enemy that can be modelled can become a shadow without a
+second art budget, and a new enemy arrives shadow-ready.
+
+The system has to carry, visually: **extraction**, **spawn / summon**, **recall**, **death /
+despawn**, the standing **aura**, **dissolve**, **particles**, **emission**, and eventually
+**variation by shadow rank**. Whether a given shadow also gets bespoke silhouette work is a
+case-by-case decision, not the default.
+
+Built in **M13.7**. Until then the summoned shadow is a translucent, emissive capsule, which is a
+placeholder and reads as one.
+
+**Not decided**: any cost to summon, whether bosses yield shadows, what happens to a collection
+between sessions, and whether the command mode should persist across a full restart.
+
+**Scheduled rather than undecided**: shadow **ranks, evolution, shadow skills and fielding more
+than one** are M17; the **save** that would carry a collection between sessions is M19.
 
 ---
 
@@ -281,19 +309,86 @@ over. Health is restored for the new attempt.
 
 ---
 
-## Future Combat Features
+## Combat features: what exists, what is coming
 
-The following features are **future direction, not yet defined or implemented**. They are listed here so architecture and data schemas can leave room for them, but no numeric values, timing windows, or interactions are committed.
+**Already implemented and playable** (M2, M9): a three-hit **light attack combo**, a **dodge** with
+an i-frame window that can cancel late attack recovery, hitboxes with startup/active/recovery, and
+a damage pipeline from attacker through hitbox and hurtbox to a health component. These are
+described above under *Combat Feel*; they are not future work.
 
-- Light attack
-- Heavy attack
-- Combo
-- Dodge
-- Sprint
-- Lock-on
-- Abilities
-- Ranged abilities
-- Stamina / resource system — under evaluation
-- Parry / block — under evaluation
+**Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
+timing windows or interactions are committed yet:
 
-Nothing in the list above should be treated as a locked design decision. Each feature is defined at the milestone that implements it.
+- heavy attack
+- stamina, and sprint gated by it
+- hit reactions, stagger, knockback
+- critical hits
+- combat feedback: hit stop, camera shake, floating damage
+- target lock, soft targeting, target switching, target indicators
+- a damage model carrying Physical, Magic, Critical, Defense, Armor Penetration, Elemental damage
+  and Status Effects
+
+**Scheduled for M17 — Skills & Shadow Army 2.0**: active, passive, ultimate, movement and shadow
+skills, with cooldown, mana cost, cast, range and area.
+
+**Still under evaluation, not scheduled**: parry and block.
+
+Nothing in the scheduled lists is a locked design decision. Each feature is defined at the
+milestone that implements it.
+
+---
+
+## Art direction
+
+**Not yet decided.** The definitive visual identity is chosen in **M13**, and this section is the
+place it will be written down. What follows is direction, not specification: it is enough to judge
+a reference against, and deliberately not enough to model from.
+
+**The direction is original.** ShadowAscension is not a reproduction of Solo Leveling, and
+"looks like Solo Leveling" is not an acceptable answer to an art question.
+
+Conceptual references:
+
+- **dark fantasy** as the base register;
+- **urban fantasy** — a contemporary world, not a medieval one;
+- a modern atmosphere, with dungeons that **contrast** with the real world rather than continuing it;
+- a **strong visual identity for the shadows**, distinct at a glance from both the player and the
+  enemies they came from;
+- combat that is **legible first and spectacular second** — an effect that hides a telegraph is a
+  bug, not a flourish;
+- cinematic environments that never cost gameplay readability.
+
+When M13 settles it, this section will describe: player visual style, enemy style, boss style,
+shadow style, gate style, dungeon style, hub style, UI style, lighting, colour palette, and the
+VFX language. **Those are deliberately undecided today and are not to be invented in advance.**
+
+### Placeholders are the plan until M12
+
+Everything visible in the game today — capsules, boxes, flat materials — is a placeholder, and that
+is intentional. Definitive assets are produced from **M13**, once combat, hitboxes, skeleton and
+animation requirements, AI, movement, interaction and architecture have stopped moving. See
+`ROADMAP.md`, *Why art waits for M13*.
+
+---
+
+## Controls
+
+The bindings as the InputMap actually defines them. Shadow commands only do anything while a
+shadow is summoned, and their on-screen hints appear with it.
+
+| Action | Binding |
+| --- | --- |
+| Move | `W` `A` `S` `D` |
+| Camera | mouse |
+| Light attack (3-hit combo) | left mouse button |
+| Dodge (i-frames) | `Space` |
+| Interact — gate, exit, loot, remnant | `E` |
+| Character sheet | `C` |
+| Inventory and equipment | `I` |
+| Shadow collection | `O` |
+| Shadow: come back to me | `Q` |
+| Shadow: FOLLOW / AGGRESSIVE | `T` |
+| Shadow: attack what I am aiming at | middle mouse button |
+| Close a menu / release the cursor | `Esc` |
+
+Key rebinding is a settings feature scheduled for **M19**.

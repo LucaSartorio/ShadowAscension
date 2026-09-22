@@ -2,12 +2,17 @@
 
 Action RPG 3D in Godot 4.7 (GDScript). The Godot project lives in `shadow-ascension/`.
 
-**Status: Vertical Slice — RC1.** The M0–M9 roadmap is complete: the slice runs from the main menu
-through a hub, a dungeon and a boss, and back, with progression, loot, equipment and the shadow
-mechanic all live. There is no versioning convention in the project and no export preset; "RC1"
-here is a statement about scope, not a build artifact.
+## Status
 
-## The loop
+**Prototype / Core Foundation (M0–M9) complete — Vertical Slice, RC1.**
+
+The slice runs from the main menu through a hub, a dungeon and a boss, and back, with progression,
+loot, equipment and the shadow mechanic all live. Everything you can see is a **placeholder**:
+definitive art production starts at M13, deliberately, once the systems that consume it stop
+moving.
+
+Next up is **M10 — Core Refactor & Game Architecture**, the first milestone of the Core Production
+Foundation phase that runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub
@@ -15,43 +20,8 @@ Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E
                  +-------------------------------------------------------------------------+
 ```
 
-The dungeon is Start → Combat Room 1 → Combat Room 2 → Boss Room. Doors open as rooms clear.
-Enemies drop loot and leave **remnants** you can try to extract a shadow from; the shadow you
-collect can be summoned, commanded and levelled. Dying restarts the dungeon and costs the run —
-never the character.
-
-## Controls
-
-| Action | Binding |
-| --- | --- |
-| Move | `W` `A` `S` `D` |
-| Camera | mouse |
-| Light attack (3-hit combo) | left mouse button |
-| Dodge (i-frames) | `Space` |
-| Interact — gate, exit, loot, remnant | `E` |
-| Character sheet | `C` |
-| Inventory and equipment | `I` |
-| Shadow collection | `O` |
-| Shadow: come back to me | `Q` |
-| Shadow: FOLLOW / AGGRESSIVE | `T` |
-| Shadow: attack what I am aiming at | middle mouse button |
-| Close a menu / release the cursor | `Esc` |
-
-The shadow bindings only do anything while a shadow is summoned, and the on-screen hints appear
-with it.
-
-## Systems
-
-Player movement and a camera-relative third-person camera · a three-hit light combo with a dodge
-that cancels late recovery and grants i-frames · enemies that perceive, space themselves and
-telegraph · a three-room dungeon with a four-pattern, two-phase boss · XP, levels and five
-allocatable stat points per level (STR/AGI/VIT/INT) · loot with rarities, an inventory and two
-equipment slots · shadow extraction, a collection, summoning, ally AI, shadow levels and a 70/30
-kill split · a run summary · everything above surviving scene changes and a death for the length
-of a session.
-
-Progression is in memory only: there is no save system, so closing the game starts a fresh
-character.
+Progression is in memory only — there is no save system yet (scheduled for M19), so closing the
+game starts a fresh character.
 
 ## Running the project
 
@@ -62,6 +32,8 @@ godot -e --path .                      # open the editor
 godot --path .                         # run the game (starts at the main menu)
 godot --headless --path . --quit       # headless smoke test
 ```
+
+Controls are documented in [`docs/GAME_DESIGN.md`](shadow-ascension/docs/GAME_DESIGN.md).
 
 ## After every `git pull`: rebuild the class cache
 
@@ -121,8 +93,13 @@ Each prints `[PASS]` / `[FAIL]` lines and a `[SUMMARY]`.
 
 ## Documentation
 
-- `CLAUDE.md` — operational rules for working in this repository
-- `shadow-ascension/docs/GAME_DESIGN.md` — confirmed design decisions
-- `shadow-ascension/docs/ARCHITECTURE.md` — systems and how they fit together
-- `shadow-ascension/docs/ROADMAP.md` — milestones and their exit criteria
-- `shadow-ascension/docs/PROGRESS.md` — what is done, in progress and next
+This README is a pointer. Each document owns one thing, and information lives in exactly one of
+them:
+
+| Document | Owns |
+| --- | --- |
+| [`docs/ROADMAP.md`](shadow-ascension/docs/ROADMAP.md) | Milestones, development order, the macro-phases through to Alpha 1 |
+| [`docs/GAME_DESIGN.md`](shadow-ascension/docs/GAME_DESIGN.md) | Gameplay loop, progression, shadows, gates, the RPG layer, controls, art direction |
+| [`docs/ARCHITECTURE.md`](shadow-ascension/docs/ARCHITECTURE.md) | Systems and structure, data-driven architecture, state separation, the content pipeline, gameplay/visual separation |
+| [`docs/PROGRESS.md`](shadow-ascension/docs/PROGRESS.md) | What shipped, what was found closing it, what is next, and Future Work |
+| [`CLAUDE.md`](CLAUDE.md) | Operational rules and conventions for working in this repository |

@@ -1,10 +1,57 @@
 # ShadowAscension — Roadmap
 
-Milestone plan for the Action RPG 3D. Each milestone is scoped, sequential, and closed by explicit exit criteria. No milestone extends the scope of the next.
+Milestone plan for the Action RPG 3D. Each milestone is scoped, sequential, and closed by explicit
+exit criteria. No milestone extends the scope of the next.
 
-**M0–M9 are complete.** The vertical slice is at RC1; see `PROGRESS.md` for the record of each milestone and for the Future Work left deliberately unstarted.
+This file owns **what is built and in what order**. Design decisions live in `GAME_DESIGN.md`,
+systems and their structure in `ARCHITECTURE.md`, and the record of what actually shipped in
+`PROGRESS.md`.
 
 ---
+
+## Macro-phases
+
+| Phase | Milestones | What it is |
+| --- | --- | --- |
+| **Prototype / Core Foundation** | **M0–M9** — *complete* | Building and validating the fundamental mechanics. Closed at the vertical slice, RC1. |
+| **Core Production Foundation** | M10–M12 | Technical consolidation before any definitive art is produced. |
+| **Visual Production** | M13–M15 | Producing ShadowAscension's real visual identity. |
+| **RPG & Content Production** | M16–M19 | Expanding the RPG systems, content, dungeons and progression to production shape. |
+| **Alpha 1** | M20 | The first complete, playable end-to-end version. |
+
+**Definitive art production starts at M13.** Everything up to and including M12 runs on
+placeholders, primitives and temporary assets by design — see *Why art waits for M13* below.
+
+**M20 is Alpha 1.** It introduces no large new systems; it consolidates.
+
+---
+
+## Why art waits for M13
+
+Producing final assets before the systems that consume them are stable means producing them twice.
+Until M12 closes, these are all still moving:
+
+- combat shape and timings;
+- hitbox and hurtbox geometry;
+- skeleton requirements;
+- animation requirements (which states exist, how they blend);
+- enemy AI and its movement;
+- interaction ranges;
+- the architecture the models plug into.
+
+A rig built against M9's capsule combat would be rebuilt against M11's. So placeholders stay until
+the requirements stop moving, and M13 opens with an art direction decision rather than with a model.
+
+This is enforced structurally, not by discipline: **gameplay logic and visual representation are
+kept separate** (see `ARCHITECTURE.md`), so replacing a placeholder with a finished model is a
+scene-level change that does not touch how anything behaves.
+
+---
+
+# Phase 1 — Prototype / Core Foundation (M0–M9, complete)
+
+The record of what each of these shipped, and the bugs found closing them, is in
+`PROGRESS.md`. The milestones below are kept as written.
 
 ## M0 — Project Foundation
 
@@ -216,3 +263,306 @@ Assemble prior milestones into a complete, replayable minimum loop demonstrating
 - All systems (combat, progression, loot, shadows) function end-to-end without desync
 - No blockers, no fatal errors during a full clear
 - Slice is demoable to a first-time viewer without developer narration
+
+---
+
+# Phase 2 — Core Production Foundation (M10–M12)
+
+Consolidating the prototype into something a much larger project can be built on without
+rewriting it. No definitive art is produced in this phase.
+
+---
+
+## M10 — Core Refactor & Game Architecture
+
+**Goal**
+Make the architecture solid enough to carry a far bigger project without the existing systems
+having to be rewritten again and again.
+
+**Deliverables**
+- Refactor of the M0–M9 code; removal of temporary and debug-only code paths
+- Reduced coupling between systems; signals and an event layer where they genuinely help
+- Clear separation of responsibilities, one concern per system
+- The main systems converted to a data-driven shape, with Godot `Resource` assets for anything
+  configurable
+- Data resources formalised: `PlayerData` / `PlayerStats`, `EnemyData`, `SkillData`, `ItemData`,
+  `ShadowData`, `DungeonData`, `GateData`
+- State formally separated into: **Persistent Player State**, **Run State**, **Dungeon State**,
+  **World State**, **Settings**, **Save Data**
+
+**Exit criteria**
+- Persistent data — level, XP, allocated stats, inventory, equipment, shadows — can never be
+  reinitialised by a scene change, and a test proves it across repeated transitions
+- Each of the listed data resources exists and is the single source of truth for its domain
+- The state categories above are distinct, with no system reading or writing outside its own
+- No behavioural regression: the M9 suites still pass unchanged
+
+---
+
+## M11 — Combat System 2.0
+
+**Goal**
+Turn prototype combat into a real action-RPG combat system.
+
+**Deliverables**
+- Light attacks, combos, heavy attack
+- Dodge with i-frames, stamina, sprint
+- Hit reactions, stagger, knockback
+- Critical hits
+- Combat feedback: hit stop, camera shake, floating damage numbers
+- Targeting: target lock, soft targeting, target switching, on-screen target indicators
+- Damage model extended to carry, in prospect: Physical Damage, Magic Damage, Critical Damage,
+  Defense, Armor Penetration, Elemental Damage, Status Effects
+
+**Exit criteria**
+- Every listed action is bound, readable and cancellable where the design says it should be
+- Stamina gates sprint and dodge without making ordinary combat feel rationed
+- The damage model carries each field end to end, even where only some are used yet
+- Targeting never locks onto something dead, unreachable or off-screen
+
+---
+
+## M12 — Enemy AI 2.0 & Boss Framework
+
+**Goal**
+Build a reusable framework for enemies and bosses, rather than one hand-made enemy and one
+hand-made boss.
+
+**Deliverables**
+- Enemy archetypes: Melee, Ranged, Tank, Assassin, Support, Elite
+- A shared state machine: Idle, Patrol, Alert, Chase, Attack, Retreat, Stun, Dead
+- Distance management, avoidance, group combat
+- **Target selection between the player and the shadow** — enemies choose, rather than always
+  aiming at the player (see the M9 finding in `PROGRESS.md`)
+- Attack telegraphs as a first-class, configurable feature
+- Enemy scaling
+- A Boss Framework: multiple phases, special attacks, enrage, ultimate, death sequence, all
+  configurable per boss
+
+**Exit criteria**
+- A new enemy archetype can be produced from data without new AI code
+- A new boss can be configured — phases, attacks, enrage — without new boss code
+- Group combat reads clearly: enemies space themselves and do not synchronise attacks unavoidably
+- **Gameplay is technically stable.** This is the gate before definitive art production begins
+
+---
+
+# Phase 3 — Visual Production (M13–M15)
+
+**Definitive art production starts here.** Godot stays the engine; Blender is a content-pipeline
+tool. The pipeline is documented in `ARCHITECTURE.md`.
+
+---
+
+## M13 — Art Direction & Character Production
+
+**Goal**
+Establish the visual identity and produce the first definitive characters.
+
+**Pipeline**
+
+```
+Concept / Reference -> 3D asset -> Blender (rig, materials, animation prep) -> GLB -> Godot
+                                                                                -> gameplay, shader, VFX, lighting
+```
+
+**Sub-milestones**
+
+| | |
+| --- | --- |
+| M13.1 | Definitive art direction |
+| M13.2 | Blender setup and the Blender/Godot pipeline |
+| M13.3 | First definitive Player |
+| M13.4 | Player rig and animation integration |
+| M13.5 | First definitive weapon |
+| M13.6 | First definitive Enemy |
+| M13.7 | Shadow visual system |
+| M13.8 | Further enemies |
+| M13.9 | First definitive Elite |
+| M13.10 | First definitive Boss |
+| M13.11 | Replacement of the main placeholders |
+| M13.12 | Import optimisation, LOD, cleanup |
+
+**Exit criteria**
+- The art direction is written down and specific enough to judge a new asset against
+- The Blender → GLB → Godot path is repeatable and documented
+- A definitive model replaces a placeholder without any gameplay script changing
+- The shadow visual system turns an existing enemy mesh into a shadow (see `GAME_DESIGN.md`)
+
+---
+
+## M14 — Animation, VFX, Audio & Game Feel
+
+**Goal**
+Bring the M13 assets to life.
+
+**Deliverables**
+- **Animation:** idle, walk/run, sprint, dodge, combo, heavy attack, skill, hit, stun, death,
+  extraction, summon — with `AnimationTree` and blending where it helps
+- **VFX:** weapon trails, hit effects, critical effects, skill effects, shadow effects, gate
+  effects, boss attacks, level-up, loot rarity
+- **Audio buses:** Music, Ambient, Combat, Player, Enemy, UI, Skills
+- **Camera and game feel:** camera collision, combat camera, boss camera, dynamic FOV, camera
+  shake, hit stop
+
+**Exit criteria**
+- Every combat state has an animation and no state pops or T-poses
+- Each audio category is routed through its own bus and is independently mixable
+- Game-feel effects are configurable and can be turned down without breaking readability
+
+---
+
+## M15 — Environment Art, Hub & World Building
+
+**Goal**
+Real environments, and a hub that no longer reads as a prototype.
+
+**Deliverables**
+- Hub areas: Hunter Association, Gate Area, Training Area, Blacksmith, Merchant, Quest NPC,
+  Shadow Management, Storage
+- A generic **NPC Framework**: dialogue, shop, quest, interaction, and room for future reputation
+- Modular environment kits rather than monolithic levels — a dungeon kit of wall, floor, arch,
+  column, door, stairs, statue and props, assembled in Godot
+- The contextual prompt system from M4/M8 kept and extended: interactable things stay obviously
+  interactable
+
+**Exit criteria**
+- The hub is composed from kit modules, not one baked mesh
+- A second dungeon environment can be assembled from the same kit without new art
+- Every interactable in the hub announces itself with a prompt in the established format
+
+---
+
+# Phase 4 — RPG & Content Production (M16–M19)
+
+---
+
+## M16 — RPG Progression System
+
+**Goal**
+Expand progression from the vertical slice's four stats into a real RPG layer.
+
+**Deliverables**
+- Primary stats: Level, XP, Strength, Agility, Vitality, Intelligence, **Perception**
+- Derived stats: HP, Mana, Attack, Defense, Critical Chance, Critical Damage, Movement Speed
+- Character screen
+- Equipment slots: Weapon, Helmet, Chest, Gloves, Boots, Accessory 1, Accessory 2
+- Rarity: Common, Uncommon, Rare, Epic, Legendary, Mythic
+- Inventory: sorting, filters, equip, unequip, compare, sell, drop where allowed
+- Configurable loot tables
+
+**The RPG loop:** Combat → Loot → Upgrade → Higher Gate → Better Loot
+
+**Exit criteria**
+- Every primary stat feeds at least one derived stat, and the character screen shows both
+- All seven equipment slots are wearable and their bonuses stack without duplication
+- Loot tables are data; adding an item needs no code
+
+---
+
+## M17 — Skills & Shadow Army 2.0
+
+**Goal**
+Player skills, and shadows as an army rather than a single companion.
+
+**Deliverables**
+- Skill categories: Active, Passive, Ultimate, Shadow, Movement
+- Skills carry cooldown, mana cost, cast time, range, area, damage, status effects
+- A skill tree split at least into Combat, Movement and Shadow
+- Shadows gain: Shadow Level, **Shadow Rank**, Shadow Stats, Shadow Skills, evolution, and
+  team/formation management
+- Shadow Management UI
+
+**The XP split from M8 is unchanged and stays:** a kill the shadow finishes pays **70% to the
+shadow and 30% to the player**.
+
+**Exit criteria**
+- A skill can be added as data, with no new code for cooldown, cost, range or area
+- More than one shadow can be fielded and managed, and the UI makes the roster legible
+- Shadow rank visibly changes both capability and appearance
+
+---
+
+## M18 — Gates & Dungeon System 2.0
+
+**Goal**
+Many gates and many dungeons, from data.
+
+**Deliverables**
+- **Gate ranks E, D, C, B, A, S**, driving enemies, elites, boss, XP, loot, dungeon complexity
+  and events
+- Dungeon environments: Cave, Ruins, Forest, Temple, Crypt, City/Urban, and room for more
+- Room types: Entrance, Combat, Elite, Treasure, Event, Rest, Secret, Boss
+- Composition: **handcrafted rooms assembled semi-procedurally** — not fully procedural generation
+- Events: ambush, elite spawn, cursed chest, secret room, mini boss, challenge, shadow candidate
+- **Red Gate** as a rare, high-difficulty event
+
+**Exit criteria**
+- A new gate configuration is data, not a new scene
+- Two runs of the same gate rank differ in composition while staying hand-authored in the small
+- Rank demonstrably changes difficulty and reward together
+
+---
+
+## M19 — Quest, Save, Settings & Production Systems
+
+**Goal**
+The systems a shippable build needs and a prototype does not.
+
+**Deliverables**
+- Quest types: Main, Side, Daily, Dungeon, Hunter, Shadow
+- Configurable objectives: Kill, Collect, Reach, Interact, Complete Dungeon, Defeat Boss
+- A story/dialogue framework independent of gameplay logic
+- **The definitive save system**, storing level, XP, stats, inventory, equipment, skills, shadows,
+  quests, gate progression and settings — with autosave, manual save, backup and save versioning
+- Settings: resolution, fullscreen, graphics, FPS limit, audio, mouse sensitivity, controls and
+  key rebinding
+- Profiling of CPU, GPU, physics, AI, navigation, memory and draw calls, with particular attention
+  to **many shadows active at once**
+
+**Exit criteria**
+- A save written by an older version loads, or is migrated, rather than failing
+- Every setting persists and takes effect without a restart where technically possible
+- A stress test with a full shadow army holds frame time within budget
+
+---
+
+# Phase 5 — Alpha 1 (M20)
+
+---
+
+## M20 — Alpha 1
+
+**Goal**
+Consolidate everything into the first complete, playable version. **No large new systems.**
+
+**The Alpha loop**
+
+```
+New Game -> Tutorial -> Hub -> Quest -> Gate -> Dungeon -> Combat -> Loot -> Boss
+         -> Shadow Extraction -> Return to Hub -> Equipment / Skills -> Shadow Upgrade
+         -> Higher Rank Gate
+```
+
+**Indicative content target**
+- 1 complete hub
+- 3 dungeon environments
+- 5–7 gate configurations
+- 8–12 enemy types
+- 3–4 elites
+- 3 bosses
+- 20–30 items
+- 8–12 player skills
+- several recruitable shadows
+- an introductory main quest and some side quests
+
+**Work included**
+Balancing, QA, bug fixing, save/load testing, long-run testing, performance, progression tuning,
+dungeon replay, inventory edge cases, and a shadow-army stress test.
+
+**Target version:** ShadowAscension — Alpha 0.1.0
+
+**Exit criteria**
+- The Alpha loop above is traversable start to finish without developer intervention
+- The content targets are met, or the shortfall is deliberate and recorded
+- No progression loss, no save corruption and no soft-locks across a long session
