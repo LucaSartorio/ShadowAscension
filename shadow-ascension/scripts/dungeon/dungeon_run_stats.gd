@@ -1,7 +1,11 @@
 class_name DungeonRunStats
 extends Node
 
-## What one dungeon run amounted to, for the summary at the end of it.
+## RUN STATE. What one dungeon run amounted to, for the summary at the end of it.
+##
+## The run is the lifetime: this resets by being rebuilt with the dungeon scene,
+## and nothing here survives into the next one. Persistent player data belongs in
+## the PlayerRuntimeState autoload instead.
 ##
 ## Deliberately small and deliberately local: a component on the DungeonController,
 ## counting five things about THIS run and nothing else. It is not an analytics

@@ -1,10 +1,15 @@
 class_name DungeonController
 extends Node3D
 
-## Orchestrates one dungeon run: room order, which room is current, when the run
-## ends — by completion or by the player dying. It owns no combat, no AI, no door
-## mechanics and no player movement; it only listens to the rooms under its Rooms
-## container, in tree order.
+## DUNGEON STATE. Orchestrates one dungeon run: room order, which room is
+## current, when the run ends — by completion or by the player dying. It owns no
+## combat, no AI, no door mechanics and no player movement; it only listens to
+## the rooms under its Rooms container, in tree order.
+##
+## Its state dies with the dungeon scene, which is the whole point: a second run
+## builds a second controller rather than resetting this one. Each RoomController
+## owns its own room's share of it. Nothing here outlives the scene, and nothing
+## that must outlive it may be kept here — that is PlayerRuntimeState's job.
 
 signal dungeon_started
 signal dungeon_completed
@@ -40,7 +45,6 @@ var _current_index: int = 0
 ## second completion or a second restart checks it.
 var _run_ended: bool = false
 var _player: Player = null
-var _transition: SceneTransition = null
 var _status_tween: Tween = null
 var _restart_tween: Tween = null
 var _objective: String = ""
@@ -73,7 +77,7 @@ func _collect_rooms() -> void:
 ## One lookup at startup. The player adds itself to the group in its own _ready,
 ## which runs before this node's.
 func _connect_player() -> void:
-	_player = get_tree().get_first_node_in_group("player") as Player
+	_player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	if _player == null or _player.health_component == null:
 		return
 	_player.health_component.died.connect(_on_player_died)
@@ -168,7 +172,7 @@ func _restart_after_delay() -> void:
 
 
 func _do_restart() -> void:
-	var transition: SceneTransition = _get_transition()
+	var transition: SceneTransition = SceneTransition.find_in(get_tree())
 	if transition != null:
 		transition.reload_current_scene()
 	else:
@@ -204,10 +208,3 @@ func _set_objective(text: String) -> void:
 		return
 	_objective = text
 	objective_changed.emit(text)
-
-
-func _get_transition() -> SceneTransition:
-	if _transition != null and is_instance_valid(_transition):
-		return _transition
-	_transition = get_tree().get_first_node_in_group(SceneTransition.GROUP) as SceneTransition
-	return _transition

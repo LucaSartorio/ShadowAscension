@@ -43,7 +43,7 @@ func press_play() -> void:
 		return
 	_leaving = true
 	play_requested.emit()
-	var transition: SceneTransition = _transition()
+	var transition: SceneTransition = SceneTransition.find_in(get_tree())
 	if transition != null and transition.transition_to_scene(hub_scene):
 		return
 	# No transition in the scene: still go, just without the fade.
@@ -54,9 +54,3 @@ func press_quit() -> void:
 	quit_requested.emit()
 	if quit_on_request:
 		get_tree().quit()
-
-
-func _transition() -> SceneTransition:
-	for node in get_tree().get_nodes_in_group(SceneTransition.GROUP):
-		return node as SceneTransition
-	return null

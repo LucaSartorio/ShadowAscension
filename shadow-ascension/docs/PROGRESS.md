@@ -6,17 +6,18 @@
 
 ## Current Milestone
 
-**M10 — Core Refactor & Game Architecture** (Not started)
+**M10 — Core Refactor & Game Architecture** (In progress — M10.1 complete)
 
-First milestone of the **Core Production Foundation** phase. Nothing of it is implemented; see
-`ROADMAP.md` for its deliverables and exit criteria.
+First milestone of the **Core Production Foundation** phase. M10.1 consolidated the M0–M9
+architecture without changing behaviour; the data-resource set and the formal state split are the
+later steps. See `ROADMAP.md` for the deliverables and exit criteria.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | Not started |
+| Core Production Foundation | M10–M12 | **In progress** — M10.1 complete |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -32,6 +33,61 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M10.1 — Core Architecture Audit & Refactor Foundation** (Completed). A behaviour-preserving
+  consolidation of everything M0–M9 built, taken as read before anything was changed: the real
+  dependency graph between player, dungeon, gate, enemies, shadows, XP, UI and the one autoload,
+  rather than the one the filenames suggest.
+
+  What the audit found, and what was done about it:
+
+    - **The persistent-state access path was duplicated seven times.** `player.gd`,
+      `player_progression.gd`, `player_inventory.gd`, `player_equipment.gd`,
+      `player_shadow_collection.gd`, `player_shadow_summoner.gd` and `player_shadow_commander.gd`
+      each carried an identical private `_runtime_state()` that looked the autoload up by its node
+      name. There is now one accessor, `Player.session(node)`, and the name lives once in
+      `Player.RUNTIME_STATE_NODE` instead of in seven string literals.
+
+      The first attempt went further and used the `PlayerRuntimeState` autoload global directly,
+      dropping the lookup altogether. **That was wrong, and the flow harnesses caught it**: a test
+      entered through `--script` compiles the game's scripts before the autoloads are registered, so
+      the identifier does not resolve and `player.gd` fails to compile, taking the boss, the rooms,
+      the dungeon and the gate with it. `m5_review_run` went from 37 passes to 23 failures — the
+      player swung 5401 times for 0 damage, because there was no compiled player. A probe had shown
+      the global resolving from a `Node` script, but that probe loaded the script *after* the
+      autoloads existed, which is not the harness's order. Reverted, and the constraint is now
+      written down in `ARCHITECTURE.md` and in `player.gd` so it is not rediscovered a third time.
+      Nothing about the scene suites or a normal boot reveals it.
+    - **The scene-transition lookup was duplicated four times**, in `dungeon_controller.gd`,
+      `dungeon_gate.gd`, `dungeon_exit.gd` and `main_menu.gd` — three copies of one caching helper
+      plus a fourth written differently. Now `SceneTransition.find_in(tree)`, matching how
+      `InteractionPrompt` and `RunSummary` already publish their own lookups.
+    - **`"player"` was the last bare group literal**, repeated across 23 call sites while every
+      other group in the project is a typed constant on its owner. Now `Player.GROUP`.
+    - **The state categories had no names in code.** `PlayerRuntimeState` (Persistent Player State),
+      `DungeonRunStats` (Run State) and `DungeonController` (Dungeon State) now say which category
+      they own and what must not be put in them. World State, Settings and Save Data have no owner
+      because nothing needs them yet; none was invented.
+
+  What the audit checked and found already sound, so nothing was touched: one autoload with one
+  responsibility and no scene-specific state in it; enemies, bosses, loot, items and shadows already
+  data-driven through `EnemyStats`, `BossStats`, `BossAttack`, `LootTable`, `ItemData`, `ShadowData`,
+  `ProgressionStats` and `AttackStep`, with no repeated hardcoded tuning left to extract and no
+  collision layers written in code; XP owned by `PlayerProgression` alone, including the 70/30
+  shadow split, with every HUD and menu observing signals rather than holding a copy; rooms and
+  dungeons that only ever walk their own subtree; and no `get_parent().get_parent()` chains or deep
+  absolute paths anywhere. The sibling lookups that do exist are `@export`-with-fallback, which is
+  the project's existing injection pattern. This is why M10.1's diff is small: most of what the
+  audit looks for was not there to find.
+
+  What the audit found and deliberately did **not** change: the player's attack hitbox is parented
+  under `VisualRoot`, which also carries the cosmetic attack and dodge tilts, so moving it to a
+  gameplay anchor — as the enemy already has in `VisualRoot/AttackOrigin` — would change the swept
+  hit volume. That is a behaviour change, so it is M10's next step to decide, not this one's to
+  slip in. Debug output was reviewed and kept: what exists is intentional tooling, not leftovers.
+
+  **1265 assertions across 31 suites, identical to the pre-refactor baseline, zero failures**, plus
+  a cold-cache reimport and a headless boot with no errors, parser errors or warnings.
 
 - **M9 — Vertical Slice** (Completed). Closed on M9.2: balance, QA and release candidate.
 

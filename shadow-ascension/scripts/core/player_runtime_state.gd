@@ -1,11 +1,33 @@
 extends Node
 
-## Player state that must outlive a scene change, and nothing else.
+## PERSISTENT PLAYER STATE. Player state that must outlive a scene change, and
+## nothing else.
 ##
 ## A scene change destroys the player and builds a new one, so everything the
 ## player knew about itself died with it. This autoload holds the handful of
 ## values that belong to the session rather than to any one scene, and hands
-## them back to the next player.
+## them back to the next player. It is the only autoload in the project, and the
+## only place session-scoped player data lives.
+##
+## M10 separates state into categories. This node owns exactly one of them, and
+## the others live with whoever their lifetime belongs to:
+##
+##   Persistent Player State  here                  level, XP, stats, health,
+##                                                  inventory, equipment, shadows
+##   Run State                DungeonRunStats       what one run amounted to;
+##                                                  dies with the run
+##   Dungeon State            DungeonController     rooms, current room, whether
+##                            + RoomController      the run is over; dies with
+##                                                  the dungeon scene
+##   World State              nothing yet           no system needs it; do not
+##                                                  invent one here
+##   Settings                 nothing yet           belongs to a settings service
+##                                                  (M19), never to this node
+##   Save Data                nothing yet           M19; see below
+##
+## Nothing that belongs to one run, one dungeon or one scene may be added here,
+## however convenient the global access is. The test for it is the lifetime: if
+## a new dungeon should start it over, it is not persistent player state.
 ##
 ## It is NOT a save system: nothing here touches the disk, and closing the game
 ## starts a fresh session. Permanent saving is its own milestone.

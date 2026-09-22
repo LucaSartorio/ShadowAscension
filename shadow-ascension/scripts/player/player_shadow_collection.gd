@@ -156,4 +156,4 @@ func _sync() -> void:
 
 
 func _runtime_state() -> Node:
-	return get_tree().root.get_node_or_null("PlayerRuntimeState")
+	return Player.session(self)

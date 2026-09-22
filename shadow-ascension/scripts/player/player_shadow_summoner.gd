@@ -204,4 +204,4 @@ func _on_shadow_removed(shadow: ShadowInstance) -> void:
 
 
 func _runtime_state() -> Node:
-	return get_tree().root.get_node_or_null("PlayerRuntimeState")
+	return Player.session(self)

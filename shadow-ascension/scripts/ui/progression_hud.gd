@@ -31,7 +31,7 @@ var _banner_tween: Tween = null
 func _ready() -> void:
 	add_to_group(GROUP)
 	banner.visible = false
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	if player == null or player.progression == null:
 		root.visible = false
 		return

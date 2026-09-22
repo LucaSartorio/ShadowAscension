@@ -248,7 +248,7 @@ func _stat_dictionary() -> Dictionary:
 
 
 func _runtime_state() -> Node:
-	return get_tree().root.get_node_or_null("PlayerRuntimeState")
+	return Player.session(self)
 
 
 # --- stats and derived values -------------------------------------------------

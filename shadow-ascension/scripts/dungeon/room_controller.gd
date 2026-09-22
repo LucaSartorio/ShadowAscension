@@ -86,7 +86,7 @@ func _on_entry_body_entered(body: Node3D) -> void:
 	# restarts, so backtracking is safe.
 	if _state != RoomState.IDLE:
 		return
-	if not body.is_in_group("player"):
+	if not body.is_in_group(Player.GROUP):
 		return
 	_start()
 

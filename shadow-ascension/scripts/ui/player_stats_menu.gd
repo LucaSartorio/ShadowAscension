@@ -47,7 +47,7 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	add_to_group(PAUSE_MENU_GROUP)
 	panel_root.visible = false
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	if player == null or player.progression == null:
 		hint.visible = false
 		return
@@ -237,7 +237,7 @@ func _refresh() -> void:
 ## Read live off the player, so the panel shows what the game is actually using
 ## rather than a second copy of the formulas.
 func _derived_text() -> String:
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	var move: float = player.effective_movement_speed if player != null else 0.0
 	var dodge: float = player.effective_dodge_speed if player != null else 0.0
 	var hp: float = player.health_component.max_health if player != null else 0.0

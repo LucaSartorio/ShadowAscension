@@ -379,7 +379,7 @@ func _physics_process(delta: float) -> void:
 func _get_player() -> Player:
 	if _player != null and is_instance_valid(_player):
 		return _player
-	_player = get_tree().get_first_node_in_group("player") as Player
+	_player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	return _player
 
 

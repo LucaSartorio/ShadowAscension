@@ -275,6 +275,12 @@ rewriting it. No definitive art is produced in this phase.
 
 ## M10 — Core Refactor & Game Architecture
 
+**Status:** in progress. **M10.1 — Core Architecture Audit & Refactor Foundation** is complete: the
+audit, the single access path to persistent state, named owners for the state categories that exist,
+and the removal of the duplicated cross-system lookups. No behaviour changed and no gameplay feature
+was added. The deliverables below that remain — the full data-resource set and the formal state
+split — belong to the later steps of M10.
+
 **Goal**
 Make the architecture solid enough to carry a far bigger project without the existing systems
 having to be rewritten again and again.

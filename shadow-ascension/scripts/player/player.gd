@@ -1,6 +1,15 @@
 class_name Player
 extends CharacterBody3D
 
+## Every other group in the project is a typed constant on the class that owns
+## it; this one was the last bare literal, repeated across 23 call sites.
+const GROUP: StringName = &"player"
+
+## The autoload node holding this character's persistent state. A String, not a
+## StringName: it is passed where a NodePath is expected, and only String
+## converts to one implicitly.
+const RUNTIME_STATE_NODE: String = "PlayerRuntimeState"
+
 enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 
 ## Base values. AGI scales these into the `effective_*` fields below; the bases
@@ -58,7 +67,7 @@ var _dodge_iframes_active: bool = false
 
 
 func _ready() -> void:
-	add_to_group("player")
+	add_to_group(GROUP)
 	attack_hitbox.source = self
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
 	base_max_health = health_component.max_health
@@ -73,6 +82,18 @@ func _ready() -> void:
 	_restore_health()
 	health_component.health_changed.connect(_on_health_changed)
 	health_component.died.connect(_on_player_died)
+
+
+## The session's persistent player state, or null where there is none.
+##
+## Looked up by node name rather than through the `PlayerRuntimeState` autoload
+## global, and that is not a style choice: a flow test entered through
+## `--script` compiles the game's scripts BEFORE the autoloads are registered,
+## so the global identifier does not resolve yet and every script that named it
+## would fail to compile. The name lives here, once, instead of in each of the
+## seven player scripts that need the session.
+static func session(from: Node) -> Node:
+	return from.get_tree().root.get_node_or_null(RUNTIME_STATE_NODE)
 
 
 ## Health carries across a scene change, so walking through a gate is not a free
@@ -111,7 +132,7 @@ func _on_player_died() -> void:
 
 
 func _runtime_state() -> Node:
-	return get_tree().root.get_node_or_null("PlayerRuntimeState")
+	return session(self)
 
 
 ## Recomputes every stat-driven value from its base. Called once at startup and

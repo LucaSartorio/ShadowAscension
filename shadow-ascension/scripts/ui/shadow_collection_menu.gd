@@ -43,7 +43,7 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	add_to_group(PAUSE_MENU_GROUP)
 	panel_root.visible = false
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	if player == null or player.shadows == null:
 		hint.visible = false
 		return

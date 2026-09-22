@@ -42,7 +42,7 @@ func _ready() -> void:
 
 
 func _subscribe() -> void:
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	if player == null or player.health_component == null:
 		root.visible = false
 		return

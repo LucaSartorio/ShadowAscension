@@ -106,7 +106,9 @@ Rules:
   - `scenes/core/` — infrastructure scenes (root controllers, camera rigs, spawners)
 - Composed scenes reference sub-scenes by instancing. Sub-scenes are authored to be reusable — no hard assumptions about their parent.
 - Root node of each scene is named in `PascalCase` and matches the file's intent.
-- Groups (`add_to_group`) are used for tagging (e.g. `"enemy"`, `"player"`), never as a replacement for typed references.
+- Groups (`add_to_group`) are used for tagging, never as a replacement for typed references.
+- **A group name is a typed constant on the class that owns the group**, never a bare literal at the call site: `Player.GROUP`, `DungeonBoss.GROUP`, `SceneTransition.GROUP`, `InteractionPrompt.GROUP`, `RunSummary.GROUP`. A mistyped constant is a parse error; a mistyped string is a lookup that silently finds nothing. (M10.1 closed the last exception, `"player"`, which had been repeated across 23 call sites.)
+- **Finding a node outside your own subtree goes through a static helper on the owner**: `SceneTransition.find_in(tree)`, `InteractionPrompt.raise()` / `.clear()`, `RunSummary.dismiss_open(tree)`. The group name and the cast then live in one place instead of in a private helper copied into every caller.
 
 Scene lifecycle expectations:
 - `_ready()` performs setup and signal wiring.
@@ -335,7 +337,27 @@ on the next physics frame.
 
 ## PlayerRuntimeState (autoload)
 
-`scripts/core/player_runtime_state.gd`, registered as the autoload `PlayerRuntimeState`.
+`scripts/core/player_runtime_state.gd`, registered as the autoload `PlayerRuntimeState`. It is the
+**Persistent Player State** of the M10 category table below, and the only one of the six that has an
+owner in code today.
+
+**Reached by node name, from one place.** `Player.session(node)` is the single accessor; the seven
+player scripts that need the session call it through their own one-line `_runtime_state()`, and the
+autoload's node name lives once, in `Player.RUNTIME_STATE_NODE`.
+
+**It is deliberately *not* reached through the `PlayerRuntimeState` autoload global**, and that is a
+constraint rather than a preference. A flow test entered through `--script` compiles the game's
+scripts *before* the autoloads are registered, so the global identifier does not resolve and every
+script naming it fails to compile — `player.gd` first, taking the boss, the rooms, the dungeon and
+the gate down with it. Scene-based suites and a normal boot do not show this, because there the
+autoloads come up first. M10.1 tried the global, the flow harnesses rejected it, and the lookup by
+name went back. Anything that reaches the session must go through `Player.session()`.
+
+One consequence is worth stating: the accessor returns an untyped `Node`, so nothing about the
+session contract is checked at parse time. Fixing that means giving the script a `class_name`, which
+cannot be `PlayerRuntimeState` — Godot refuses a class that hides an autoload singleton — so it
+means a second name for one concept. That is a decision for the later steps of M10, where the state
+categories are formalised, not a change to smuggle into an audit.
 
 **Global runtime session data — not a save system.** Nothing here touches the disk. Closing the
 game starts a fresh session at level 1. Permanent saving is a separate milestone and will not live
@@ -615,18 +637,23 @@ getters, instance state lives in components, and `.tres` is preferred over `.res
 
 ## State separation (M10)
 
-Today there is one autoload, `PlayerRuntimeState`, holding everything that has to survive a scene
-change. That works for a slice and will not survive a save system. M10 separates it into six
-categories with no system reading or writing outside its own:
+M10 separates state into six categories, with no system reading or writing outside its own. M10.1
+named them and gave each existing one a single owner in code; the three with no owner are not built,
+and inventing a home for them before a system needs one is exactly the premature abstraction M10
+avoids.
 
-| Category | What it holds | Lifetime |
-| --- | --- | --- |
-| **Persistent Player State** | level, XP, allocated stats, inventory, equipment, shadows, skills | the character |
-| **Run State** | the current dungeon run: tally, temporary buffs, what the run has consumed | one run |
-| **Dungeon State** | the current dungeon instance: rooms cleared, doors, spawned contents | one dungeon |
-| **World State** | hub state, gate availability, world-level flags | the world |
-| **Settings** | resolution, audio, controls, graphics | the installation |
-| **Save Data** | the serialised form of the above that is written to disk | across sessions |
+| Category | What it holds | Lifetime | Owner today |
+| --- | --- | --- | --- |
+| **Persistent Player State** | level, XP, allocated stats, health, inventory, equipment, shadows, skills | the character | `PlayerRuntimeState` (autoload) |
+| **Run State** | the current dungeon run: tally, temporary buffs, what the run has consumed | one run | `DungeonRunStats` |
+| **Dungeon State** | the current dungeon instance: rooms cleared, doors, spawned contents | one dungeon | `DungeonController` + `RoomController` |
+| **World State** | hub state, gate availability, world-level flags | the world | *nothing needs it yet* |
+| **Settings** | resolution, audio, controls, graphics | the installation | *not built — M19* |
+| **Save Data** | the serialised form of the above that is written to disk | across sessions | *not built — M19* |
+
+The categories are stated in each owner's own header, so the rule is read where the code is written.
+The test for what belongs where is lifetime: if a new dungeon should start a value over, it is not
+Persistent Player State, however convenient the autoload would be.
 
 **The hard requirement:** persistent data must never be reinitialised by a scene change. That class
 of bug has been hit and fixed twice already — once in M6.3 (level and XP resetting through a gate)

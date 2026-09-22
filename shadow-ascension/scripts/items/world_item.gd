@@ -84,14 +84,14 @@ func _process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if _claimed or not body.is_in_group("player"):
+	if _claimed or not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = true
 	InteractionPrompt.raise(self, interact_key_label, get_prompt_text(), null)
 
 
 func _on_body_exited(body: Node3D) -> void:
-	if not body.is_in_group("player"):
+	if not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = false
 	InteractionPrompt.clear(self, null)
@@ -137,5 +137,5 @@ func pick_up() -> bool:
 
 
 func _find_inventory() -> PlayerInventory:
-	var player: Player = get_tree().get_first_node_in_group("player") as Player
+	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	return player.inventory if player != null else null

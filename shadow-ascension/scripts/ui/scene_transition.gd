@@ -37,6 +37,14 @@ func _ready() -> void:
 		fade_rect.visible = false
 
 
+## The transition belonging to `tree`, or null when the scene has none: a bare
+## test bench, or a scene that hands over without a fade. The group name and the
+## cast live here, with the class that owns them, instead of being copied into a
+## private helper in every caller.
+static func find_in(tree: SceneTree) -> SceneTransition:
+	return tree.get_first_node_in_group(GROUP) as SceneTransition
+
+
 ## True while a fade is running. Callers must refuse to act while it is.
 func is_busy() -> bool:
 	return _busy

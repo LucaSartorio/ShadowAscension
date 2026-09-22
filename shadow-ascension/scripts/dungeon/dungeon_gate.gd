@@ -30,7 +30,6 @@ signal gate_activated(target_scene: String)
 
 var _player_in_range: bool = false
 var _used: bool = false
-var _transition: SceneTransition = null
 
 
 func _ready() -> void:
@@ -64,14 +63,14 @@ func is_player_in_range() -> bool:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if _used or not body.is_in_group("player"):
+	if _used or not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = true
 	InteractionPrompt.raise(self, interact_key_label, prompt_text, prompt)
 
 
 func _on_body_exited(body: Node3D) -> void:
-	if not body.is_in_group("player"):
+	if not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = false
 	InteractionPrompt.clear(self, prompt)
@@ -89,7 +88,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func activate() -> bool:
 	if _used or not _player_in_range:
 		return false
-	var transition: SceneTransition = _get_transition()
+	var transition: SceneTransition = SceneTransition.find_in(get_tree())
 	if transition != null and transition.is_busy():
 		return false
 	_used = true
@@ -102,10 +101,3 @@ func activate() -> bool:
 	else:
 		get_tree().change_scene_to_file(target_scene)
 	return true
-
-
-func _get_transition() -> SceneTransition:
-	if _transition != null and is_instance_valid(_transition):
-		return _transition
-	_transition = get_tree().get_first_node_in_group(SceneTransition.GROUP) as SceneTransition
-	return _transition
