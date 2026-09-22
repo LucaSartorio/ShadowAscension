@@ -284,7 +284,9 @@ than one** are M17; the **save** that would carry a collection between sessions 
 Confirmed in M9.1. Only what is listed here is decided.
 
 **The game opens on a menu**, not in a world: title, GIOCA, ESCI. There is no settings screen, no
-load, and no character creation in the slice.
+load, and no character creation in the slice. GIOCA is a New Game: it always starts a fresh
+character. The character then lasts for the session — every gate, dungeon, death and return to the
+hub keeps it — and ends when the game is closed, since there is no save until M19.
 
 **The hub is where a run starts and ends.** It is a walled courtyard with a lit path to the gate and
 a training corner with dummies. It states one objective — *Entra nel Gate* — and it is not a combat

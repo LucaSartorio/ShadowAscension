@@ -10,10 +10,15 @@ extends Node
 ## ever hears about are the ones the player actually hit — so nothing here
 ## searches the tree and no controller has to wire enemies to the player.
 ##
-## Progression survives a scene change: the first player of the session hands its
-## starting values to the PlayerRuntimeState autoload, and every later player
-## restores from it. That autoload stores data only — every formula, including
-## the XP curve and each derived stat, stays here.
+## Progression survives a scene change because none of it lives here. The level,
+## XP, points and stats are a PlayerProgressionData held by the PlayerRuntimeState
+## autoload; this node attaches to that one object on _ready() and reads and
+## writes it in place. A new player scene attaches to the same object again, so
+## there is no restore step to forget and no copy to fall out of step.
+##
+## What does live here is everything that DOES something with those numbers: the
+## XP curve, the level-up loop, the derived stats, and the signals the UI listens
+## to. The data object is storage; this is its only writer.
 
 signal xp_changed(current_xp: int, required_xp: int)
 signal level_changed(level: int)
@@ -60,17 +65,34 @@ var stat_points_per_level: int = 5
 var base_xp_requirement: int = 100
 var xp_growth_factor: float = 1.25
 
-var current_level: int = 1
-var current_xp: int = 0
-var available_stat_points: int = 0
+## Where the character has got to. These are views onto the session's
+## PlayerProgressionData, not copies of it: reading one reads the session, and
+## writing one writes the session. Nothing needs syncing, and nothing is lost
+## when this node is freed.
+var current_level: int:
+	get: return _data.current_level
+	set(value): _data.current_level = value
+var current_xp: int:
+	get: return _data.current_xp
+	set(value): _data.current_xp = value
+var available_stat_points: int:
+	get: return _data.available_stat_points
+	set(value): _data.available_stat_points = value
 
-## The single source of truth for the player's ALLOCATED stats. Equipment adds
-## on top when an effective value is asked for; these are never written to, so
-## taking a piece off can never leave a stat inflated.
-var strength: int = 10
-var agility: int = 10
-var vitality: int = 10
-var intelligence: int = 10
+## ALLOCATED stats. Equipment adds on top when an effective value is asked for;
+## it never writes these, so taking a piece off can never leave a stat inflated.
+var strength: int:
+	get: return _data.strength
+	set(value): _data.strength = value
+var agility: int:
+	get: return _data.agility
+	set(value): _data.agility = value
+var vitality: int:
+	get: return _data.vitality
+	set(value): _data.vitality = value
+var intelligence: int:
+	get: return _data.intelligence
+	set(value): _data.intelligence = value
 
 # Derived-stat tuning, seeded from `stats`.
 var neutral_stat_value: int = 10
@@ -80,14 +102,18 @@ var dodge_speed_per_point: float = 0.005
 var health_per_vitality_point: float = 8.0
 var ability_power_per_point: float = 0.03
 
+## The session's character. A private stand-in until _ready() attaches to the
+## real one, so nothing read before then can fail; a node with no session at all
+## (a bare bench outside the project) keeps a private character of its own.
+var _data: PlayerProgressionData = PlayerProgressionData.new()
 ## Combatants already being watched, so one enemy is never subscribed twice.
 var _tracked: Dictionary = {}
 var _shadows: PlayerShadowCollection = null
 
 
 func _ready() -> void:
-	_apply_stats()
-	_restore_or_capture()
+	_apply_tuning()
+	_attach_to_session()
 	if attack_hitbox == null:
 		# Resolved here rather than read off the player's own @onready var: this
 		# node is a child, so its _ready() runs first and that var is still null.
@@ -105,19 +131,18 @@ func _ready() -> void:
 	attack_hitbox.hit_landed.connect(_on_hit_landed)
 
 
-func _apply_stats() -> void:
+## Tuning only: the curve, what a level pays, and the derived-stat rates. The
+## starting level and stat block are NOT applied here — doing that on every
+## _ready() is exactly how a scene change used to put a character back to level
+## 1. They are applied once per session, by PlayerProgressionData.from_stats().
+func _apply_tuning() -> void:
 	if stats == null:
 		push_warning("%s has no ProgressionStats assigned; falling back to script defaults." % name)
 		return
-	current_level = stats.starting_level
 	max_level = stats.max_level
 	stat_points_per_level = stats.stat_points_per_level
 	base_xp_requirement = stats.base_xp_requirement
 	xp_growth_factor = stats.xp_growth_factor
-	strength = stats.strength
-	agility = stats.agility
-	vitality = stats.vitality
-	intelligence = stats.intelligence
 	neutral_stat_value = stats.neutral_stat_value
 	melee_damage_per_point = stats.melee_damage_per_point
 	movement_speed_per_point = stats.movement_speed_per_point
@@ -185,7 +210,6 @@ func add_xp(amount: int) -> void:
 		# Nothing left to earn towards, so the bar reads full rather than drifting.
 		current_xp = 0
 
-	_sync_to_runtime_state()
 	xp_changed.emit(current_xp, get_xp_to_next_level())
 	if levels_gained > 0:
 		level_changed.emit(current_level)
@@ -208,43 +232,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		debug_add_xp(debug_xp_amount)
 
 
-# --- session persistence ------------------------------------------------------
+# --- session ------------------------------------------------------------------
 
-## The first player of a session defines the starting point; every player after
-## it picks up where the last one left off. Only the raw values travel — derived
-## stats are always recomputed here, never restored.
-func _restore_or_capture() -> void:
+## The first player of a session creates the character from `stats`; every player
+## after it attaches to that same character. Derived stats are never stored, so
+## there is nothing else to bring across: they are recomputed from the data.
+func _attach_to_session() -> void:
 	var state: Node = _runtime_state()
 	if state == null:
+		_data = PlayerProgressionData.from_stats(stats)
 		return
-	if not state.initialized:
-		state.capture_initial(current_level, current_xp, available_stat_points, _stat_dictionary())
-		return
-	current_level = state.current_level
-	current_xp = state.current_xp
-	available_stat_points = state.available_stat_points
-	strength = state.strength
-	agility = state.agility
-	vitality = state.vitality
-	intelligence = state.intelligence
-
-
-## One place writes progress back, so a new field does not have to be remembered
-## in every callback that can change it.
-func _sync_to_runtime_state() -> void:
-	var state: Node = _runtime_state()
-	if state == null:
-		return
-	state.sync_progression(current_level, current_xp, available_stat_points, _stat_dictionary())
-
-
-func _stat_dictionary() -> Dictionary:
-	return {
-		"strength": strength,
-		"agility": agility,
-		"vitality": vitality,
-		"intelligence": intelligence,
-	}
+	_data = state.get_or_create_progression(stats)
 
 
 func _runtime_state() -> Node:
@@ -324,7 +322,6 @@ func allocate_stat(stat: Stat) -> bool:
 		_:
 			return false
 	available_stat_points -= 1
-	_sync_to_runtime_state()
 	stat_points_changed.emit(available_stat_points)
 	stats_changed.emit()
 	return true

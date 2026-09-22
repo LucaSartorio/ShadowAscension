@@ -29,6 +29,17 @@ extends Node
 ## however convenient the global access is. The test for it is the lifetime: if
 ## a new dungeon should start it over, it is not persistent player state.
 ##
+## Lifecycle. The data lives for the SESSION, which a New Game starts:
+##
+##   New Game       reset_runtime_state(), called from the main menu's GIOCA. The
+##                  only place the session goes back to nothing.
+##   first player   get_or_create_progression() builds the character from the
+##                  player's ProgressionStats — the only first initialization.
+##   scene change   the player and everything in the scene are freed and built
+##                  again. Nothing here is touched: the new player attaches to
+##                  the same progression object and the same shadow array.
+##   death          reset_health_to_max(). Progress is untouched.
+##
 ## It is NOT a save system: nothing here touches the disk, and closing the game
 ## starts a fresh session. Permanent saving is its own milestone.
 ##
@@ -36,33 +47,22 @@ extends Node
 ## PlayerProgression still computes XP, levels and every derived stat, and this
 ## node never duplicates one of those formulas.
 
-## Emitted when the session is wiped back to its starting values. Ordinary
-## progress changes are already reported by PlayerProgression, and are not
-## repeated here.
-signal runtime_state_reset
-
-const DEFAULT_LEVEL: int = 1
 ## AGGRESSIVE, matching BasicMeleeShadow.CommandMode. A plain int so this
 ## autoload keeps no dependency on the shadow scene.
 const DEFAULT_SHADOW_MODE: int = 1
-const DEFAULT_STAT: int = 10
 
-## False until the first player of the session hands over its starting values.
-var initialized: bool = false
+## The character's level, XP, points and allocated stats. Null until the first
+## player of the session asks for it, and null again after a New Game. Every
+## PlayerProgression holds a reference to this object, never a copy of it.
+var progression: PlayerProgressionData = null
 
-var current_level: int = DEFAULT_LEVEL
-var current_xp: int = 0
-var available_stat_points: int = 0
-
-var strength: int = DEFAULT_STAT
-var agility: int = DEFAULT_STAT
-var vitality: int = DEFAULT_STAT
-var intelligence: int = DEFAULT_STAT
-
-## Carried so a scene change is not a free heal. Max health is deliberately NOT
-## stored: it is recomputed from the player's own base and VIT, so raising VIT
-## and reloading can never desync the two. Negative means "start at full", which
-## is both the fresh-session state and what a death leaves behind.
+## Current health only, carried so a scene change is not a free heal. The
+## HealthComponent on the player owns current health while a scene runs; this is
+## the value handed from one player to the next, written on every change.
+## Max health is deliberately NOT stored: it is recomputed from the player's own
+## base and VIT, so raising VIT and reloading can never desync the two. Negative
+## means "start at full", which is both the fresh-session state and what a death
+## leaves behind.
 var current_health: float = -1.0
 
 ## What the player is carrying: id -> { "item": ItemData, "quantity": int }.
@@ -76,12 +76,14 @@ var inventory: Dictionary = {}
 ## two can never drift apart.
 var equipment: Dictionary = {}
 
-## Extracted shadows, as [{ instance_id, shadow_data, level, current_xp }]. Kept
-## flat and dumb: the collection rebuilds its ShadowInstance objects from these.
+## Every extracted shadow: the ShadowInstance objects themselves, which carry
+## each shadow's own level and XP. The collection on every player holds this same
+## array rather than a copy, so a level a shadow earns is already here the moment
+## it is earned, and a summoned shadow is only a view onto one of these.
+var shadows: Array[ShadowInstance] = []
 ## The counter lives here too, because a new scene builds a new collection and
 ## would otherwise start numbering from one again and collide with what is
 ## already held.
-var shadows: Array[Dictionary] = []
 var next_shadow_index: int = 1
 
 ## Which shadow was out when the scene changed, so the next one re-summons it.
@@ -94,33 +96,14 @@ var active_shadow_instance_id: StringName = &""
 var active_shadow_mode: int = DEFAULT_SHADOW_MODE
 
 
-## Called by the first player of the session, with the values its own resources
-## gave it. Later players restore instead. Health is deliberately not a parameter:
-## progression does not know it, and the player reports its own.
-func capture_initial(level: int, xp: int, points: int, stats: Dictionary) -> void:
-	if initialized:
-		return
-	current_level = level
-	current_xp = xp
-	available_stat_points = points
-	strength = stats.get("strength", DEFAULT_STAT)
-	agility = stats.get("agility", DEFAULT_STAT)
-	vitality = stats.get("vitality", DEFAULT_STAT)
-	intelligence = stats.get("intelligence", DEFAULT_STAT)
-	initialized = true
-
-
-## The one place progress is written back. PlayerProgression calls this whenever
-## anything it owns changes, so no callback keeps its own copy of this list.
-func sync_progression(level: int, xp: int, points: int, stats: Dictionary) -> void:
-	current_level = level
-	current_xp = xp
-	available_stat_points = points
-	strength = stats.get("strength", strength)
-	agility = stats.get("agility", agility)
-	vitality = stats.get("vitality", vitality)
-	intelligence = stats.get("intelligence", intelligence)
-	initialized = true
+## The session's character, built from `stats` the first time any player asks
+## and handed back unchanged to every player after that. This is the line between
+## a first initialization and a scene merely coming up: `stats` is read once per
+## session, and a player entering a scene can never re-apply its starting values.
+func get_or_create_progression(stats: ProgressionStats) -> PlayerProgressionData:
+	if progression == null:
+		progression = PlayerProgressionData.from_stats(stats)
+	return progression
 
 
 func sync_health(value: float) -> void:
@@ -144,11 +127,6 @@ func get_equipment_copy() -> Dictionary:
 	return equipment.duplicate()
 
 
-func sync_shadows(rows: Array[Dictionary]) -> void:
-	shadows = rows.duplicate()
-
-
-## Hands out the next number and moves on, so no two extractions can share one.
 ## Stored rather than derived: a shadow that died is no longer active, and the
 ## collection alone cannot tell that apart from one that was never summoned.
 func sync_active_shadow(instance_id: StringName) -> void:
@@ -164,6 +142,7 @@ func sync_active_shadow_mode(mode: int) -> void:
 	active_shadow_mode = mode
 
 
+## Hands out the next number and moves on, so no two extractions can share one.
 func take_next_shadow_index() -> int:
 	var index: int = next_shadow_index
 	next_shadow_index += 1
@@ -189,22 +168,20 @@ func wants_full_health() -> bool:
 	return current_health < 0.0
 
 
-## A fresh session. Not part of any scene change — for debug, tests, and a
-## future New Game.
+## A New Game: the one place the whole session goes back to nothing. The main
+## menu calls it when a run is started, and tests call it to start clean. It is
+## never part of a scene change.
+##
+## The progression and the shadow array are REPLACED rather than emptied. A
+## scene still holding the old ones — a player on its way out — keeps writing to
+## objects nobody reads any more, and can never leak into the new session.
 func reset_runtime_state() -> void:
-	initialized = false
-	current_level = DEFAULT_LEVEL
-	current_xp = 0
-	available_stat_points = 0
-	strength = DEFAULT_STAT
-	agility = DEFAULT_STAT
-	vitality = DEFAULT_STAT
-	intelligence = DEFAULT_STAT
+	progression = null
 	current_health = -1.0
 	inventory.clear()
 	equipment.clear()
-	shadows.clear()
+	var fresh_shadows: Array[ShadowInstance] = []
+	shadows = fresh_shadows
 	next_shadow_index = 1
 	active_shadow_instance_id = &""
 	active_shadow_mode = DEFAULT_SHADOW_MODE
-	runtime_state_reset.emit()

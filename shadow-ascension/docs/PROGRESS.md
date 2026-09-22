@@ -6,18 +6,19 @@
 
 ## Current Milestone
 
-**M10 — Core Refactor & Game Architecture** (In progress — M10.1 complete)
+**M10 — Core Refactor & Game Architecture** (In progress — M10.1 and M10.2 complete)
 
 First milestone of the **Core Production Foundation** phase. M10.1 consolidated the M0–M9
-architecture without changing behaviour; the data-resource set and the formal state split are the
-later steps. See `ROADMAP.md` for the deliverables and exit criteria.
+architecture without changing behaviour; M10.2 gave the character's persistent state a single
+source of truth. The data-resource set and the rest of the formal state split are the later steps.
+See `ROADMAP.md` for the deliverables and exit criteria.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10.1 complete |
+| Core Production Foundation | M10–M12 | **In progress** — M10.1 and M10.2 complete |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -33,6 +34,69 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M10.2 — Persistent State & Data Ownership** (Completed). Level, XP, points, stats and every
+  shadow's progression now have one source of truth each, held by the session; the player scene only
+  views them. Traced from the code, not the docs: the session was already surviving scene changes
+  correctly — the M6.3 fix held — but it did so by keeping **two copies of everything** and
+  reconciling them by hand.
+
+  What the trace found:
+
+    - **Level, XP, points and stats existed twice.** `PlayerProgression` held its own fields and
+      `PlayerRuntimeState` held a second set; the component wrote back through
+      `_sync_to_runtime_state()` after each change and read back through `_restore_or_capture()` on
+      each `_ready()`. Every new write path had to remember the sync.
+    - **`_ready()` re-applied the starting values every time a player came up** — level, STR, AGI,
+      VIT, INT from `ProgressionStats` — and relied on the restore right after to overwrite them.
+      That is the exact shape of the M6.3 bug; it was only correct because the two calls were
+      adjacent.
+    - **Every shadow existed twice.** The collection rebuilt fresh `ShadowInstance` objects from
+      flat rows on every scene and flattened them back after every extraction, removal and XP award.
+    - **GIOCA did not start a new game.** Nothing reset the session except the tests. It was
+      invisible only because nothing leads back to the menu, so the session is always fresh when
+      GIOCA can be pressed; the first route back would have carried the old character into the new
+      game. A latent defect rather than an observed bug, fixed as part of centralising the reset.
+
+  What changed:
+
+    - **`PlayerProgressionData`** (new, `scripts/player/`) — plain data: level, XP, points, the
+      allocated stats. One per session, held by `PlayerRuntimeState.progression`, created once by
+      `get_or_create_progression(stats)` — the only place starting values are applied.
+      `PlayerProgression` attaches to it on `_ready()`; its `current_level`, `current_xp`, stat
+      fields and so on are now properties that read and write that object, so every consumer and
+      test kept its API and nothing needs syncing. `_apply_stats()` became `_apply_tuning()` and no
+      longer touches a starting value.
+    - **`PlayerRuntimeState.shadows` holds the `ShadowInstance` objects themselves**, and the
+      collection takes that array by reference. The summoned entity was already a view onto its
+      instance, so a shadow's level and XP now have exactly one home.
+    - **One New Game point.** GIOCA calls `reset_runtime_state()`, which *replaces* the progression
+      and the shadow array rather than emptying them, so a scene still holding the old game can no
+      longer write into the new one.
+    - Removed as dead: `capture_initial()`, `sync_progression()`, `sync_shadows()`, `initialized`,
+      the `DEFAULT_LEVEL` / `DEFAULT_STAT` constants, the flat row format, the component-side
+      restore and sync, and the `runtime_state_reset` signal, which nothing had ever connected to.
+
+  What was checked and deliberately left as it is: **health** keeps its behaviour — max health
+  derived and never stored, current health owned by the `HealthComponent` and handed to the next
+  player through the session, full after a death. The **70/30 split** was already owned in one
+  place (`PlayerProgression._collect()`, with the reward latched on the combatant) and is unchanged.
+  The **UI** owned no copies and wrote only through owner APIs. A cross-scene **Run State** was not
+  introduced: one gate leads to one dungeon and the run lives and ends inside that scene. **Inventory
+  and equipment** still use the copy-and-sync pattern; they were outside this step's scope.
+
+  New suite: `tests/core/persistent_state_run.gd` (54 assertions) walks menu → hub → gate → dungeon
+  → kills → shadow kill → boss → exit → death → menu → GIOCA, and proves the ownership by object
+  identity: the player's progression and shadow array *are* the session's, the same objects survive
+  every scene change, a New Game replaces them, and a stale reference to the old game cannot reach
+  the new one. It also covers level-up with remainder, two levels in one award announced once, a
+  repeated death announcement paying nothing, and the 70/30 split on a real shadow kill.
+
+  **1319 assertions across 32 suites, zero failures.** The 31 suites that existed before are
+  line-for-line identical to the pre-change baseline (1265), so no behaviour moved; the other 54 are
+  the new suite. One existing assertion was rewritten rather than weakened: `persistence_run` #31
+  read the removed fields, and now checks the same claim — a reset session yields level 1, 0 XP,
+  stats 10 — through `get_or_create_progression()`. Cold-cache reimport and headless boot are clean.
 
 - **M10.1 — Core Architecture Audit & Refactor Foundation** (Completed). A behaviour-preserving
   consolidation of everything M0–M9 built, taken as read before anything was changed: the real

@@ -8,6 +8,12 @@ extends Node
 ## extraction is its own thing and carries its own level and XP. Minting
 ## the ids is this node's job; the session only remembers where the counter got
 ## to, so two scenes can never hand out the same number.
+##
+## The ShadowInstance is each shadow's persistent data — id, type, level, XP —
+## and this node is the only thing that changes it. A summoned BasicMeleeShadow
+## is a runtime representation that reads its level from the instance and owns
+## nothing of it: freeing the node, by recall, death or a scene change, loses no
+## progress.
 
 signal shadow_added(shadow: ShadowInstance)
 signal shadow_removed(shadow: ShadowInstance)
@@ -21,11 +27,14 @@ signal collection_changed
 const ID_PREFIX: String = "shadow_"
 const ID_DIGITS: int = 6
 
+## The session's own array, not a copy of it: every extraction, removal and XP
+## award lands in the session as it happens, and a new player scene picks the
+## same array up again. A private one until _ready() attaches to the session.
 var _shadows: Array[ShadowInstance] = []
 
 
 func _ready() -> void:
-	_restore()
+	_attach_to_session()
 
 
 # --- queries ---------------------------------------------------------------------
@@ -71,7 +80,6 @@ func add_shadow(data: ShadowData) -> ShadowInstance:
 		return null
 	var shadow: ShadowInstance = ShadowInstance.new(_mint_id(), data)
 	_shadows.append(shadow)
-	_sync()
 	shadow_added.emit(shadow)
 	collection_changed.emit()
 	return shadow
@@ -83,7 +91,6 @@ func remove_shadow(instance_id: StringName) -> bool:
 			continue
 		var shadow: ShadowInstance = _shadows[i]
 		_shadows.remove_at(i)
-		_sync()
 		shadow_removed.emit(shadow)
 		collection_changed.emit()
 		return true
@@ -99,7 +106,6 @@ func award_xp(instance_id: StringName, amount: int) -> int:
 	if shadow == null:
 		return 0
 	var levels: int = shadow.add_xp(amount)
-	_sync()
 	shadow_xp_gained.emit(shadow, amount)
 	if levels > 0:
 		shadow_leveled_up.emit(shadow, levels)
@@ -111,7 +117,6 @@ func clear() -> void:
 	if _shadows.is_empty():
 		return
 	_shadows.clear()
-	_sync()
 	collection_changed.emit()
 
 
@@ -125,34 +130,15 @@ func _mint_id() -> StringName:
 	return StringName(ID_PREFIX + str(index).pad_zeros(ID_DIGITS))
 
 
-# --- session persistence ---------------------------------------------------------------
+# --- session ---------------------------------------------------------------------------
 
-func _restore() -> void:
+## Takes the session's array by reference. There is nothing to rebuild: the
+## instances in it are the same objects the last scene's collection held.
+func _attach_to_session() -> void:
 	var state: Node = _runtime_state()
 	if state == null:
 		return
-	_shadows.clear()
-	for row in state.shadows:
-		_shadows.append(ShadowInstance.new(
-			row["instance_id"],
-			row["shadow_data"],
-			row.get("level", 1),
-			row.get("current_xp", 0)))
-
-
-func _sync() -> void:
-	var state: Node = _runtime_state()
-	if state == null:
-		return
-	var rows: Array[Dictionary] = []
-	for shadow in _shadows:
-		rows.append({
-			"instance_id": shadow.instance_id,
-			"shadow_data": shadow.shadow_data,
-			"level": shadow.level,
-			"current_xp": shadow.current_xp,
-		})
-	state.sync_shadows(rows)
+	_shadows = state.shadows
 
 
 func _runtime_state() -> Node:

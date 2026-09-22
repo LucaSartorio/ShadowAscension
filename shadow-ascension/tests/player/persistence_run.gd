@@ -195,8 +195,12 @@ func _initialize() -> void:
 	# --- 31) an explicit fresh session
 	var state2: Node = root.get_node_or_null("PlayerRuntimeState")
 	state2.reset_runtime_state()
-	_record(not state2.initialized and state2.current_level == 1 and state2.current_xp == 0
-			and state2.strength == 10 and state2.available_stat_points == 0,
+	# A reset holds no character at all; the next player to come up creates one
+	# from its starting block, which is what "level 1, 0 XP, stats 10" means now.
+	var fresh: PlayerProgressionData = state2.get_or_create_progression(
+		load("res://resources/characters/player_progression.tres") as ProgressionStats)
+	_record(fresh.current_level == 1 and fresh.current_xp == 0
+			and fresh.strength == 10 and fresh.available_stat_points == 0,
 		"31) reset_runtime_state() returns the session to level 1, 0 XP, stats 10")
 
 	print("[SUMMARY] passed=%d failed=%d" % [_pass, _fail])

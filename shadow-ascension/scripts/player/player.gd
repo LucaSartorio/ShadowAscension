@@ -99,11 +99,15 @@ static func session(from: Node) -> Node:
 ## Health carries across a scene change, so walking through a gate is not a free
 ## heal. The ceiling is never restored — _apply_stat_effects() has already
 ## recomputed it from this player's own base plus VIT — only the wound is.
+##
+## Who owns what: MAX health is derived, never stored — base plus VIT plus
+## equipment, recomputed by _apply_stat_effects(). CURRENT health is owned by the
+## HealthComponent while the scene runs; the session holds only the value handed
+## from one player to the next. A fresh session and a death both hand over
+## "full", which is the negative sentinel.
 func _restore_health() -> void:
 	var state: Node = _runtime_state()
-	if state == null or not state.initialized:
-		if state != null:
-			state.sync_health(health_component.current_health)
+	if state == null:
 		return
 	if state.wants_full_health():
 		health_component.current_health = health_component.max_health

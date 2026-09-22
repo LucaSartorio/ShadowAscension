@@ -4,8 +4,10 @@ extends Resource
 ## Tuning definition for player progression: the XP curve, what a level awards,
 ## and the starting stat block. Instances live under `resources/characters/`.
 ##
-## A definition, not runtime state: PlayerProgression copies these into its own
-## fields on _ready(), so the shared asset is never written to.
+## A definition, not runtime state: the asset is never written to. The tuning
+## is read by PlayerProgression on every _ready(); the starting level and stat
+## block are read once per session, by PlayerProgressionData.from_stats(), when
+## the character is first created.
 
 @export_group("Level")
 @export var starting_level: int = 1

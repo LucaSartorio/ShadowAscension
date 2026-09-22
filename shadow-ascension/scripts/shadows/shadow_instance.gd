@@ -6,6 +6,11 @@ extends RefCounted
 ## An id that tells it apart from every other extraction, the ShadowData it came
 ## from, and the progression that belongs to this one shadow rather than to its
 ## type. Rank and equipment are still later milestones.
+##
+## PERSISTENT: this is the shadow's data, held for the session by
+## PlayerRuntimeState and changed only through PlayerShadowCollection.award_xp().
+## Its level is the one source every consumer reads — the summoned entity, the
+## HUD, the collection menu — and none of them keeps a copy.
 
 var instance_id: StringName = &""
 var shadow_data: ShadowData = null

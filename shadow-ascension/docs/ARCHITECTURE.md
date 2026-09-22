@@ -276,7 +276,9 @@ Main.tscn (MainMenu)  --GIOCA-->  scenes/core/hub.tscn  --DungeonGate-->  scenes
                                         +---------------- DungeonExit -------------+
 ```
 
-**`MainMenu`** (`scripts/ui/main_menu.gd`) is a router with no state. It emits `quit_requested`
+**`MainMenu`** (`scripts/ui/main_menu.gd`) is a router with no state. GIOCA is a New Game, and
+since M10.2 it is the one place the session is reset (`PlayerRuntimeState.reset_runtime_state()`),
+rather than that being left to whichever scene happens to come up first. It emits `quit_requested`
 before asking the application to close, and `quit_on_request` turns the closing off — a headless run
 can then watch the choice without the process going away underneath it.
 
@@ -363,29 +365,84 @@ categories are formalised, not a change to smuggle into an audit.
 game starts a fresh session at level 1. Permanent saving is a separate milestone and will not live
 in this node.
 
-It exists because a scene change destroys the player and builds a new one, so everything the player
-knew about itself died with it. This node holds the few values that belong to the *session* rather
-than to any one scene, and hands them to the next player:
+It exists because a scene change destroys the player and builds a new one. It is the one autoload
+CLAUDE.md §4 allows: genuinely global state that has to outlive a scene, not gameplay logic parked
+in a singleton. It holds data and owns no behaviour — every formula, from the XP curve to each
+derived stat, stays in `PlayerProgression`. It is not a `GameManager`, a `SceneManager`, or a
+general blackboard, and nothing unrelated to player session data belongs in it.
 
-- `current_level`, `current_xp`, `available_stat_points`
-- `strength`, `agility`, `vitality`, `intelligence`
-- `current_health`
+### What it holds (M10.2)
 
-It is the one autoload CLAUDE.md §4 allows: genuinely global state that has to outlive a scene, not
-gameplay logic parked in a singleton. It stores and returns data and owns no behaviour — every
-formula, from the XP curve to each derived stat, stays in `PlayerProgression`. It is not a
-`GameManager`, a `SceneManager`, or a general blackboard, and nothing unrelated to player session
-data belongs in it.
+| Field | What it is |
+| --- | --- |
+| `progression: PlayerProgressionData` | level, XP into the level, unspent points, the allocated stat block |
+| `shadows: Array[ShadowInstance]` | every extracted shadow, each carrying its own level and XP |
+| `next_shadow_index` | the id counter, so two scenes never mint the same shadow id |
+| `active_shadow_instance_id`, `active_shadow_mode` | which shadow was out, and how it was fighting, so it re-summons after a scene change |
+| `current_health` | the hand-off value between one player and the next; negative means "full" |
+| `inventory`, `equipment` | what is carried and worn, still as copies the components sync (see below) |
+
+**The progression and the shadows are held by reference, not copied.** Until M10.2 each of them
+existed twice: `PlayerProgression` kept its own `current_level`, `current_xp` and stats and wrote
+them back through a sync call, and `PlayerShadowCollection` rebuilt new `ShadowInstance` objects
+from flat rows on every scene and flattened them back on every change. Both copies were kept in step
+by hand, and a missed sync was exactly the M6.3 class of bug. Now there is one
+`PlayerProgressionData` and one shadow array per session; every player scene attaches to those same
+objects on `_ready()` and reads and writes them in place. There is nothing to restore on the way in
+and nothing to write back on the way out, so neither step can be forgotten.
+
+### Who owns what
+
+| Data | Stored in | Only writer | Consumers are told by |
+| --- | --- | --- | --- |
+| Player level, XP, points | `PlayerProgressionData` | `PlayerProgression.add_xp()`, `allocate_stat()` | `xp_changed`, `level_changed`, `level_up`, `stat_points_changed` |
+| Player allocated stats | `PlayerProgressionData` | `PlayerProgression.allocate_stat()` | `stats_changed` |
+| Effective / derived stats | nowhere — computed | `PlayerProgression` getters, from the data plus equipment | `stats_changed` |
+| Shadow level and XP | its `ShadowInstance` | `PlayerShadowCollection.award_xp()` | `shadow_xp_gained`, `shadow_leveled_up`, `collection_changed` |
+| Which shadows exist | the session's shadow array | `PlayerShadowCollection.add_shadow()`, `remove_shadow()` | `shadow_added`, `shadow_removed`, `collection_changed` |
+| Max health | nowhere — derived | `Player._apply_stat_effects()`: base + VIT + equipment | `HealthComponent.health_changed` |
+| Current health | the player's `HealthComponent` | combat, through the hurtbox | `HealthComponent.health_changed` |
+| Current health, between scenes | `PlayerRuntimeState.current_health` | `Player`, on every `health_changed` | read once, when the next player spawns |
+| Run tally | `DungeonRunStats` | its own signal handlers | `stats_changed` |
+| Dungeon progress | `DungeonController`, `RoomController` | their own signal handlers | `objective_changed`, `room_cleared`, `dungeon_completed` |
+
+**The UI owns none of it.** Every HUD and menu reads the owner's getters and redraws on the owner's
+signals; the only writes any UI makes go through the owner's API — `allocate_stat()` from the
+character sheet, `toggle()` from the shadow menu, `equip()` from the inventory. Nothing polls.
+
+**Kill attribution and the 70/30 split** are `PlayerProgression._collect()`: the combatant hands
+its reward over exactly once (`claim_xp()` latches), the killer is whoever `HealthComponent`
+recorded as the last source, and a kill the summoned shadow finished pays it
+`round(reward × SHADOW_KILL_SHARE)` through `award_xp()` while the player keeps the remainder
+through `add_xp()`. The summoned `BasicMeleeShadow` is a runtime view onto its `ShadowInstance` — it
+reads its health and damage from the instance's level and stores no progress of its own.
+
+### Lifecycle
+
+| Moment | What happens to the persistent state |
+| --- | --- |
+| **New Game** (GIOCA) | `MainMenu` calls `reset_runtime_state()` — the one reset point. The progression and the shadow array are *replaced*, so anything still holding the old ones cannot write into the new game. |
+| **First player of the session** | `get_or_create_progression(stats)` builds the character from `ProgressionStats`. The only place starting values are applied. |
+| **Scene change** (gate, exit) | The scene and its player are freed and rebuilt. The session is untouched; the new player attaches to the same objects. |
+| **In the dungeon** | Kills write XP into the session as they happen. The run and dungeon state live in the dungeon scene and die with it. |
+| **Death** | `reset_health_to_max()`; the dungeon reloads. Progression and shadows are untouched. |
+| **Return to the hub** | A scene change like any other. |
+| **Return to the menu** | Nothing in the game leads there yet. When something does, GIOCA already resets, so no session can leak into the next. |
+
+**Initialization is split three ways**, which is what closes the M6.3 bug class: *first
+initialization* is `get_or_create_progression()`, once per session; *a scene coming up* only
+attaches, and `PlayerProgression._ready()` applies tuning (the XP curve, the derived-stat rates) but
+never a starting value; *an explicit reset* is `reset_runtime_state()`, called by New Game and by
+tests.
 
 **Max health is deliberately not stored.** It is recomputed from the player's own base plus VIT on
 every load, so the two can never desync. A negative `current_health` means "start at whatever this
 player computes as its maximum" — both the fresh-session state and what a death leaves behind.
 
-**Flow.** The first player of a session calls `capture_initial()` with the values its own resources
-gave it. Every later player restores from the node instead, then recomputes its derived stats from
-scratch. `PlayerProgression` writes back through a single `_sync_to_runtime_state()`, so a new
-persisted field does not have to be remembered in each callback that can change it. The player
-itself reports health, through `HealthComponent.health_changed`.
+**Inventory and equipment are still copies.** `PlayerInventory` and `PlayerEquipment` restore a copy
+on `_ready()` and sync one back on each change, the pattern the progression and shadows used to
+follow. They were left alone because M10.2 was scoped to progression, shadows and health; they are
+the next candidates for the same by-reference treatment.
 
 **Not persisted**, on purpose: position, camera rotation, combat and combo state, dodge state,
 cooldowns, the current room, dungeon progress, enemy and boss state, and transient UI.
@@ -483,10 +540,11 @@ standing on the floor.
 
 **`PlayerShadowCollection`** (`scripts/player/player_shadow_collection.gd`) — a component on the
 player holding `ShadowInstance` objects rather than a count per type. It mints the ids; the session
-remembers only where the counter got to, so two scenes can never hand out the same number.
-Contents survive a scene change through `PlayerRuntimeState`, which stores them and interprets
-nothing. `award_xp()` pays one named shadow — only the one that struck the killing blow earns
-anything.
+remembers where the counter got to, so two scenes can never hand out the same number. The array it
+holds *is* the session's (`PlayerRuntimeState.shadows`), taken by reference on `_ready()`, so every
+extraction and every XP award is already in the session when it happens. `award_xp()` pays one named
+shadow — only the one that struck the killing blow earns anything — and is the only thing that
+changes a shadow's level or XP.
 
 **`BasicMeleeShadow`** (`scripts/shadows/basic_melee_shadow.gd`,
 `scenes/shadows/basic_melee_shadow.tscn`) — the summoned entity. It shares the combat components
@@ -633,18 +691,24 @@ finishes the job and gives every domain one named definition resource:
 | `GateData` | a gate: rank, contents, rewards |
 
 The rule that already governs resources still holds: definitions are pure data with minimal derived
-getters, instance state lives in components, and `.tres` is preferred over `.res` for diff-ability.
+getters, and `.tres` is preferred over `.res` for diff-ability. Instance state lives in components —
+except the character's, which since M10.2 lives in the session's data objects
+(`PlayerProgressionData`, `ShadowInstance`) and is only *viewed* by components. Today the player's
+definition is `ProgressionStats`; `PlayerData` is where it goes once there is more to define.
 
 ## State separation (M10)
 
 M10 separates state into six categories, with no system reading or writing outside its own. M10.1
-named them and gave each existing one a single owner in code; the three with no owner are not built,
-and inventing a home for them before a system needs one is exactly the premature abstraction M10
-avoids.
+named them and gave each existing one a single owner in code; M10.2 made the persistent one a single
+source of truth (see *PlayerRuntimeState* above for the ownership and lifecycle tables). The three
+with no owner are not built, and inventing a home for them before a system needs one is exactly the
+premature abstraction M10 avoids. A cross-scene Run State in particular was considered and not
+built: one gate leads to one dungeon, the run begins and ends inside that dungeon scene, and nothing
+yet carries a run's information back to the hub.
 
 | Category | What it holds | Lifetime | Owner today |
 | --- | --- | --- | --- |
-| **Persistent Player State** | level, XP, allocated stats, health, inventory, equipment, shadows, skills | the character | `PlayerRuntimeState` (autoload) |
+| **Persistent Player State** | level, XP, allocated stats, health, inventory, equipment, shadows, skills | the character | `PlayerRuntimeState` (autoload), holding `PlayerProgressionData` and the `ShadowInstance`s |
 | **Run State** | the current dungeon run: tally, temporary buffs, what the run has consumed | one run | `DungeonRunStats` |
 | **Dungeon State** | the current dungeon instance: rooms cleared, doors, spawned contents | one dungeon | `DungeonController` + `RoomController` |
 | **World State** | hub state, gate availability, world-level flags | the world | *nothing needs it yet* |
@@ -658,8 +722,9 @@ Persistent Player State, however convenient the autoload would be.
 **The hard requirement:** persistent data must never be reinitialised by a scene change. That class
 of bug has been hit and fixed twice already — once in M6.3 (level and XP resetting through a gate)
 and once in M9.2 (run stats taking their XP baseline from the player being freed during a
-transition). M10 closes it structurally rather than case by case, and a test has to prove it across
-repeated transitions.
+transition). M10.2 closed it structurally for progression and shadows: a scene has no copy to
+reinitialise, only a reference to attach. `tests/core/persistent_state_run.gd` proves it by object
+identity across the menu, the gate, the exit, a death and a second New Game.
 
 ## Gameplay logic and visual representation stay separate
 

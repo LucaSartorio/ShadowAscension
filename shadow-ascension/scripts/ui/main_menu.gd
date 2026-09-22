@@ -5,7 +5,8 @@ extends CanvasLayer
 ## needs nothing else, and a settings screen with nothing to set would be a lie.
 ##
 ## It is a router, not a game scene: it holds no state, and everything it knows
-## about the run is that the hub is where one starts.
+## about the run is that the hub is where one starts. GIOCA is a New Game, which
+## makes this the one place the session is reset.
 
 signal play_requested
 ## Emitted before the application is asked to close, so a harness can watch the
@@ -42,12 +43,23 @@ func press_play() -> void:
 	if _leaving:
 		return
 	_leaving = true
+	_start_new_game()
 	play_requested.emit()
 	var transition: SceneTransition = SceneTransition.find_in(get_tree())
 	if transition != null and transition.transition_to_scene(hub_scene):
 		return
 	# No transition in the scene: still go, just without the fade.
 	get_tree().change_scene_to_file(hub_scene)
+
+
+## The one New Game point. Nothing leads back to this menu yet, so the session is
+## already fresh whenever GIOCA can be pressed and nothing visible changes; the
+## reset lives here so that stays true once a way back exists, instead of being
+## remembered by the hub, the player or the dungeon.
+func _start_new_game() -> void:
+	var state: Node = Player.session(self)
+	if state != null:
+		state.reset_runtime_state()
 
 
 func press_quit() -> void:
