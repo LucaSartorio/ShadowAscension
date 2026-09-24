@@ -130,9 +130,10 @@ Systems are built from small, composable components attached to a scene root (e.
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
 - **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down. Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
-- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power` and `knockback_force`, sends each target one `DamageInfo` with the hit's direction worked out at impact, emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
+- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier, sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
+- **`DamageModel`** (`scripts/combat/damage_model.gd`, static, M11.7) — the damage rules in one place: `attack_damage(base, multiplier)`, `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`. Stateless; see *Damage model and critical hits (M11.7)*.
 - **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to.
-- **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6).
+- **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, and the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2).
 
 The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); see *Combat architecture (M11)*.
@@ -207,7 +208,7 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
-| `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
+| `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
 | `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
@@ -309,7 +310,10 @@ leaked GDScript instances on every run through the dungeon while every assertion
 close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, **37 suites and
 1506 assertions**; at M11.2, **39 suites and 1565 assertions**;
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
-**45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**, all clean.
+**45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
+**49 suites and 1845 assertions**, all clean. Since M11.7 a player hit can be critical at
+random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
+its script), and the critical suites test them deterministically.
 
 **Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
 To see them all at once, put an `override.cfg` in the project root that raises each warning to an
@@ -939,9 +943,11 @@ has one owner and the animation is never the source of truth. M11.2 (Light Attac
 the combo a real chain on that foundation, M11.3 (Heavy Attack & Attack Variants) added a second
 attack type on the same controller, M11.4 (Dodge & I-Frames) made the dodge's phases and its
 invulnerability explicit, M11.5 (Stamina & Combat Resource Management) made the dodge cost
-stamina, and M11.6 (Hit Reactions, Stagger & Knockback) made enemies answer the hits they take: see
-*Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina (M11.5)*
-and *Hit reactions, stagger and knockback (M11.6)* below.
+stamina, M11.6 (Hit Reactions, Stagger & Knockback) made enemies answer the hits they take, and
+M11.7 (Critical Hits & Damage Model 2.0) put the damage rules in one place and added critical hits:
+see *Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina
+(M11.5)*, *Hit reactions, stagger and knockback (M11.6)* and *Damage model and critical hits (M11.7)*
+below.
 
 ```
 Input          CameraRig (attack_light, attack_heavy — only while the mouse is captured) and
@@ -959,8 +965,9 @@ Attack         AttackData, from PlayerCombatData.light_combo / heavy_combo: wind
 Hit detection  the player's Hitbox (Area3D), open for the active phase only;
    |             one hit per target per swing, any number of targets
    v
-Damage         PlayerCombat.calculate_damage() when the window opens -> Hitbox.damage;
-   |             the Hitbox sends each target a DamageInfo(amount, source, attack_id,
+Damage         PlayerCombat.calculate_damage() when the window opens -> Hitbox.damage (raw);
+   |             per target, DamageModel rolls the critical and gives the final damage,
+   |             and the Hitbox sends a DamageInfo(amount, source, attack_id, is_critical,
    |             stagger_power, knockback_force, direction)
    |             -> Hurtbox.receive_hit(hit) -> HealthComponent.take_damage(hit)
    v
@@ -1397,17 +1404,105 @@ come they are a listener, not a new pipeline.
 **Debug**: `BasicMeleeEnemy.debug_log_reactions` (off by default) prints each hit's stagger power
 against the resistance, whether it staggered, and the push it left.
 
+### Damage model and critical hits (M11.7)
+
+Every hit's damage follows one set of rules, `DamageModel` (`scripts/combat/damage_model.gd`,
+static and stateless):
+
+```
+raw    = base damage x attack multiplier           DamageModel.attack_damage()      once per swing,
+         then the attacker's own stats:            PlayerProgression                 when the hit
+         + weapon power, x STR, rounded             .get_effective_damage()          window opens
+critical = chance, rolled for this hit             DamageModel.roll_critical()       once per hit
+final  = raw, or round(raw x critical multiplier)  DamageModel.final_damage()        once per hit
+-- the target's mitigation goes here, when there is one: Hurtbox.receive_hit(), after the
+   i-frames and before HealthComponent.take_damage(). There is none yet. --
+health -= final                                    HealthComponent.take_damage()
+```
+
+The attacking side ends at `final`: `DamageInfo.amount` is the final damage and the target never
+recomputes an attack multiplier or a critical. Defense and armour penetration have no formula yet and
+none is invented: when they come, the target's defense is applied on the receiving side at the point
+above, and whatever of the attacker it needs (a penetration value) travels in `DamageInfo` like the
+M11.6 fields did.
+
+**The player's numbers** (`PlayerCombatData`, `resources/characters/player_combat.tres`):
+
+| | Value | Where |
+| --- | --- | --- |
+| Base damage | 20 | `PlayerCombatData.base_damage` — its only source; attacks hold a multiplier, never a damage |
+| Critical chance | 0.1 (10%) | `PlayerCombatData.critical_chance` |
+| Critical multiplier | 1.5 (150%) | `PlayerCombatData.critical_damage_multiplier` |
+
+| Attack | Multiplier | Normal | Critical |
+| --- | --- | --- | --- |
+| Light 1 | 1.0 | 20 | 30 |
+| Light 2 | 1.25 | 25 | 38 (37.5) |
+| Light 3 | 1.75 | 35 | 53 (52.5) |
+| Heavy | 2.0 | 40 | 60 |
+
+(At STR 10 with no weapon; the weapon and STR act on the raw damage before the critical.) The
+multipliers are M11.6's, so every normal hit deals exactly what it did.
+
+**Critical chance** is a normalised float, 0.0 to 1.0, everywhere in the project (0.1 = 10%). The
+field is range-limited in the editor, `PlayerCombat.get_critical_chance()` clamps it into 0..1, and
+`_ready()` warns about a value outside it. At 0 nothing is ever critical and at 1 everything is,
+without a random draw, so both ends are exact. The **multiplier** must not be negative (it counts as
+0 if it is), and `_ready()` warns below 1.0, where a critical would hit no harder than a normal hit;
+it is not forced up, in case a design ever wants that.
+
+**One roll per hit.** The chance is read when the hit window opens and stamped on the hitbox with the
+damage; the hitbox rolls once for each target it hits, so one swing through two enemies rolls twice —
+one can be critical and the other not (**per target, not per swing**) — and each hit of a combo rolls
+on its own: Light 1 normal, Light 2 critical, Light 3 normal is an ordinary sequence. Nothing of a
+critical outlives its hit: `is_critical` lives on that hit's `DamageInfo`, never on the controller.
+
+**The generator** is the hitbox's own `RandomNumberGenerator`, created once and seeded from the
+hitbox's path, like loot drops and shadow extraction, so a run can be reproduced; there is no global
+random service. `DamageModel.roll_critical()` takes the generator as an argument, as `LootTable.roll()`
+does.
+
+**Rounding.** Health is a float. A player swing's raw damage is a whole number, rounded when it is
+worked out (as since M6); a critical rounds its product once, half away from zero (37.5 → 38). A
+normal hit is never rounded again, so enemy, boss and shadow damage reaches its target exactly as
+configured. There is no minimum damage.
+
+**Independent of everything else.** A critical changes the damage and nothing else: stagger power and
+knockback force are the attack's (M11.6), whatever the roll — a critical Light 1 still only flinches, a
+critical heavy pushes exactly as far as a normal one. Hit reactions, i-frames, stamina, kill
+attribution and rewards are untouched: a hit refused in the i-frames takes nothing whether or not it
+was critical, and a critical killing blow is one death and one reward like any other.
+
+**Who crits.** Only the player. The shadow, the enemies and the boss go through the same code, but
+their hitboxes carry chance 0 and multiplier 1.0 (the `Hitbox` defaults), so their damage is exactly
+what it was — nothing in their data or the design gives them a critical yet, and none is invented.
+The model is general: giving one a chance is setting two fields on its hitbox.
+
+**Later.** M16's derived stats (critical chance and damage from stats, equipment, buffs, skills) join
+in `get_critical_chance()` / `get_critical_damage_multiplier()`, which every swing reads; no
+`AttackData` changes. Per-attack critical modifiers are not built. Critical feedback — damage numbers,
+a sound, a flash — reads `DamageInfo.is_critical`; there is no floating-damage system yet.
+
+**Debug**: with `PlayerCombat.debug_log_enabled` on, each hit is logged — raw damage, base and
+multiplier, critical chance, whether it was critical, final damage; when off, nothing even listens.
+`BasicMeleeEnemy.debug_log_reactions` marks a critical hit too.
+
+**Tests and randomness.** Criticals make a hit's damage random, so the suites that check exact damage
+(16 of them, found by running every suite with criticals forced on) switch criticals off for their
+own run; `critical_hit_test` and `m11_critical_run` test criticals at 0% and 100% — exact — and one
+per-target case on a seeded generator, and `m11_critical_run` also plays a dungeon on the shipped 10%.
+
 ### Damage flow
 
-- **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's damage is
-  worked out — `PlayerCombatData.base_damage` (20) × the attack's `damage_multiplier`
-  (1.0 / 1.25 / 1.75), then `PlayerProgression.get_effective_damage()` adds the weapon and applies
-  STR. It runs once per swing, when the window opens, so every target of that swing takes the same
+- **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's raw damage
+  is worked out — `DamageModel.attack_damage()`: `PlayerCombatData.base_damage` (20) × the attack's
+  `damage_multiplier` (1.0 / 1.25 / 1.75 / 2.0), then `PlayerProgression.get_effective_damage()` adds
+  the weapon and applies STR. Each hit's critical and final damage follow at impact (M11.7, above). It runs once per swing, when the window opens, so every target of that swing takes the same
   number. The weapon's power is added after the multiplier, exactly as before, so every M10 value is
   unchanged; whether a finisher should scale the weapon too is tuning for later in M11.
-- **In transit**: the hitbox builds one `DamageInfo` per target — `amount`, `source`,
-  `attack_id`, and since M11.6 `stagger_power`, `knockback_force` and `direction` — and emits it on
-  `hit_landed`.
+- **In transit**: the hitbox builds one `DamageInfo` per target — `amount` (the final damage),
+  `source`, `attack_id`, since M11.6 `stagger_power`, `knockback_force` and `direction`, and since
+  M11.7 `is_critical` — and emits it on `hit_landed`.
 - **Incoming**: `Hurtbox.receive_hit(hit)` (i-frames) → `HealthComponent.take_damage(hit)`, the only
   way health goes down. It records the hit as `last_damage`, then emits `died` for a killing blow or
   `damaged(hit)` for one survived — where an enemy's reaction starts. Enemies, the boss and the
@@ -1482,7 +1577,9 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
   `damaged`, with enemy attacks given stagger power and force.
 - **Beyond single-hit stagger**: a posture / poise that builds up, a boss that can be broken (M12),
   launchers and wall slams — none of which exist.
-- **Critical hits**: in `calculate_damage()`, or per hit where the hitbox builds its `DamageInfo`.
+- **Defense and mitigation**: on the receiving side, in `Hurtbox.receive_hit()` before the health
+  (see *Damage model and critical hits (M11.7)*); armour penetration travels in `DamageInfo`.
+- **Critical feedback**: damage numbers, sound, a flash — reading `DamageInfo.is_critical`.
 - **Target lock**: the aim source of `_face_aim_direction()`.
 - **An enemy can stall out of reach** (found at M11.4, not fixed): a `BasicMeleeEnemy` chasing a
   player who stands still can stop about 1.83 m away — its navigation counts it arrived within 0.25 m

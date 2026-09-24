@@ -10,7 +10,8 @@ extends Resource
 ## speed, and both belong to the player's movement.
 
 ## What an attack with a damage multiplier of 1.0 deals before STR and the
-## weapon. Every attack scales it; none carries a damage number of its own.
+## weapon. Every attack scales it; none carries a damage number of its own. The
+## one source of the player's base damage.
 @export var base_damage: float = 20.0
 ## The light combo, in order: Attack 1 -> Attack 2 -> Attack 3. Each is its own
 ## AttackData asset, so one can be retuned without touching the others or the
@@ -24,6 +25,14 @@ extends Resource
 ## remembered. It queues the next attack if the window opens in time, and is
 ## dropped otherwise — a press made earlier than this simply does nothing.
 @export var input_buffer_time: float = 0.15
+
+@export_group("Critical")
+## The chance, 0.0 to 1.0 (0.1 = 10%), that one of the player's hits is critical.
+## Rolled for each hit on its own — each target of a swing, each attack of a
+## combo — never once for a swing or a chain.
+@export_range(0.0, 1.0, 0.01) var critical_chance: float = 0.1
+## A critical hit's damage is its raw damage times this: 1.5 is 150%.
+@export_range(0.0, 10.0, 0.05, "or_greater") var critical_damage_multiplier: float = 1.5
 
 @export_group("Dodge")
 ## The whole dodge, in seconds: the player is committed to it, and moved by it,

@@ -361,12 +361,18 @@ staggers it and throws it back about a metre. A killing blow simply kills — no
 boss takes damage and flashes, but it is never staggered and never pushed. The shadow's hits make
 their target flinch, nothing more. The player is not staggered or pushed by enemies yet.
 
+**M11.7 added critical hits.** Any hit of the player's has a **10%** chance to be critical and deal
+**150%** of its damage: Light 1 / 2 / 3 and the heavy hit for 20 / 25 / 35 / 40, or 30 / 38 / 53 / 60
+when critical. Each hit rolls on its own — within a combo, and for each enemy a swing reaches — so a
+combo can go normal, critical, normal, and one swing can crit one enemy and not the one beside it. A
+critical only does more damage: it does not stagger harder, push further or get through a dodge. The
+shadow, enemies and the boss do not land critical hits.
+
 **Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
-timing windows or interactions are committed yet (the heavy attack, the dodge's timing, stamina and
-hit reactions shipped in M11.3 to M11.6):
+timing windows or interactions are committed yet (the heavy attack, the dodge's timing, stamina, hit
+reactions and critical hits shipped in M11.3 to M11.7):
 
 - sprint, draining stamina
-- critical hits
 - combat feedback: hit stop, camera shake, floating damage
 - target lock, soft targeting, target switching, target indicators
 - a damage model carrying Physical, Magic, Critical, Defense, Armor Penetration, Elemental damage

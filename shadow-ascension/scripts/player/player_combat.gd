@@ -131,6 +131,11 @@ func _ready() -> void:
 	# one — a new game, a gate, a restart after death — is a new player.
 	_max_stamina = maxf(data.max_stamina, 0.0)
 	_stamina = _max_stamina
+	if data.critical_chance < 0.0 or data.critical_chance > 1.0:
+		push_warning("%s: critical_chance %.2f is outside 0..1 and is clamped." % [name, data.critical_chance])
+	if data.critical_damage_multiplier < 1.0:
+		push_warning("%s: critical_damage_multiplier %.2f makes a critical hit no harder than a normal one." % [
+			name, data.critical_damage_multiplier])
 
 
 ## Called once by the player with the parts of itself this drives or reads.
@@ -142,6 +147,9 @@ func setup(hitbox: Hitbox, hurtbox: Hurtbox, health: HealthComponent,
 	_progression = progression
 	if _health != null:
 		_health.died.connect(_on_owner_died)
+	# Only when asked for: a hit is logged from the hitbox's own report of it.
+	if debug_log_enabled and _hitbox != null:
+		_hitbox.hit_landed.connect(_log_hit)
 
 
 # --- intents ------------------------------------------------------------------------------
@@ -288,15 +296,26 @@ func get_movement_multiplier() -> float:
 	return 1.0
 
 
-## The one place a player attack's damage is worked out: the character's base,
-## scaled by the attack, then by the weapon and STR. It runs once per swing, when
-## the hit window opens, so every target that swing reaches takes the same
-## number, and neither the attack nor the base is ever written.
+## A player attack's raw damage — DamageModel's first step: the character's
+## base scaled by the attack, then the weapon and STR, rounded. It runs once per
+## swing, when the hit window opens; whether each hit of it is critical is rolled
+## per hit, by the hitbox (see DamageModel). Neither the attack nor the base is
+## ever written.
 func calculate_damage(attack: AttackData) -> float:
-	var base: float = data.base_damage * attack.damage_multiplier
+	var base: float = DamageModel.attack_damage(data.base_damage, attack.damage_multiplier)
 	if _progression == null:
 		return base
 	return _progression.get_effective_damage(base)
+
+
+## The player's chance, 0.0 to 1.0, that a hit is critical. Read per swing, so a
+## future bonus (equipment, a buff, a skill) joins here and nowhere else.
+func get_critical_chance() -> float:
+	return clampf(data.critical_chance, 0.0, 1.0)
+
+
+func get_critical_damage_multiplier() -> float:
+	return maxf(data.critical_damage_multiplier, 0.0)
 
 
 # --- stamina ------------------------------------------------------------------------------
@@ -480,6 +499,8 @@ func _open_hit_window() -> void:
 	_hitbox.attack_id = _attack.id
 	_hitbox.stagger_power = _attack.stagger_power
 	_hitbox.knockback_force = _attack.knockback_force
+	_hitbox.critical_chance = get_critical_chance()
+	_hitbox.critical_damage_multiplier = get_critical_damage_multiplier()
 	_hitbox.set_debug_color(_attack.debug_color)
 	_hitbox.activate()
 
@@ -535,6 +556,13 @@ func _log(what: String) -> void:
 		_next_attack.id if _next_attack != null else &"-", _buffered_attack,
 		DodgePhase.keys()[_dodge_phase], _iframes_active,
 		_stamina, _max_stamina, _stamina_regen_delay_remaining])
+
+
+func _log_hit(target: Node, hit: DamageInfo) -> void:
+	_log("hit %s: raw %.0f (base %.0f x %.2f), crit chance %.2f -> %s, final %.0f" % [
+		target.name, _hitbox.damage, data.base_damage, _attack.damage_multiplier if _attack != null else 0.0,
+		_hitbox.critical_chance, "CRITICAL x%.2f" % _hitbox.critical_damage_multiplier if hit.is_critical else "normal",
+		hit.amount])
 
 
 func _set_iframes(value: bool) -> void:

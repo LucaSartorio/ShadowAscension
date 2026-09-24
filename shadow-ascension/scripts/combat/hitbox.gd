@@ -7,6 +7,8 @@ signal hit_landed(target: Node, hit: DamageInfo)
 ## Below this, a source and its target count as standing in the same place, and
 ## the hit is pushed the way the hitbox faces instead.
 const MIN_DIRECTION_LENGTH_SQUARED: float = 0.0001
+## Mixed into the critical generator's seed, apart from every other seeded roll.
+const CRITICAL_SEED_SALT: int = 0xC217
 
 @export var damage: float = 25.0
 @export var source: Node = null
@@ -19,6 +21,12 @@ var attack_id: StringName = &""
 ## whose attacks do not (enemies, the boss, shadows).
 var stagger_power: float = 0.0
 var knockback_force: float = 0.0
+## The swing's critical chance (0.0 to 1.0) and what a critical multiplies its
+## damage by, set with `damage` by an attacker that has them. By default 0 and
+## 1.0: an attacker that sets neither — an enemy, the boss, a shadow — never
+## crits, and its damage reaches the target exactly as configured.
+var critical_chance: float = 0.0
+var critical_damage_multiplier: float = 1.0
 
 var _active: bool = false
 ## Whom this activation has already hit. Per target, not per swing: one swing
@@ -26,9 +34,13 @@ var _active: bool = false
 ## activate(), so each swing starts with nobody hit.
 var _hit_targets: Array[Node] = []
 var _debug_visual: MeshInstance3D = null
+## Rolls this hitbox's criticals, one draw per hit. Seeded from its path, like
+## loot drops and shadow extraction, so a run can be reproduced.
+var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 func _ready() -> void:
+	_rng.seed = hash(String(get_path())) ^ CRITICAL_SEED_SALT
 	monitoring = false
 	monitorable = true
 	area_entered.connect(_on_area_entered)
@@ -90,7 +102,11 @@ func _on_area_entered(area: Area3D) -> void:
 	if target_entity in _hit_targets:
 		return
 	_hit_targets.append(target_entity)
-	var hit: DamageInfo = DamageInfo.new(damage, source, attack_id)
+	# One roll per hit: every target of the swing rolls on its own.
+	var critical: bool = DamageModel.roll_critical(critical_chance, _rng)
+	var hit: DamageInfo = DamageInfo.new(
+		DamageModel.final_damage(damage, critical, critical_damage_multiplier), source, attack_id)
+	hit.is_critical = critical
 	hit.stagger_power = stagger_power
 	hit.knockback_force = knockback_force
 	hit.direction = _direction_to(target_entity)

@@ -28,7 +28,14 @@ var _menu: InventoryMenu = null
 var _stats: PlayerStatsMenu = null
 
 
+## Criticals are random (M11.7) and this suite checks exact damage, so they are
+## off for its whole run: every player here reads this one cached instance of
+## the combat data. critical_hit_test and m11_critical_run test criticals.
+var _no_crits: PlayerCombatData = preload("res://resources/characters/player_combat.tres")
+
+
 func _ready() -> void:
+	_no_crits.critical_chance = 0.0
 	_run()
 
 

@@ -10,11 +10,12 @@
 
 **M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain**, **M11.3 — Heavy Attack &
 Attack Variants**, **M11.4 — Dodge & I-Frames**, **M11.5 — Stamina & Combat Resource Management**
-and **M11.6 — Hit Reactions, Stagger & Knockback** are complete: the player's combat runs on its own
-controller (`PlayerCombat`); the light attack is a real three-hit chain on it, the heavy attack a
-second, slower chain of one on its own button, the dodge has explicit phases whose i-frames the
-hurtbox enforces and costs stamina, and enemies flinch, stagger and get knocked back by what hits
-them. M11.7 is next; sprint, crits, combat feedback and targeting are not built yet. The architecture
+**M11.6 — Hit Reactions, Stagger & Knockback** and **M11.7 — Critical Hits & Damage Model 2.0** are
+complete: the player's combat runs on its own controller (`PlayerCombat`); the light attack is a real
+three-hit chain on it, the heavy attack a second, slower chain of one on its own button, the dodge has
+explicit phases whose i-frames the hurtbox enforces and costs stamina, enemies flinch, stagger and get
+knocked back by what hits them, and every hit's damage follows one model, with its own critical roll.
+M11.8 is next; sprint, combat feedback and targeting are not built yet. The architecture
 is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
@@ -22,7 +23,7 @@ is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROAD
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.6 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.7 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -38,6 +39,58 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.7 — Critical Hits & Damage Model 2.0** (Completed). Every place damage was worked out was
+  found first — the player's swing (`PlayerCombat.calculate_damage()` → `PlayerProgression`), the
+  shadow's level, the enemy's and the boss's configured numbers, and the hitbox carrying them into a
+  `DamageInfo` — and there was no duplicated formula to merge; what was missing was one place for the
+  rules and a step per hit. So:
+
+    - **`DamageModel`** (`scripts/combat/damage_model.gd`, static, stateless): `attack_damage()` (base ×
+      attack multiplier), `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`.
+      The pipeline — raw once per swing (then weapon + STR, rounded, as before), a critical rolled
+      per hit, final = raw or round(raw × multiplier) — is documented there, with the point where a
+      target's defense will go: `Hurtbox.receive_hit()`, before the health. No defense is invented.
+    - **Player stats** in `PlayerCombatData`, beside `base_damage` (20, its only source):
+      `critical_chance` **0.1** (a normalised 0..1 float everywhere; clamped, warned about) and
+      `critical_damage_multiplier` **1.5** (never negative; warned below 1). Read per swing through
+      `PlayerCombat.get_critical_chance()` / `get_critical_damage_multiplier()`, where M16's bonuses
+      will join. Attack multipliers unchanged: 1.0 / 1.25 / 1.75 / 2.0 → 20 / 25 / 35 / 40, critical
+      30 / 38 / 53 / 60.
+    - **One roll per hit, per target**, by the hitbox that builds each `DamageInfo`, from its own
+      generator seeded from its path (like loot and extraction). `DamageInfo.is_critical` is the one
+      new field; `amount` is the final damage and no target recomputes it.
+    - **Nothing else changes with a critical**: stagger, knockback, i-frames, stamina, rewards.
+      Only the player crits: shadow, enemy and boss hitboxes keep chance 0, so their damage is
+      exactly what it was.
+    - Debug: `PlayerCombat.debug_log_enabled` logs each hit's raw, chance, result and final damage
+      (not even listening when off).
+
+  Tests: **`tests/combat/critical_hit_test.tscn`** (23) — the configuration and its clamps; the model
+  on its own (the four attacks normal and critical, 0% / 100% exact, 0.5 over 10000 draws); 0% and
+  100% over 30 real hits each; Light 1 / 2 / 3 and the heavy, normal and critical, with the health
+  bar; no double multiplier; a combo normal / critical / normal, and nothing left after it; one heavy
+  through two enemies, one critical and one not (seeded); a critical heavy staggering and pushing
+  exactly like a normal one, a critical Light 1 still only flinching; a critical killing blow (one
+  death, no reaction, one reward); the boss, normal and critical, not moved; a critical hit refused
+  by the i-frames and taken exactly outside them; stamina untouched, the debug log silent.
+  **`tests/core/m11_critical_run.gd`** (18) — New Game → dungeon → a swing dodged (25 stamina, back)
+  → the combo normal / critical / normal with the enemy's bar in step, a critical heavy finishing it
+  → a normal heavy staggering and throwing the other, a critical one killing it → a critical heavy
+  killing blow → the shadow's hits never critical, its kill 70/30 → the boss dodged, hit normal and
+  critical, finished by a critical heavy → hub (XP 282, level 3, shadow 18, no orphans) → a second
+  dungeon on the shipped 10%: 18 hits, each its raw or its critical, each reacting as its attack does.
+  The existing suites that check exact damage — 16, found by running every suite with criticals
+  forced on — switch criticals off for their own run (one line each); nothing else in them changed.
+
+  **1845 assertions across 49 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 47 existing suites keep M11.6's 1804; the two new ones add 41.
+  Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M11.8 and later: defense and armour penetration (their place is set, not their formula),
+  critical feedback and damage numbers, per-attack critical modifiers, M16's derived critical stats,
+  sprint, target lock.
 
 - **M11.6 — Hit Reactions, Stagger & Knockback** (Completed). A hit an enemy survives now does
   something to it, by extending the one damage flow rather than adding a second:

@@ -9,11 +9,13 @@ extends RefCounted
 ## boss all send this, and a health component reacts to it the same way.
 ##
 ## Deliberately small: it carries what something downstream reads today, and a
-## field is added when a system needs one — a critical flag, a damage type —
-## rather than ahead of it. M11.6 added the three a hit reaction reads: how hard
-## the hit tries to interrupt its target, how hard it pushes, and which way.
+## field is added when a system needs one — a damage type, an armour
+## penetration — rather than ahead of it. M11.6 added the three a hit reaction reads: how hard
+## the hit tries to interrupt its target, how hard it pushes, and which way;
+## M11.7 whether it was critical.
 
-## Health this hit removes, as the attacker resolved it.
+## Health this hit removes, as the attacker resolved it: its final damage, a
+## critical already applied (see DamageModel). The target never recomputes it.
 var amount: float = 0.0
 ## Whoever dealt it, or null for damage with no attacker. Kill attribution
 ## reads it: the killing blow's source is who collects.
@@ -31,6 +33,9 @@ var knockback_force: float = 0.0
 ## dealt it to whatever it landed on, fixed at impact so nothing has to reach
 ## back to an attacker that may be gone by then. Zero when there is no telling.
 var direction: Vector3 = Vector3.ZERO
+## Whether this hit was critical — `amount` already includes it. Decided once,
+## for this hit alone; nothing else about the hit (stagger, push) changes with it.
+var is_critical: bool = false
 
 
 func _init(damage: float = 0.0, dealt_by: Node = null, attack: StringName = &"") -> void:

@@ -707,8 +707,8 @@ func _on_damaged(hit: DamageInfo) -> void:
 		_enter_stagger(hit)
 	_apply_knockback(hit)
 	if debug_log_reactions:
-		print("[%s] hit %s: stagger %.0f vs %.0f%s -> %s, push %.2f m/s" % [
-			name, hit.attack_id, hit.stagger_power, stagger_resistance,
+		print("[%s] hit %s%s: stagger %.0f vs %.0f%s -> %s, push %.2f m/s" % [
+			name, hit.attack_id, " (critical)" if hit.is_critical else "", hit.stagger_power, stagger_resistance,
 			" (immune)" if is_stagger_immune() else "", "STAGGERED" if staggers else "flinch",
 			_knockback_velocity.length()])
 
