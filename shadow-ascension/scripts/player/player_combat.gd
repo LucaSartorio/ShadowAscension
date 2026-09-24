@@ -6,17 +6,25 @@ extends Node
 ## It turns an intent into a committed action and runs that action's timeline:
 ##
 ##     request_attack() -> WINDUP -> ACTIVE (hitbox open) -> RECOVERY -> IDLE
-##                                                                 \-> the next attack
+##                                                               \-> the next attack, if one
+##                                                                   was accepted in the window
 ##     request_dodge()  -> DODGING (i-frames inside it) -> IDLE, then a cooldown
 ##
-## It owns the combat state, the attack timeline, the input buffer, the combo
-## chain, the hit window, and the dodge's timing and i-frames. Everything else is
-## someone else's: the devices are read by the player (camera rig and player
-## script), which only calls request_*(); the body is moved by the player, which
-## asks this what the current action allows; the representation is played by the
-## player on attack_started. A hit leaves through the hitbox as a DamageInfo, and
-## whatever it lands on resolves it — this never touches a health bar, an enemy,
-## XP or the dungeon.
+## It owns the combat state, the attack timeline, the light combo chain, the
+## input buffer, the hit window, and the dodge's timing and i-frames. Everything
+## else is someone else's: the devices are read by the player (camera rig and
+## player script), which only calls request_*(); the body is moved by the player,
+## which asks this what the current action allows; the representation is played
+## by the player on attack_started. A hit leaves through the hitbox as a
+## DamageInfo, and whatever it lands on resolves it — this never touches a
+## health bar, an enemy, XP or the dungeon.
+##
+## The light combo (M11.2). A chain runs only while each attack accepts the next
+## one: a press inside an attack's combo window — or just before it, held by the
+## input buffer — queues the next attack of the chain, which starts the moment
+## the current one is over. Anything else ends the chain with the attack, and the
+## next press starts it again from the first attack. Nothing of the chain
+## survives the player going free.
 ##
 ## One timing source: this node's _physics_process, on delta. It runs after the
 ## player's own (a child processes after its parent), pauses with the tree, and
@@ -31,11 +39,15 @@ signal attack_started(attack: AttackData)
 ## component, so combat cannot be dead while the body lives, or the other way.
 enum State { IDLE, WINDUP, ACTIVE, RECOVERY, DODGING, DEAD }
 
+## No attack: the chain has not started, or is over.
+const NO_ATTACK: int = -1
+
 @export var data: PlayerCombatData
 
 @export_group("DEBUG")
 ## DEBUG ONLY. Off by default; the game never needs it. Prints every state change
-## with the attack it belongs to — for tuning windows, not for play.
+## with the attack, its place in the chain and what is waiting to follow it — for
+## tuning windows, not for play.
 @export var debug_log_enabled: bool = false
 
 # Handed over by the player in setup().
@@ -47,16 +59,15 @@ var _progression: PlayerProgression = null
 var _state: State = State.IDLE
 ## Time spent in the current state, reset on every change.
 var _state_elapsed: float = 0.0
-## The attack being performed, or null.
+## The attack being performed, and its index in the light combo; null and
+## NO_ATTACK while free.
 var _attack: AttackData = null
-## Index in the light combo of the attack that starts next.
-var _combo_index: int = 0
-## How long the chain has been waiting since the last attack ended, and how long
-## that attack said it would wait.
-var _chain_idle: float = 0.0
-var _chain_window: float = 0.0
-## Seconds a buffered attack press has left; 0 when there is none. One slot, not
-## a queue: pressing again only renews it.
+var _combo_index: int = NO_ATTACK
+## The attack accepted to follow this one, or null. Set at most once per attack,
+## so one window buys one follow-up however often the button is pressed.
+var _next_attack: AttackData = null
+## Seconds a press made before the combo window opened has left; 0 when there is
+## none. One slot, not a queue: pressing again only renews it.
 var _buffered_attack: float = 0.0
 var _dodge_cooldown_remaining: float = 0.0
 var _iframes_active: bool = false
@@ -81,22 +92,34 @@ func setup(hitbox: Hitbox, hurtbox: Hurtbox, health: HealthComponent,
 
 # --- intents ------------------------------------------------------------------------------
 
-## A light attack was asked for. Starts one now if the player is free; while an
-## attack is running, remembers the press for `input_buffer_time`; otherwise —
-## dodging, dead — ignores it. True when an attack started.
+## A light attack was asked for.
+##
+## - Free: the first attack of the chain starts now.
+## - Inside the current attack's combo window: the next attack is queued.
+## - Earlier in an attack that has a next one: the press is held for
+##   `input_buffer_time`, and queues the next attack if the window opens in time.
+## - Anything else — after the window, during the chain's last attack, a
+##   follow-up already queued, dodging, dead — does nothing.
+##
+## True when an attack started.
 func request_attack() -> bool:
-	match get_state():
-		State.IDLE:
-			return _start_next_attack()
-		State.WINDUP, State.ACTIVE, State.RECOVERY:
-			_buffered_attack = data.input_buffer_time
+	var state: State = get_state()
+	if state == State.IDLE:
+		return _start_attack(0)
+	if not is_attacking() or state == State.DEAD:
+		return false
+	if _next_attack != null or not _has_next_attack():
+		return false
+	if _in_combo_window():
+		_queue_next_attack()
+	elif not _combo_window_passed():
+		_buffered_attack = data.input_buffer_time
 	return false
 
 
 ## A dodge was asked for. Refused while dodging, dead, on cooldown, or during an
 ## attack before its dodge-cancel window; an attack inside that window is
-## cancelled. Whichever way it starts, the combo starts over. True when a dodge
-## started.
+## cancelled, and the chain with it. True when a dodge started.
 func request_dodge() -> bool:
 	var state: State = get_state()
 	if state == State.DODGING or state == State.DEAD:
@@ -107,7 +130,7 @@ func request_dodge() -> bool:
 		if not _in_dodge_cancel_window():
 			return false
 		_stop_attack()
-	_restart_chain()
+	_end_chain()
 	_enter(State.DODGING)
 	# Off at the start as well as the end, exactly as the dodge always did: the
 	# window below switches it on only once the dodge is under way.
@@ -116,13 +139,13 @@ func request_dodge() -> bool:
 
 
 ## Drops whatever combat was doing and starts clean: no attack and no hit window,
-## no dodge and no i-frames, nothing buffered, the combo from its first attack,
-## no cooldown. What a death does.
+## no chain, nothing queued or buffered, no dodge and no i-frames, no cooldown.
+## What a death does.
 func reset() -> void:
 	_stop_attack()
+	_end_chain()
 	_set_iframes(false)
 	_enter(State.IDLE)
-	_restart_chain()
 	_dodge_cooldown_remaining = 0.0
 
 
@@ -145,6 +168,17 @@ func is_dodging() -> bool:
 ## The attack being performed, or null.
 func get_current_attack() -> AttackData:
 	return _attack
+
+
+## Where the current attack sits in the light combo (0 for the first), or
+## NO_ATTACK while free.
+func get_combo_index() -> int:
+	return _combo_index
+
+
+## The attack accepted to follow the current one, or null.
+func get_queued_attack() -> AttackData:
+	return _next_attack
 
 
 func has_buffered_attack() -> bool:
@@ -183,9 +217,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if _dodge_cooldown_remaining > 0.0:
 		_dodge_cooldown_remaining = maxf(0.0, _dodge_cooldown_remaining - delta)
-	if _state == State.IDLE:
-		_advance_chain(delta)
-	else:
+	if is_attacking():
 		_advance_attack(delta)
 	if _buffered_attack > 0.0:
 		_buffered_attack = maxf(0.0, _buffered_attack - delta)
@@ -202,21 +234,10 @@ func _advance_attack(delta: float) -> void:
 				_close_hit_window()
 				_enter(State.RECOVERY)
 		State.RECOVERY:
-			if _buffered_attack > 0.0 and _has_next_attack() \
-					and _state_elapsed >= _attack.recovery * _attack.combo_window_start:
-				_start_next_attack()
-			elif _state_elapsed >= _attack.recovery:
-				_finish_attack()
-
-
-## While free after an attack that is not the last, the chain waits that
-## attack's combo_window_end for the next one, then lapses.
-func _advance_chain(delta: float) -> void:
-	if _combo_index <= 0:
-		return
-	_chain_idle += delta
-	if _chain_idle >= _chain_window:
-		_restart_chain()
+			if _buffered_attack > 0.0 and _next_attack == null and _in_combo_window():
+				_queue_next_attack()
+			if _state_elapsed >= _attack.recovery:
+				_end_attack()
 
 
 func _advance_dodge(delta: float) -> void:
@@ -229,27 +250,43 @@ func _advance_dodge(delta: float) -> void:
 		_dodge_cooldown_remaining = data.dodge_cooldown
 
 
-# --- attacks --------------------------------------------------------------------------------
+# --- the light combo ------------------------------------------------------------------------
 
 func _has_next_attack() -> bool:
-	return _combo_index < data.light_combo.size()
+	return _combo_index + 1 < data.light_combo.size()
 
 
-func _start_next_attack() -> bool:
-	var combo: Array[AttackData] = data.light_combo
-	if combo.is_empty():
+## The window in which the current attack accepts the next one: a stretch of its
+## recovery, given as fractions of it by the attack itself.
+func _in_combo_window() -> bool:
+	if _state != State.RECOVERY or not _has_next_attack():
 		return false
-	if _combo_index < 0 or _combo_index >= combo.size():
-		_combo_index = 0
-	var attack: AttackData = combo[_combo_index]
-	if attack == null:
-		return false
-	_combo_index += 1
+	return _state_elapsed >= _attack.recovery * _attack.combo_window_start \
+		and _state_elapsed <= _attack.recovery * _attack.combo_window_end
+
+
+func _combo_window_passed() -> bool:
+	return _state == State.RECOVERY and _state_elapsed > _attack.recovery * _attack.combo_window_end
+
+
+func _queue_next_attack() -> void:
+	_next_attack = data.light_combo[_combo_index + 1]
 	_buffered_attack = 0.0
-	_chain_idle = 0.0
-	_attack = attack
+	_log("queued %s" % _next_attack.id)
+
+
+## Starts the attack at `index` in the light combo — a fresh instance: its own
+## timeline, its own hit window, nobody hit yet.
+func _start_attack(index: int) -> bool:
+	var combo: Array[AttackData] = data.light_combo
+	if index < 0 or index >= combo.size() or combo[index] == null:
+		return false
+	_attack = combo[index]
+	_combo_index = index
+	_next_attack = null
+	_buffered_attack = 0.0
 	_enter(State.WINDUP)
-	attack_started.emit(attack)
+	attack_started.emit(_attack)
 	return true
 
 
@@ -271,17 +308,14 @@ func _close_hit_window() -> void:
 		_hitbox.deactivate()
 
 
-## Over, with nothing buffered in time. After the last attack the chain ends;
-## otherwise it waits for the next.
-func _finish_attack() -> void:
-	var finished: AttackData = _attack
+## The attack is over: the queued one follows at once, or the chain ends here.
+func _end_attack() -> void:
+	if _next_attack != null:
+		_start_attack(_combo_index + 1)
+		return
 	_attack = null
+	_end_chain()
 	_enter(State.IDLE)
-	if _has_next_attack():
-		_chain_window = finished.combo_window_end
-		_chain_idle = 0.0
-	else:
-		_restart_chain()
 
 
 ## Ends the current attack wherever it is, closing its hit window.
@@ -290,9 +324,10 @@ func _stop_attack() -> void:
 	_attack = null
 
 
-func _restart_chain() -> void:
-	_combo_index = 0
-	_chain_idle = 0.0
+## Nothing of the chain is kept: the next attack will be the first.
+func _end_chain() -> void:
+	_combo_index = NO_ATTACK
+	_next_attack = null
 	_buffered_attack = 0.0
 
 
@@ -307,8 +342,15 @@ func _in_dodge_cancel_window() -> bool:
 func _enter(state: State) -> void:
 	_state = state
 	_state_elapsed = 0.0
-	if debug_log_enabled:
-		print("[PlayerCombat] %s %s" % [State.keys()[state], _attack.id if _attack != null else &""])
+	_log(State.keys()[state])
+
+
+func _log(what: String) -> void:
+	if not debug_log_enabled:
+		return
+	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs" % [
+		what, _attack.id if _attack != null else &"-", _combo_index + 1, data.light_combo.size(),
+		_next_attack.id if _next_attack != null else &"-", _buffered_attack])
 
 
 ## `force` writes the hurtbox even when the value has not changed.

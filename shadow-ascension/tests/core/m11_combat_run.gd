@@ -125,7 +125,7 @@ func _phase_player_combat() -> void:
 	var clears: Array[int] = []
 	room.room_cleared.connect(func(_r: RoomController) -> void: clears.append(1))
 
-	# One measured swing: light_1 from a fresh chain.
+	# One measured swing: light_attack_1 from a fresh chain.
 	var a_health: HealthComponent = a.get_node("HealthComponent")
 	var before: float = a_health.current_health
 	var hit: DamageInfo = await _first_hit(p, a)
@@ -133,11 +133,11 @@ func _phase_player_combat() -> void:
 	var bar: EnemyHealthBar3D = a.get_node("EnemyHealthBar3D")
 	_record(hit != null and hit.amount == 20.0 and dealt == hit.amount
 			and hit.amount == p.combat.calculate_damage(p.combat.data.light_combo[0]),
-		"E1) a real light_1 takes exactly its calculated %.0f off the enemy (took %.0f)" % [
+		"E1) a real light_attack_1 takes exactly its calculated %.0f off the enemy (took %.0f)" % [
 			p.combat.calculate_damage(p.combat.data.light_combo[0]), dealt])
-	_record(hit != null and hit.source == p and hit.attack_id == &"light_1"
+	_record(hit != null and hit.source == p and hit.attack_id == &"light_attack_1"
 			and is_same(a_health.last_damage, hit),
-		"E2) the enemy's health recorded that hit: from the player, by light_1")
+		"E2) the enemy's health recorded that hit: from the player, by light_attack_1")
 	_record(is_equal_approx(bar.get_ratio(), a_health.current_health / a_health.max_health),
 		"E3) its health bar follows: %.2f" % bar.get_ratio())
 

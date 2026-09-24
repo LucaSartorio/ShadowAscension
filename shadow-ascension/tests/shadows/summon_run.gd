@@ -71,9 +71,6 @@ func _initialize() -> void:
 	# Levelled on purpose, so "it came back the same" is a claim with substance.
 	p.shadows.award_xp(shadow_id, 200)
 	_record(shadow.level > 1, "7) topped up to Lv.%d for the trip" % shadow.level)
-	var level_out: int = shadow.level
-	var xp_out: int = shadow.current_xp
-	print("[IN DUNGEON ] %s Lv.%d %d XP" % [shadow.get_short_id(), level_out, xp_out])
 
 	# --- clear the rest so the exit portal opens
 	# Shielded for the clear, as the player already is: a boss can genuinely
@@ -91,6 +88,12 @@ func _initialize() -> void:
 	_record(p.shadow_summoner.has_active_shadow(),
 		"9) with the shadow still out at the end of it")
 	p.hurtbox.set_invulnerable(false)
+	# Read just before the scene change this run is about. The shadow fights the
+	# clear alongside the player and may well finish an enemy there — that is its
+	# job, not a change the portal made.
+	var level_out: int = shadow.level
+	var xp_out: int = shadow.current_xp
+	print("[IN DUNGEON ] %s Lv.%d %d XP" % [shadow.get_short_id(), level_out, xp_out])
 
 	# --- out through the portal: it should come back on its own
 	p.global_position = EXIT_POS

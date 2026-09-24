@@ -185,7 +185,7 @@ func _initialize() -> void:
 	# --- 30) nothing temporary rode along. The pre-death dungeon is gone, so the
 	# reloaded one has to be read off current_scene rather than the stale handle.
 	var reloaded: DungeonController = current_scene as DungeonController
-	_record(player5.combat._combo_index == 0 and not player5.combat.is_dodging()
+	_record(player5.combat.get_combo_index() == PlayerCombat.NO_ATTACK and not player5.combat.is_dodging()
 			and player5.combat.get_state() == PlayerCombat.State.IDLE
 			and reloaded != null
 			and reloaded.get_rooms()[0].get_state() == RoomController.RoomState.IDLE

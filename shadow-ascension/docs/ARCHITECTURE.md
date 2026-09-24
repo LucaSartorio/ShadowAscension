@@ -133,7 +133,7 @@ Systems are built from small, composable components attached to a scene root (e.
 - **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source` and `attack_id`, sends each target one `DamageInfo`, emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
 - **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: honours `is_invulnerable` (dodge i-frames) and forwards the hit to the `HealthComponent` it is wired to.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1).
-- **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, placeholder presentation (M11.1; replaced `AttackStep`).
+- **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, and the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2).
 
 The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); see *Combat architecture (M11)*.
 
@@ -208,7 +208,7 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, the light combo (its `AttackData`s), input-buffer time, dodge duration / i-frames / cooldown | `PlayerCombat` | the combat state, timers, combo position or buffered input — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack | `id`, damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, placeholder tilt and debug colour | `PlayerCombat`; the presentation reads the placeholder fields | a damage number of its own — it scales the owner's base; any per-swing state |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -307,7 +307,8 @@ godot --headless --path . --script res://tests/run_all.gd
 The last two columns are there because a PASS/FAIL count cannot see them: M10.4's first version
 leaked GDScript instances on every run through the dungeon while every assertion passed. At the
 close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, **37 suites and
-1506 assertions**, all clean.
+1506 assertions**; at M11.2, **39 suites and 1565 assertions**,
+all clean.
 
 **Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
 To see them all at once, put an `override.cfg` in the project root that raises each warning to an
@@ -928,7 +929,8 @@ Two consequences worth stating, because they are easy to lose:
 M11.1 (Combat Foundation 2.0) rebuilt the player's combat as the foundation the rest of M11 extends.
 The gameplay it carries is the one M2–M9 shipped — the three-hit light combo, the dodge with its
 i-frames and its cancel windows, the same damage numbers — reorganised so that each step of an attack
-has one owner and the animation is never the source of truth.
+has one owner and the animation is never the source of truth. M11.2 (Light Attack Combo Chain) made
+the combo a real chain on that foundation: see *Light attack combo (M11.2)* below.
 
 ```
 Input          CameraRig (attack_light, only while the mouse is captured) and Player (dodge):
@@ -975,33 +977,34 @@ One enum, `PlayerCombat.State`, instead of an attack state beside an `_is_dodgin
 
 | State | Meaning | Attack press | Dodge press |
 | --- | --- | --- | --- |
-| `IDLE` | free | starts the next attack of the chain now | starts a dodge (off cooldown) |
-| `WINDUP` | an attack is winding up; the hitbox is shut | buffered | refused |
-| `ACTIVE` | the hit window: the hitbox is open | buffered | refused |
-| `RECOVERY` | the hitbox is shut again; the player is still committed | buffered | cancels the attack, once past the attack's `dodge_cancel_recovery_fraction` |
+| `IDLE` | free; no chain | starts Attack 1 now | starts a dodge (off cooldown) |
+| `WINDUP` | an attack is winding up; the hitbox is shut | held by the buffer, if the attack has a next | refused |
+| `ACTIVE` | the hit window: the hitbox is open | held by the buffer, if the attack has a next | refused |
+| `RECOVERY` | the hitbox is shut again; the player is still committed | queues the next attack inside the combo window; held before it; ignored after it | cancels the attack, once past the attack's `dodge_cancel_recovery_fraction` |
 | `DODGING` | a dodge; the i-frames fall inside it | ignored | refused |
 | `DEAD` | read from the health component, never stored | refused | refused |
 
 Only what the current combat needs is built. There is no `STUNNED` — hit reactions and stagger are a
 later M11 step, and add it when they do — and no separate `ATTACKING`: the three phases are the
-attack. `is_attacking()`, `is_dodging()`, `get_current_attack()` and `has_buffered_attack()` are the
-queries; `allows_turning()` and `get_movement_multiplier()` are what the player's movement asks.
+attack. `is_attacking()`, `is_dodging()`, `get_current_attack()`, `get_combo_index()`,
+`get_queued_attack()` and `has_buffered_attack()` are the queries; `allows_turning()` and
+`get_movement_multiplier()` are what the player's movement asks.
 
 ### Attack lifecycle
 
 ```
 request_attack()      windup            active              recovery
-      |-------------------|-------------------|-------------------|--> IDLE, or the next attack
-   attack_started      hitbox opens       hitbox closes      combo window opens
-   (facing, anim)      (damage stamped)                      (combo_window_start)
+      |-------------------|-------------------|-------------------|--> the queued attack, or IDLE
+   attack_started      hitbox opens       hitbox closes      [ combo window ]
+   (facing, anim)      (damage stamped)                      a press here queues the next
 ```
 
 - **Windup** — the attack is committed and aimed; nothing can be hit yet.
 - **Active** — `_open_hit_window()` works the damage out, stamps it and the attack's id on the
   hitbox and opens it. `activate()` also forgets whom the last swing hit.
 - **Recovery** — the hitbox is shut; the player is still committed. A dodge can cancel it past the
-  attack's cancel fraction; a buffered attack press starts the next attack once the combo window
-  opens.
+  attack's cancel fraction; a press inside the combo window queues the next attack of the chain,
+  which starts the moment recovery ends.
 
 **One timing source**: `PlayerCombat._physics_process`, on `delta`. Each phase restarts its own
 clock, so a phase ends on the first physics step at or past its length — at most one step late,
@@ -1010,29 +1013,75 @@ There is no `Timer` node, no `AnimationPlayer` track and no tween deciding anyth
 presentation. The node pauses with the tree — the buffer does not age during a pause — and is
 freed with the player, so no timer, connection or open hit window outlives a scene change.
 
-### Input buffer
+### Light attack combo (M11.2)
 
-One slot, not a queue. An attack pressed while another is running is remembered for
-`PlayerCombatData.input_buffer_time` (0.4 s); pressing again only renews it. It is spent the moment
-the chain may continue, and dropped when it expires, when a dodge starts, when the combat resets, or
-when the chain ends with its last attack. A press while dodging or dead is not buffered.
+```
+IDLE --press--> Attack 1 --window--> Attack 2 --window--> Attack 3 --> IDLE
+                   |                    |                    (the chain always ends here)
+                   +--no press in the window: the chain ends with this attack --> IDLE
+```
 
-**This is the one change of feel in M11.1.** The old combo remembered a press made at any point in
-an attack, however early. Now a press made more than 0.4 s before the chain can continue is too
-early and does nothing: ten clicks in one frame buy one attack (they bought two). Presses in rhythm —
-two clicks 0.15 s apart, a click during the swing's impact — chain exactly as before.
+**The chain.** `PlayerCombatData.light_combo` holds the three attacks, in order. A press on a free
+player starts Attack 1. Each attack that has a next one accepts a follow-up inside its combo window;
+the accepted attack is *queued* and starts the moment the current one is over, as a fresh attack
+instance — its own timeline, its own hit window, nobody hit yet. An attack that did not accept a
+follow-up ends the chain when it ends: the player goes free, and the next press is Attack 1 again.
+Attack 3 has no next, so it always ends the chain. There is no Attack 4, no branch, no finisher
+variant.
 
-### Combo window
+**Combo state** is three fields on `PlayerCombat`, never booleans per step:
 
-Each `AttackData` defines its own:
+| Field | Meaning |
+| --- | --- |
+| `_combo_index` (`get_combo_index()`) | where the current attack sits in the chain (0, 1, 2); `NO_ATTACK` (-1) while free |
+| `_attack` (`get_current_attack()`) | the attack being performed — always `light_combo[_combo_index]` |
+| `_next_attack` (`get_queued_attack()`) | the attack accepted to follow it — always `light_combo[_combo_index + 1]` — or null |
 
-- `combo_window_start` — how far into recovery the next attack may begin, as a fraction of it.
-  `1.0` on every shipped attack: the next starts when this one is over, as always. A lower value
-  lets a buffered press cut recovery short (tested, not shipped).
-- `combo_window_end` — how long after this attack is over the chain still waits (0.8 s, the old
-  `combo_reset_time`). Pressed within it, the next attack of the chain; after it, the first.
+**Reset.** The chain is dropped — index `NO_ATTACK`, nothing queued, nothing buffered — whenever the
+player goes free: Attack 3 ending, an attack ending with nothing queued, a dodge, `reset()`, the
+player's death (combat resets on its own `died`), and a scene change (the whole combat is freed with
+the player). There is no timeout while free, because nothing of the chain survives going free — the
+M11.1 combo kept the chain open for 0.8 s after an attack; M11.2 removed that, so "the next attack is
+Attack 2" can never outlive the attack that accepted it.
 
-The last attack of a chain ends it, and a dodge restarts it.
+**Combo window.** A stretch of the attack's recovery, as fractions of it:
+`combo_window_start` and `combo_window_end`. Both shipped attacks with a follow-up use the whole
+recovery (`0.0` to `1.0`); Attack 3's are never read. A press:
+
+| When | What happens |
+| --- | --- |
+| free | Attack 1 starts now |
+| inside the window | the next attack is queued at once |
+| up to `input_buffer_time` before the window opens (late windup, active) | held by the buffer; queued when the window opens |
+| earlier than that (the start of the attack) | too early: the buffer expires and it does nothing |
+| after the window closes (only if `combo_window_end` < 1) | too late: ignored, the chain ends with the attack |
+| during the chain's last attack, or with a follow-up already queued | ignored |
+
+**Input buffer.** One slot, not a queue: `PlayerCombatData.input_buffer_time` (0.15 s). Pressing again
+only renews it. It exists only to catch a press made just before a window opens, and is cleared when
+it is spent, when it expires, when the chain ends, on a dodge, on `reset()` and on death — so no press
+ever reaches a later chain or a later scene. Fifteen presses in one frame buy one Attack 1; fifteen
+inside one window buy one follow-up; mashing gives 1 → 2 → 3 → 1 … for as long as it lasts, and once
+it stops at most the one attack already queued runs.
+
+**The three attacks** are their own assets, in `resources/characters/player_attacks/`, so each is
+retuned on its own and the controller never changes:
+
+| Asset | `id` | `animation` | multiplier | windup / active / recovery | combo window | dodge cancel |
+| --- | --- | --- | --- | --- | --- | --- |
+| `light_attack_1.tres` | `light_attack_1` | `light_attack_01` | ×1.0 → 20 | 0.12 / 0.12 / 0.22 s | whole recovery | from 0% |
+| `light_attack_2.tres` | `light_attack_2` | `light_attack_02` | ×1.25 → 25 | 0.14 / 0.14 / 0.24 s | whole recovery | from 35% |
+| `light_attack_3.tres` | `light_attack_3` | `light_attack_03` | ×1.75 → 35 | 0.18 / 0.16 / 0.32 s | — (ends the chain) | from 60% |
+
+The numbers are the M2 combo's, unchanged: the damage values are the same 20 / 25 / 35 (80 for the
+chain at neutral STR, no weapon), and every duration is the same. What M11.2 changed is when a press
+counts. The data is shared configuration and holds nothing of a running attack: the index, the queue,
+the buffer, the timers and the hit history are all runtime state on `PlayerCombat` and the hitbox.
+
+**Timing and frame rate.** Every attack ends on the first physics step at or past its phases, so a
+chain is at most one step late per phase. Godot runs physics at a fixed 60 Hz whatever the rendering
+frame rate, so a low FPS does not change it; `light_combo_test` also steps a bare controller at 30 and
+144 Hz to check the chain itself.
 
 ### Damage flow
 
@@ -1068,16 +1117,21 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 - **Movement during an attack is unchanged** — full speed. The player's movement multiplies its speed
   by `PlayerCombat.get_movement_multiplier()`, which is the current attack's `movement_multiplier`:
   1.0 on every shipped attack. A slowed, rooted or lunging attack is data from here.
-- **Facing**: the player turns toward where it walks only while `allows_turning()` (IDLE). An attack
-  faces the camera's aim when it starts (`Player._face_aim_direction()`), and target lock replaces
-  that aim source rather than the combat.
+- **Facing**: the player turns toward where it walks only while `allows_turning()` (IDLE). Every
+  attack of the chain faces the aim when it starts (`Player._face_aim_direction()`), and the aim is
+  one function, `Player._aim_direction()` (the camera's forward today): target lock replaces that
+  function, and neither the combo nor the facing code changes.
 - **The hitbox no longer rolls with the placeholder.** It hangs under `VisualRoot`, which only turns
   with the facing; the model moved to `VisualRoot/Model`, and the attack and dodge tilts rotate that
   node alone. Before, the finisher's 15° roll moved its hit volume up to ~0.2 m sideways — the only
   change to a hit volume in M11.1.
 - **Animation**: combat emits `attack_started(attack)`; `Player._play_attack_animation(attack)` is the
-  one place an attack is shown. M14 swaps the tween for real animation there. Animation method
-  tracks may later serve as hooks, but the timeline stays `PlayerCombat`'s.
+  one place an attack is shown, and it knows the attack only by `AttackData.animation`. Today that
+  name picks a placeholder roll from `Player.placeholder_attack_tilts` (set in `player.tscn`:
+  6° / 10° / 15° for `light_attack_01` / `02` / `03`) — the same three placeholder swings as before,
+  now addressed by name. M14 plays real clips under the same names there; the attack data and the
+  combat never change for a new model, skeleton or AnimationTree. Animation method tracks may later
+  serve as hooks, but the timeline stays `PlayerCombat`'s.
 
 ### Death and scene change
 
@@ -1089,8 +1143,9 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 
 ### Debug and input actions
 
-- `PlayerCombat.debug_log_enabled` (off by default, inspector only) prints every state change with its
-  attack. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
+- `PlayerCombat.debug_log_enabled` (off by default, inspector only) prints every state change and
+  every queued follow-up with the current attack, its place in the chain, the queued attack and the
+  buffer. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
 - The input actions stay `attack_light` and `dodge`. New ones follow the same pattern —
   `attack_heavy`, `target_lock` — and are added with their features, not before.
 
@@ -1099,6 +1154,8 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 - **Heavy attack**: a second chain of `AttackData` and an `attack_heavy` intent.
 - **Stamina**: maximum and rates in `PlayerCombatData`, the current value on `PlayerCombat`.
 - **Dodge 2.0**: stamina cost, buffering an attack out of a dodge, cancelling into a dodge earlier.
+- **Combo 2.0**: a follow-up cutting recovery short, windows reaching into the active phase, branches,
+  launchers and air combos — each a change to data and to `_end_attack()`, not a second system.
 - **Hit reactions, stagger, knockback**: a `STUNNED` state; `DamageInfo` gains the direction and force
   a reaction needs, on the receiving side.
 - **Critical hits**: in `calculate_damage()`, or per hit where the hitbox builds its `DamageInfo`.

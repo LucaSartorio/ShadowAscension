@@ -236,8 +236,7 @@ func _test_attack_1_cancelable_during_recovery() -> void:
 
 func _test_attack_2_cancel_window() -> void:
 	_reset_player()
-	_player.combat._combo_index = 1  # target Attack 2 next
-	_player._on_attack_light_pressed()
+	_player.combat._start_attack(1)  # Attack 2, directly
 	# Attack 2: startup 0.14 + active 0.14 = 0.28 → recovery. Fraction 0.35 * 0.24 = 0.084s
 	await _wait(0.32)  # 0.04s into recovery (< 0.084)
 	_player._on_dodge_pressed()
@@ -251,8 +250,7 @@ func _test_attack_2_cancel_window() -> void:
 
 func _test_attack_3_cancel_window() -> void:
 	_reset_player()
-	_player.combat._combo_index = 2
-	_player._on_attack_light_pressed()
+	_player.combat._start_attack(2)  # Attack 3, directly
 	# Attack 3: startup 0.18 + active 0.16 = 0.34 → recovery. Fraction 0.6 * 0.32 = 0.192s
 	await _wait(0.42)  # 0.08s into recovery (< 0.192)
 	_player._on_dodge_pressed()
@@ -280,22 +278,26 @@ func _test_queued_input_cleared_by_dodge() -> void:
 	await _wait(0.15)
 	_player._on_attack_light_pressed()  # queue Attack 2
 	var was_queued: bool = _player.combat.has_buffered_attack()
-	await _wait(0.15)  # move into RECOVERY
+	await _wait(0.15)  # move into RECOVERY: the window opens and takes the press
+	var queued: bool = _player.combat.get_queued_attack() != null
 	_player._on_dodge_pressed()
-	var cleared: bool = not _player.combat.has_buffered_attack() and _player.combat._combo_index == 0
-	_record(was_queued and cleared, "16) queued input cleared by dodge (was_queued=%s cleared=%s)" % [was_queued, cleared])
+	var cleared: bool = not _player.combat.has_buffered_attack() \
+		and _player.combat.get_queued_attack() == null \
+		and _player.combat.get_combo_index() == PlayerCombat.NO_ATTACK
+	_record(was_queued and queued and cleared, "16) queued input cleared by dodge (was_queued=%s queued=%s cleared=%s)" % [was_queued, queued, cleared])
 	await _wait(0.6)
 
 
 func _test_next_attack_after_dodge_is_attack_1() -> void:
 	_reset_player()
-	_player.combat._combo_index = 2  # target Attack 3
-	_player._on_attack_light_pressed()
+	_player.combat._start_attack(2)  # Attack 3, directly
 	await _wait(0.55)  # into recovery past 60% cancel
 	_player._on_dodge_pressed()
 	await _wait(_player.combat.data.dodge_duration + _player.combat.data.dodge_cooldown + 0.1)
-	var idx_ok: bool = _player.combat._combo_index == 0
-	_record(idx_ok, "17) next attack after dodge starts fresh (combo_index=%d expect 0)" % _player.combat._combo_index)
+	var idx_ok: bool = _player.combat.get_combo_index() == PlayerCombat.NO_ATTACK
+	_player._on_attack_light_pressed()
+	idx_ok = idx_ok and _player.combat.get_combo_index() == 0
+	_record(idx_ok, "17) next attack after dodge starts fresh (combo_index=%d expect 0)" % _player.combat.get_combo_index())
 	await _wait(0.6)
 
 

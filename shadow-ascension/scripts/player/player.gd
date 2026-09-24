@@ -23,6 +23,11 @@ const RUNTIME_STATE_NODE: String = "PlayerRuntimeState"
 ## beside the walking speed, and scales with AGI the same way.
 @export var dodge_speed: float = 11.5
 @export var dodge_visual_tilt_degrees: float = -15.0
+## PLACEHOLDER. How far the model rolls for each attack animation, keyed by the
+## animation name an AttackData asks for. It is this scene's stand-in for an
+## animation set: M14 replaces it with real clips under the same names, and
+## neither the combat nor the attack data changes.
+@export var placeholder_attack_tilts: Dictionary[StringName, float] = {}
 
 ## Turns with the player's facing, and carries the attack hitbox with it.
 @onready var visual_root: Node3D = $VisualRoot
@@ -266,22 +271,31 @@ func _on_attack_started(attack: AttackData) -> void:
 	_play_attack_animation(attack)
 
 
-## An attack goes where the camera looks. This is also what aims the hitbox,
-## which turns with the facing.
+## Every attack of the chain turns to the aim when it starts. This is also what
+## aims the hitbox, which turns with the facing.
 func _face_aim_direction() -> void:
-	var cam_basis: Basis = camera_rig.global_transform.basis
-	var forward: Vector3 = -cam_basis.z
+	var aim: Vector3 = _aim_direction()
+	if aim == Vector3.ZERO:
+		return
+	visual_root.rotation.y = atan2(-aim.x, -aim.z)
+
+
+## Where an attack should go, flat on the ground: the camera's forward. The one
+## thing a target lock replaces — the combo and the facing code stay as they are.
+func _aim_direction() -> Vector3:
+	var forward: Vector3 = -camera_rig.global_transform.basis.z
 	forward.y = 0.0
 	if forward.length() < 0.0001:
-		return
-	forward = forward.normalized()
-	visual_root.rotation.y = atan2(-forward.x, -forward.z)
+		return Vector3.ZERO
+	return forward.normalized()
 
 
+## The one place an attack is shown. It knows the attack only by its animation
+## name; today that name picks a placeholder roll.
 func _play_attack_animation(attack: AttackData) -> void:
 	if _visual_tween != null and _visual_tween.is_running():
 		_visual_tween.kill()
-	var tilt: float = deg_to_rad(attack.visual_tilt_degrees)
+	var tilt: float = deg_to_rad(placeholder_attack_tilts.get(attack.animation, 0.0))
 	var to_tilt_time: float = max(0.05, attack.windup + attack.active * 0.5)
 	var to_zero_time: float = max(0.05, attack.recovery)
 	_visual_tween = create_tween()

@@ -1,55 +1,15 @@
-[gd_resource type="Resource" script_class="PlayerCombatData" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="PlayerCombatData" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_combat_data.gd" id="1_data"]
-[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="2_attack"]
-
-[sub_resource type="Resource" id="light_1"]
-script = ExtResource("2_attack")
-id = &"light_1"
-damage_multiplier = 1.0
-windup = 0.12
-active = 0.12
-recovery = 0.22
-combo_window_start = 1.0
-combo_window_end = 0.8
-dodge_cancel_recovery_fraction = 0.0
-movement_multiplier = 1.0
-visual_tilt_degrees = 6.0
-debug_color = Color(1, 0.55, 0.35, 0.4)
-
-[sub_resource type="Resource" id="light_2"]
-script = ExtResource("2_attack")
-id = &"light_2"
-damage_multiplier = 1.25
-windup = 0.14
-active = 0.14
-recovery = 0.24
-combo_window_start = 1.0
-combo_window_end = 0.8
-dodge_cancel_recovery_fraction = 0.35
-movement_multiplier = 1.0
-visual_tilt_degrees = 10.0
-debug_color = Color(1, 0.35, 0.35, 0.4)
-
-[sub_resource type="Resource" id="light_3"]
-script = ExtResource("2_attack")
-id = &"light_3"
-damage_multiplier = 1.75
-windup = 0.18
-active = 0.16
-recovery = 0.32
-combo_window_start = 1.0
-combo_window_end = 0.8
-dodge_cancel_recovery_fraction = 0.6
-movement_multiplier = 1.0
-visual_tilt_degrees = 15.0
-debug_color = Color(0.65, 0.2, 0.9, 0.45)
+[ext_resource type="Resource" path="res://resources/characters/player_attacks/light_attack_1.tres" id="2_light_1"]
+[ext_resource type="Resource" path="res://resources/characters/player_attacks/light_attack_2.tres" id="3_light_2"]
+[ext_resource type="Resource" path="res://resources/characters/player_attacks/light_attack_3.tres" id="4_light_3"]
 
 [resource]
 script = ExtResource("1_data")
 base_damage = 20.0
-light_combo = Array[Resource]([SubResource("light_1"), SubResource("light_2"), SubResource("light_3")])
-input_buffer_time = 0.4
+light_combo = Array[Resource]([ExtResource("2_light_1"), ExtResource("3_light_2"), ExtResource("4_light_3")])
+input_buffer_time = 0.15
 dodge_duration = 0.35
 invulnerability_start = 0.06
 invulnerability_end = 0.24

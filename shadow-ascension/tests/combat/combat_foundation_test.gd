@@ -10,9 +10,12 @@ extends Node3D
 ## hand at 30 Hz and 144 Hz, since a scene only ever runs at one rate.
 ##
 ## Tests that need a window the shipped attacks do not have (a long active phase,
-## a combo window that cuts recovery, an attack that roots the player) run on a
-## copy of the data, never on the shared .tres — and the last check is that the
-## .tres came through untouched.
+## a narrower combo window, an attack that roots the player) run on a copy of the
+## data, never on the shared .tres — and the last check is that the .tres came
+## through untouched.
+##
+## Updated for M11.2: the chain now ends with any attack that did not accept a
+## follow-up, and a press is held only for the short buffer before a window.
 
 const DUMMY_SCENE: PackedScene = preload("res://scenes/enemies/training_dummy.tscn")
 const IN_FRONT: Vector3 = Vector3(0, 0.1, -1.5)
@@ -65,15 +68,15 @@ func _state_tests() -> void:
 		"S1) a fresh player's combat is IDLE: no attack, nothing buffered, hitbox shut")
 
 	_fire()
-	_record(_combat.get_state() == PlayerCombat.State.WINDUP and _attack_id() == &"light_1"
-			and _started == [&"light_1"],
-		"S2/B-A) a press on a free player starts light_1 at once (%s, started %s)" % [
+	_record(_combat.get_state() == PlayerCombat.State.WINDUP and _attack_id() == &"light_attack_1"
+			and _started == [&"light_attack_1"],
+		"S2/B-A) a press on a free player starts light_attack_1 at once (%s, started %s)" % [
 			_state_name(), _started])
 	_record(not _player.attack_hitbox.is_active(), "S3) the hitbox stays shut through the windup")
 	_fire()
-	_record(_started.size() == 1 and _attack_id() == &"light_1"
+	_record(_started.size() == 1 and _attack_id() == &"light_attack_1"
 			and _combat.get_state() == PlayerCombat.State.WINDUP,
-		"S4) a second press mid-attack starts nothing: still light_1, one attack started")
+		"S4) a second press mid-attack starts nothing: still light_attack_1, one attack started")
 
 	var to_active: int = await _frames_until(PlayerCombat.State.ACTIVE)
 	var open_in_active: bool = _player.attack_hitbox.is_active()
@@ -89,31 +92,31 @@ func _state_tests() -> void:
 		"S7) recovery %.2fs, then IDLE with no attack (%d frames)" % [attack.recovery, to_idle])
 	await get_tree().physics_frame
 	_record(not _player.attack_hitbox.monitoring, "S8) and the hitbox is no longer monitoring")
-	_record(_started == [&"light_1"],
-		"S9) the press made in the windup expired: nothing followed light_1 (%s)" % [_started])
+	_record(_started == [&"light_attack_1"],
+		"S9) the press made in the windup expired: nothing followed light_attack_1 (%s)" % [_started])
 	_fire()
-	_record(_attack_id() == &"light_2",
-		"S10) the player is free again, and the chain is still open: the next press is light_2")
+	_record(_attack_id() == &"light_attack_1",
+		"S10) the player is free again, and the chain ended with the attack: the next press is light_attack_1")
 	await _frames_until(PlayerCombat.State.IDLE)
 
 
 # --- the input buffer ---------------------------------------------------------------------
 
 func _buffer_tests() -> void:
-	# B: pressed in the last moments of an attack, used the moment the chain may go on.
+	# B: pressed in the combo window (the recovery): queued, started as it ends.
 	await _fresh()
 	_fire()
 	await _frames_until(PlayerCombat.State.RECOVERY)
 	_fire()
-	var buffered: bool = _combat.has_buffered_attack() and _started.size() == 1
+	var buffered: bool = _combat.get_queued_attack() != null and _started.size() == 1
 	var frames: int = 0
 	while _started.size() < 2 and frames < 60:
 		await get_tree().physics_frame
 		frames += 1
 	var recovery: float = _shipped.light_combo[0].recovery
-	_record(buffered and _started == [&"light_1", &"light_2"] and _near(frames, recovery)
+	_record(buffered and _started == [&"light_attack_1", &"light_attack_2"] and _near(frames, recovery)
 			and not _combat.has_buffered_attack(),
-		"B-B) pressed in recovery: remembered, then light_2 starts as recovery ends (%d frames, %s)" % [
+		"B-B) pressed in recovery: queued, then light_attack_2 starts as recovery ends (%d frames, %s)" % [
 			frames, _started])
 	await _frames_until(PlayerCombat.State.IDLE)
 
@@ -127,19 +130,18 @@ func _buffer_tests() -> void:
 	while _combat.has_buffered_attack() and expired_after < 120:
 		await get_tree().physics_frame
 		expired_after += 1
-	var still_light_1: bool = _attack_id() == &"light_1"
+	var still_light_1: bool = _attack_id() == &"light_attack_1"
 	await _frames_until(PlayerCombat.State.IDLE)
 	await _wait(0.1)
 	_record(kept_at_first and _near(expired_after, _shipped.input_buffer_time) and still_light_1
-			and _started == [&"light_1"],
-		"B-C1) too early: held %.2fs (%d frames), dropped before light_1 ended, nothing followed" % [
+			and _started == [&"light_attack_1"],
+		"B-C1) too early: held %.2fs (%d frames), dropped before light_attack_1 ended, nothing followed" % [
 			_shipped.input_buffer_time, expired_after])
 
-	# C, too late: after the combo window the chain has lapsed.
-	await _wait(_shipped.light_combo[0].combo_window_end + 0.1)
+	# C, too late: once the attack is over, so is the chain.
 	_fire()
-	_record(_attack_id() == &"light_1",
-		"B-C2) too late: a press after combo_window_end starts the combo over at light_1")
+	_record(_attack_id() == &"light_attack_1",
+		"B-C2) too late: a press after the attack ended starts the combo over at light_attack_1")
 	await _frames_until(PlayerCombat.State.IDLE)
 
 	# One slot, not a queue.
@@ -150,7 +152,7 @@ func _buffer_tests() -> void:
 		_fire()
 	await _frames_until(PlayerCombat.State.ACTIVE)
 	await _frames_until(PlayerCombat.State.IDLE)
-	_record(_started == [&"light_1", &"light_2"],
+	_record(_started == [&"light_attack_1", &"light_attack_2"],
 		"B-D) six presses in one recovery buy one attack, not six (%s)" % [_started])
 
 	# Dodging: an attack press is not buffered.
@@ -167,14 +169,14 @@ func _buffer_tests() -> void:
 # --- the combo window ---------------------------------------------------------------------
 
 func _combo_window_tests() -> void:
-	# Within the window, after the attack is over: the chain goes on.
+	# After the attack is over the chain is not waiting any more.
 	await _fresh()
 	_fire()
 	await _frames_until(PlayerCombat.State.IDLE)
 	await _wait(0.3)
 	_fire()
-	_record(_attack_id() == &"light_2",
-		"W1) 0.3s after light_1, inside its 0.8s combo window: light_2")
+	_record(_attack_id() == &"light_attack_1",
+		"W1) 0.3s after light_attack_1 ended without a follow-up: light_attack_1 again")
 	await _frames_until(PlayerCombat.State.IDLE)
 
 	# The last attack ends the chain, whatever is buffered.
@@ -186,25 +188,31 @@ func _combo_window_tests() -> void:
 	await get_tree().physics_frame
 	var after_three: Array[StringName] = _started.duplicate()
 	_fire()
-	_record(after_three == [&"light_1", &"light_2", &"light_3"] and _attack_id() == &"light_1",
-		"W2) light_3 ends the chain: its buffered press is dropped, the next press is light_1")
+	_record(after_three == [&"light_attack_1", &"light_attack_2", &"light_attack_3"] and _attack_id() == &"light_attack_1",
+		"W2) light_attack_3 ends the chain: a press during it is ignored, the next press is light_attack_1")
 	await _frames_until(PlayerCombat.State.IDLE)
 
-	# The framework: a window that opens before recovery ends cuts it short.
+	# A window that opens halfway through recovery: a press at its start is held,
+	# taken when the window opens, and the follow-up still waits for the end.
 	_combat.data = _copy_of_shipped()
 	_combat.data.light_combo[0].combo_window_start = 0.5
 	await _fresh()
 	_fire()
 	await _frames_until(PlayerCombat.State.RECOVERY)
 	_fire()
+	var held_first: bool = _combat.has_buffered_attack() and _combat.get_queued_attack() == null
 	var frames: int = 0
-	while _started.size() < 2 and frames < 60:
+	while _combat.get_queued_attack() == null and frames < 60:
 		await get_tree().physics_frame
 		frames += 1
 	var half: float = _shipped.light_combo[0].recovery * 0.5
-	_record(_started == [&"light_1", &"light_2"] and _near(frames, half),
-		"W3) combo_window_start 0.5: light_2 cuts light_1's recovery at half (%d frames, ~%.2fs)" % [
-			frames, half])
+	var queued_at_half: bool = _near(frames, half)
+	while _started.size() < 2 and frames < 60:
+		await get_tree().physics_frame
+		frames += 1
+	_record(held_first and queued_at_half and _started == [&"light_attack_1", &"light_attack_2"]
+			and _near(frames, _shipped.light_combo[0].recovery),
+		"W3) combo_window_start 0.5: held, queued at half recovery, light_attack_2 at its end (%d frames)" % frames)
 	await _frames_until(PlayerCombat.State.IDLE)
 	_combat.data = _shipped
 
@@ -220,7 +228,7 @@ func _movement_tests() -> void:
 	var walked: float = _flat_distance(start, _player.global_position)
 	Input.action_release("move_forward")
 	_record(walked > 1.0,
-		"M1) the shipped attacks leave movement as it was: walked %.2fm through light_1" % walked)
+		"M1) the shipped attacks leave movement as it was: walked %.2fm through light_attack_1" % walked)
 
 	_combat.data = _copy_of_shipped()
 	_combat.data.light_combo[0].movement_multiplier = 0.0
@@ -325,18 +333,20 @@ func _damage_tests() -> void:
 	var on_landed: Callable = func(_target: Node, hit: DamageInfo) -> void: hits.append(hit)
 	_player.attack_hitbox.hit_landed.connect(on_landed)
 	await _frames(2)
-	await _swing()
+	_fire()
+	await _frames_until(PlayerCombat.State.RECOVERY)
+	await _frames(2)
 	var first: DamageInfo = hits[0] if not hits.is_empty() else null
 	_record(first != null and first.amount == 20.0 and first.source == _player
-			and first.attack_id == &"light_1",
-		"D1) the hit carries its source (the player), its attack (light_1) and its amount (20)")
+			and first.attack_id == &"light_attack_1",
+		"D1) the hit carries its source (the player), its attack (light_attack_1) and its amount (20)")
 	_record(first != null and is_same(health.last_damage, first) and health.last_damage_source == _player,
 		"D2) the dummy's health recorded that very hit, and whom it came from")
 	_fire()
 	await _frames_until(PlayerCombat.State.IDLE)
 	_player.attack_hitbox.hit_landed.disconnect(on_landed)
 	var second: DamageInfo = hits[1] if hits.size() > 1 else null
-	_record(second != null and second.attack_id == &"light_2" and second.amount == 25.0,
+	_record(second != null and second.attack_id == &"light_attack_2" and second.amount == 25.0,
 		"D3) the next attack of the chain names itself and hits for 25")
 	dummy.queue_free()
 
@@ -417,20 +427,21 @@ func _player_death_tests() -> void:
 	_player.health_component.is_dead = false
 	_player.health_component.current_health = _player.health_component.max_health
 	_fire()
-	_record(_attack_id() == &"light_1", "P3) brought back, it attacks again, from the first attack")
+	_record(_attack_id() == &"light_attack_1", "P3) brought back, it attacks again, from the first attack")
 	await _frames_until(PlayerCombat.State.IDLE)
 
 
 # --- pause ----------------------------------------------------------------------------------
 
 ## Paused for longer than the buffer lives: if either the attack or the buffer
-## kept counting through the pause, light_2 would never run.
+## kept counting through the pause, light_attack_2 would never run. The press is
+## made in the active phase, before the window, so it sits in the buffer.
 func _pause_tests() -> void:
 	await _fresh()
 	_fire()
-	await _frames_until(PlayerCombat.State.RECOVERY)
-	_fire()
+	await _frames_until(PlayerCombat.State.ACTIVE)
 	await _frames(2)
+	_fire()
 	var state: PlayerCombat.State = _combat.get_state()
 	var elapsed: float = _combat._state_elapsed
 	get_tree().paused = true
@@ -442,8 +453,8 @@ func _pause_tests() -> void:
 	_record(frozen and buffer_kept,
 		"Z1) a paused tree freezes the attack and its buffer (state %s, %.3fs in)" % [
 			PlayerCombat.State.keys()[state], elapsed])
-	_record(_started == [&"light_1", &"light_2"],
-		"Z2) and once unpaused it carries on: the buffered light_2 ran (%s)" % [_started])
+	_record(_started == [&"light_attack_1", &"light_attack_2"],
+		"Z2) and once unpaused it carries on: the buffered light_attack_2 ran (%s)" % [_started])
 
 
 # --- frame-rate independence ---------------------------------------------------------------
@@ -549,8 +560,8 @@ func _copy_of_shipped() -> PlayerCombatData:
 
 func _shipped_untouched() -> bool:
 	var first: AttackData = _shipped.light_combo[0]
-	return _shipped.base_damage == 20.0 and _shipped.input_buffer_time == 0.4 \
-		and first.active == 0.12 and first.combo_window_start == 1.0 \
+	return _shipped.base_damage == 20.0 and _shipped.input_buffer_time == 0.15 \
+		and first.active == 0.12 and first.combo_window_start == 0.0 \
 		and first.movement_multiplier == 1.0 and _combat.data == _shipped
 
 

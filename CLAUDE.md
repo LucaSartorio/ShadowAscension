@@ -15,14 +15,15 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M10 complete; M11 in progress (M11.1 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M10 complete; M11 in progress (M11.1 and M11.2 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
-scenes. The player's combat runs on its own controller (`PlayerCombat`) since M11.1. Everything
-visible is a **placeholder**: definitive art production starts at M13.
+scenes. The player's combat runs on its own controller (`PlayerCombat`) since M11.1, and the light
+attack is a three-hit chain on it since M11.2. Everything visible is a **placeholder**: definitive art
+production starts at M13.
 
-Next: **M11 — Combat System 2.0**, from M11.2 (M11.1, the combat foundation, is complete). See
+Next: **M11 — Combat System 2.0**, from M11.3 (M11.1 and M11.2 are complete). See
 `shadow-ascension/docs/ROADMAP.md` for the M11–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, and `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today.
 

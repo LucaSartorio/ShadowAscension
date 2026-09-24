@@ -8,18 +8,18 @@
 
 **M11 — Combat System 2.0** (In progress)
 
-**M11.1 — Combat Foundation 2.0** is complete: the player's combat now runs on its own controller
-(`PlayerCombat`), with an explicit state and attack timeline, an input buffer, a combo window, attacks
-as data and a damage source carried end to end. Nothing of M11's new features is built yet — heavy
-attack, stamina, hit reactions, crits and targeting are the next steps. The architecture is
-`ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
+**M11.1 — Combat Foundation 2.0** and **M11.2 — Light Attack Combo Chain** are complete: the player's
+combat runs on its own controller (`PlayerCombat`), and the light attack is a real three-hit chain on
+it — Attack 1 → 2 → 3, each follow-up accepted only in the previous attack's combo window. M11.3 is
+next; heavy attack, stamina, hit reactions, crits and targeting are not built yet. The architecture
+is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1, M11.2 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -35,6 +35,64 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.2 — Light Attack Combo Chain** (Completed). The three-hit light combo already existed; what
+  it lacked was being a chain. After M11.1 a press was held for 0.4 s and the chain stayed open for
+  0.8 s after every attack, so "the next attack is Attack 2" outlived the attack that earned it, and
+  where a press counted was decided by one global buffer rather than by each attack. M11.2 extends
+  the M11.1 controller — no second system — so that:
+
+    - **A follow-up is accepted only inside the attack's combo window**, a stretch of its recovery
+      given by the attack (`combo_window_start` / `combo_window_end`, fractions of recovery; the
+      whole recovery on Attack 1 and 2). It is queued, and starts as a fresh attack instance the
+      moment the current attack is over.
+    - **The input buffer only bridges the moment before a window opens**: 0.15 s (was 0.4 s). A
+      press earlier than that is too early and does nothing; one after the window is too late.
+    - **Any attack that did not accept a follow-up ends the chain with it**, and so do Attack 3, a
+      dodge, `reset()`, death and a scene change. There is no timeout while free because nothing of
+      the chain survives going free: a slow second press is always Attack 1.
+    - **The combo state is three fields** — the current attack, its index in the chain, the queued
+      next attack — with `get_combo_index()` and `get_queued_attack()` beside the M11.1 queries.
+      One window buys one follow-up: fifteen presses in it queue one attack.
+    - **Each attack is its own asset**, `resources/characters/player_attacks/light_attack_1..3.tres`,
+      with its own `id` and an `animation` name. The presentation resolves the name to a placeholder
+      roll (`Player.placeholder_attack_tilts`, the same 6° / 10° / 15°); M14 resolves it to clips.
+      The aim an attack faces is one function, `Player._aim_direction()`, which target lock will
+      replace.
+    - **Numbers unchanged**: ×1.0 / ×1.25 / ×1.75 of base 20 = 20 / 25 / 35, every duration as
+      before.
+
+  What a player feels: mashing and pressing in rhythm chain as before; pressing again only after an
+  attack has fully ended starts Attack 1 instead of continuing the chain; a double-click at the very
+  start of an attack gives one attack, as since M11.1.
+
+  Tests: **`tests/combat/light_combo_test.tscn`** (33) — the chain and each attack's phases, the
+  four timings (too early, buffered, in the window, too late) and a window that closes early,
+  partial chains and slow input, spam in one frame / in one window / held for three seconds, one
+  dummy and two dummies through the whole combo, a target killed by Attack 1 while the combo goes on,
+  damage per attack and a retuned Attack 2 on a copy, death in each attack, the dodge, the chain at
+  30 and 144 Hz, and a watcher that checks every frame for an impossible state (none found).
+  **`tests/core/m11_combo_run.gd`** (26) — New Game → hub → through the gate with a follow-up queued
+  (no ghost attack) → two enemies in one hitbox, one killed by Attack 1 and one by Attack 2 → one
+  killed by Attack 3 → the shadow's kill at 70/30 → a full combo on the boss and its death → out with
+  a follow-up queued again → hub (XP, shadow XP, health, no orphans) → a second dungeon with the same
+  listeners, where the combo runs exactly as on the first. Updated for the new rules: the
+  `combat_foundation_test` checks that encoded M11.1's (a chain waiting after an attack, the 0.4 s
+  buffer, a window that cut recovery) now encode M11.2's, and `dodge_test` starts Attack 2 and 3
+  directly instead of pressing into a chain left waiting. `summon_run` read the shadow's level
+  before clearing two rooms and compared it after the portal: its kill loop presses only when the
+  player is free, so every swing is now an Attack 1 and the clear takes longer — long enough, on some
+  runs, for the shadow to finish an enemy and level up. It now reads the level just before the scene
+  change it is about. Every other existing suite is unchanged.
+
+  **1565 assertions across 39 suites, zero failures, zero runtime errors, zero exit-time leaks**
+  (`tests/run_all.gd`). The 37 existing suites keep M11.1's 1506; the two new ones add 59. Zero parser
+  warnings in the game's scripts and the new tests; cold-cache reimport, headless boot and a headless
+  run of the game are clean.
+
+  Left for M11.3 and later: heavy attack, stamina, Dodge 2.0, hit reactions / stagger / knockback,
+  crits, target lock; and for the combo itself, a follow-up that cuts recovery short, windows into
+  the active phase, branches and air combos.
 
 - **M11.1 — Combat Foundation 2.0** (Completed). The first step of M11 builds no new move: it
   rebuilds the combat the game already had — the three-hit light combo, the dodge, its i-frames and

@@ -4,16 +4,22 @@ extends Resource
 ## One attack as data: how long each phase lasts, how hard it hits relative to
 ## its owner's base damage, and when it lets the next attack or a dodge in.
 ##
-##     | windup | active | recovery |
-##              ^ hitbox opens       ^ the attack is over
-##                       ^ hitbox closes
+##     | windup | active |      recovery       |
+##              ^ hitbox opens                  ^ the attack is over: the queued
+##                       ^ hitbox closes          next attack starts, or the chain ends
+##                              [ combo window ]
 ##
 ## The combat controller runs this timeline. An animation only represents it:
-## retiming one can never retune combat.
+## retiming one can never retune combat. Pure configuration, shared by every
+## player: nothing here changes in play, and nothing of a running attack — its
+## timers, its place in the chain, whom it hit — is kept here.
 
-## Names the attack wherever it is reported: every hit it lands carries it, and
-## it is what the presentation is asked to show.
+## Names the attack wherever it is reported: every hit it lands carries it.
 @export var id: StringName = &""
+## What the presentation shows for it, by name. Combat never reads it; the
+## player resolves it — to a placeholder pose now, to a clip at M14 — so a new
+## model or animation set never touches this data.
+@export var animation: StringName = &""
 ## Scales the owner's base damage. The attack holds no damage of its own, so
 ## retuning the character's base moves every attack with it.
 @export var damage_multiplier: float = 1.0
@@ -27,14 +33,13 @@ extends Resource
 @export var recovery: float = 0.25
 
 @export_group("Windows")
-## How far into recovery the next attack of the chain may begin, as a fraction
-## of it: 1.0 only once this attack is over. A buffered press is spent the
-## moment this opens, so a lower value cuts recovery short.
-@export_range(0.0, 1.0) var combo_window_start: float = 1.0
-## Seconds the chain keeps waiting after this attack is over. An attack started
-## within them is the next of the combo; after them, the combo starts over. The
-## last attack of a chain ends it, so there this is never read.
-@export var combo_window_end: float = 0.8
+## The combo window: the stretch of recovery, as fractions of it, in which a
+## press queues the next attack of the chain. That attack starts when this one is
+## over; with nothing queued by the end of the window, the chain ends with this
+## attack. A press shortly before the window opens is held by the input buffer.
+## Never read on the last attack of a chain, which has no next.
+@export_range(0.0, 1.0) var combo_window_start: float = 0.0
+@export_range(0.0, 1.0) var combo_window_end: float = 1.0
 ## How far into recovery a dodge may cancel what is left of it, as a fraction
 ## of it: 0.0 at once, 1.0 never before it ends. Windup and active always commit.
 @export_range(0.0, 1.0) var dodge_cancel_recovery_fraction: float = 0.0
@@ -42,10 +47,6 @@ extends Resource
 ## as out of combat.
 @export var movement_multiplier: float = 1.0
 
-@export_group("Placeholder presentation")
-## How far the placeholder model rolls at the peak of the swing. Read by the
-## presentation only — nothing that decides a hit — and replaced by a real
-## animation at M14.
-@export var visual_tilt_degrees: float = 8.0
+@export_group("Debug")
 ## Colour of the hitbox's debug mesh while it is open.
 @export var debug_color: Color = Color(1, 0.3, 0.3, 0.35)

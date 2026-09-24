@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+id = &"light_attack_2"
+animation = &"light_attack_02"
+damage_multiplier = 1.25
+windup = 0.14
+active = 0.14
+recovery = 0.24
+combo_window_start = 0.0
+combo_window_end = 1.0
+dodge_cancel_recovery_fraction = 0.35
+movement_multiplier = 1.0
+debug_color = Color(1, 0.35, 0.35, 0.4)
