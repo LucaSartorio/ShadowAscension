@@ -9,10 +9,11 @@
 **M11 — Combat System 2.0** (In progress)
 
 **M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain**, **M11.3 — Heavy Attack &
-Attack Variants** and **M11.4 — Dodge & I-Frames** are complete: the player's combat runs on its own
-controller (`PlayerCombat`); the light attack is a real three-hit chain on it, the heavy attack a
-second, slower chain of one on its own button, and the dodge has explicit phases whose i-frames the
-hurtbox enforces. M11.5 is next; stamina, hit reactions, crits and targeting are not built yet. The architecture
+Attack Variants**, **M11.4 — Dodge & I-Frames** and **M11.5 — Stamina & Combat Resource Management**
+are complete: the player's combat runs on its own controller (`PlayerCombat`); the light attack is a
+real three-hit chain on it, the heavy attack a second, slower chain of one on its own button, the
+dodge has explicit phases whose i-frames the hurtbox enforces, and it costs stamina. M11.6 is next;
+sprint, hit reactions, crits and targeting are not built yet. The architecture
 is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
@@ -20,7 +21,7 @@ is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROAD
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.4 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.5 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -36,6 +37,60 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.5 — Stamina & Combat Resource Management** (Completed). The player's first limited combat
+  resource, where the M11.1 plan put it — no new component, no new resource:
+
+    - **Owner**: `PlayerCombat` holds the stamina left and is the only code that changes it
+      (`try_spend_stamina()`, `restore_stamina()`, its own regeneration), always clamped into
+      `0..max` with float edges snapped; it emits `stamina_changed(current, maximum)` only on a real
+      change. Configuration is `PlayerCombatData`: `max_stamina` **100**, `dodge_stamina_cost`
+      **25**, `stamina_regen_delay` **0.8 s**, `stamina_regen_rate` **40/s**. The asset is never
+      written: the ceiling is copied per player in `_ready()`.
+    - **Dodge**: `can_dodge()` now includes the stamina, and `request_dodge()` checks and pays in the
+      same call. Without 25 there is no dodge at all — no partial one, nothing spent. A dodge
+      refused for any other reason spends nothing and, since dodges are never buffered, reserves
+      nothing. A paid dodge is exactly M11.4's.
+    - **Regeneration**: one delay, restarted by every spend and counted from the end of the dodge
+      (it does not run during one); then 40/s on `delta` up to the maximum, where it stops and
+      signals nothing. Attacks do not hold it up; a dead player does not regenerate.
+    - **Not charged**: the light combo, and the heavy — it already pays with commitment, and a cost
+      would change M11.3's balance. **Sprint** does not exist in the game (no action, no speed), so
+      nothing drains; it will spend through the same owner when it is built.
+    - **Lifecycle**: every new player — New Game, gate, exit, restart — starts full; stamina is not
+      carried between scenes (it refills in about three seconds) and is not in `PlayerRuntimeState`.
+    - **HUD**: `PlayerStaminaHUD`, a thin gold bar right under the health bar, driven by
+      `stamina_changed` alone; `ProgressionHUD` moved down 14 px to make room.
+
+  Tests: **`tests/combat/stamina_test.tscn`** (41) — the configuration and a new player full; the
+  dodge's cost (100 → 75, one signal), paid once, the dodge itself unchanged (phases, distance); four
+  dodges from full and the fifth refused (no state, no i-frames, no movement, nothing signalled);
+  20 of 25 refused, exactly 25 paid to 0, a float's width short paid to 0 and not below; the delay
+  (49 frames after the dodge ends), the rate (40.00 in 60 frames), the fill to exactly 100 and silence
+  at full; a second dodge restarting the delay, one regeneration not two, a dodge stopping
+  regeneration; the light combo and the heavy free and not holding regeneration up; at 0 the attacks
+  and walking unchanged; one payment for twenty presses, a refused dodge reserving nothing, a dodge
+  and a heavy in one frame both ways round; an enemy hitbox in the i-frames (no damage, paid once);
+  death (no regeneration, no dodge); the API's edges; the bar (full, 0.75, empty, rising, full) and
+  that it never polls; 30 and 144 Hz; and an every-frame watcher (0 ≤ stamina ≤ max, the bar in
+  step). **`tests/core/m11_stamina_run.gd`** (31) — New Game full; a dodge in the hub; through the
+  gate and out of the dungeon mid-dodge with stamina spent, each new player full with one listener;
+  an enemy's swing taken, the next dodged for 25 and no damage, the one after taken; the light combo
+  and the heavy spending nothing; four dodges to empty, the fifth refused, regeneration 0.82 s after
+  the last dodge at 40.0/s, back to full; the shadow's kill at 70/30; the boss taken / dodged / taken,
+  then a dodge, the combo and the heavy to finish it; the hub (XP 282, level 3, shadow 18, health,
+  no orphans); a second dungeon with the same listeners and one regeneration; New Game after spending,
+  full again. Existing suites: `dodge_test` and `dodge_iframes_test` start each test with full
+  stamina (they test the dodge; `stamina_test` tests what it costs), and `vertical_slice_run` adds the
+  bar to its HUD overlap check — no assertion changed.
+
+  **1749 assertions across 45 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 43 existing suites keep M11.4's 1677; the two new ones add 72.
+  Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M11.6 and later: sprint (draining stamina), a changing stamina ceiling (M16), hit reactions
+  / stagger / knockback, crits, target lock, combat feedback, Dodge 2.0.
 
 - **M11.4 — Dodge & I-Frames** (Completed). The dodge existed since M2 and moved into `PlayerCombat`
   at M11.1 — direction, speed, collisions, cooldown and cancel windows were already there. M11.4

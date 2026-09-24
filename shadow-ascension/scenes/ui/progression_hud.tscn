@@ -23,9 +23,9 @@ script = ExtResource("1_hud")
 [node name="Root" type="Control" parent="."]
 anchors_preset = 0
 offset_left = 24.0
-offset_top = 66.0
+offset_top = 80.0
 offset_right = 264.0
-offset_bottom = 124.0
+offset_bottom = 138.0
 mouse_filter = 2
 
 [node name="LevelLabel" type="Label" parent="Root"]

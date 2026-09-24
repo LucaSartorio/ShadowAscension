@@ -339,13 +339,22 @@ the i-frames does nothing at all; one landing before or after them hurts as usua
 another one waits **0.15 s**; attacks do not. A dodge cancels an attack only late in its recovery —
 from the start of Light 1's, 35% into Light 2's, 60% into Light 3's and the heavy's — never out of a
 windup or a swing, and a dodge pressed too early is dropped, not saved for later. Attack buttons do
-nothing during a dodge. No stamina cost yet.
+nothing during a dodge.
+
+**M11.5 added stamina**, the player's first limited resource: **100**, shown as a thin gold bar right
+under the health bar. A dodge costs **25**, paid in full when it starts, so a full bar is four dodges
+in a row; with less than 25 left the dodge simply does not happen — no shorter dodge, no weaker
+i-frames. Stamina starts coming back **0.8 s** after the last dodge ends, at **40 per second** (empty
+to full in 2.5 s), and every new dodge restarts that wait. Attacks cost nothing — neither the light
+combo nor the heavy, which already pays with its commitment — and do not delay regeneration; at zero
+stamina the player still walks and attacks normally, only the dodge waits. Every new scene's player
+starts full. There is no sprint in the game yet; when there is, it will drain stamina by the second.
 
 **Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
-timing windows or interactions are committed yet (the heavy attack and the dodge's timing shipped in
-M11.3 and M11.4):
+timing windows or interactions are committed yet (the heavy attack, the dodge's timing and stamina
+shipped in M11.3, M11.4 and M11.5):
 
-- stamina, and sprint gated by it
+- sprint, draining stamina
 - hit reactions, stagger, knockback
 - critical hits
 - combat feedback: hit stop, camera shake, floating damage

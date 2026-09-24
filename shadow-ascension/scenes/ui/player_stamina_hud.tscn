@@ -1,0 +1,42 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/player_stamina_hud.gd" id="1_st"]
+
+[sub_resource type="StyleBoxFlat" id="bar_bg"]
+bg_color = Color(0.08, 0.08, 0.11, 0.8)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="bar_fill"]
+bg_color = Color(0.95, 0.76, 0.26, 0.95)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="PlayerStaminaHUD" type="CanvasLayer"]
+layer = 44
+script = ExtResource("1_st")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 0
+offset_left = 24.0
+offset_top = 62.0
+offset_right = 264.0
+offset_bottom = 72.0
+mouse_filter = 2
+
+[node name="StaminaBar" type="ProgressBar" parent="Root"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("bar_fill")
+max_value = 100.0
+value = 100.0
+show_percentage = false

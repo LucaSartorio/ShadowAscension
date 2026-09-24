@@ -207,7 +207,7 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
-| `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown | `PlayerCombat` | the combat state, timers, combo position or buffered input — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
+| `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
 | `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
@@ -308,8 +308,8 @@ The last two columns are there because a PASS/FAIL count cannot see them: M10.4'
 leaked GDScript instances on every run through the dungeon while every assertion passed. At the
 close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, **37 suites and
 1506 assertions**; at M11.2, **39 suites and 1565 assertions**;
-at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**, all
-clean.
+at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
+**45 suites and 1749 assertions**, all clean.
 
 **Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
 To see them all at once, put an `override.cfg` in the project root that raises each warning to an
@@ -434,7 +434,7 @@ control rectangles rather than by eye.
 
 | Corner | What |
 | --- | --- |
-| top-left | `PlayerHealthHUD`, then `ProgressionHUD` (level and XP) |
+| top-left | `PlayerHealthHUD`, `PlayerStaminaHUD` right under it, then `ProgressionHUD` (level and XP) |
 | top-centre | `BossHealthBar`, band y 24–88, only during the encounter |
 | top-right | `DungeonObjectiveUI`, deliberately below the boss bar's band |
 | bottom-centre | `InteractionPrompt` |
@@ -449,6 +449,10 @@ inside `ProgressionHUD`, because health is not progression and the two are drive
 components. It is driven by `health_changed` alone — which also fires when the ceiling moves, so a
 point spent on VIT or a swapped chestpiece reaches the bar without this node knowing either system
 exists.
+
+**`PlayerStaminaHUD`** (M11.5) is the same idea for stamina: a thin, caption-less bar (y 62–72)
+between the health bar and the level, driven by `PlayerCombat.stamina_changed` alone. `ProgressionHUD`
+moved down 14 px to make room; `vertical_slice_run` includes the bar in its overlap check.
 
 **`DungeonObjectiveUI`** shows `default_text` when there is no `DungeonController` above it, which
 is how the hub says "Entra nel Gate" without a second UI doing the same job in a different place.
@@ -544,6 +548,7 @@ and nothing to write back on the way out, so neither step can be forgotten.
 | Max health | nowhere — derived | `Player._apply_stat_effects()`: base + VIT + equipment | `HealthComponent.health_changed` |
 | Current health | the player's `HealthComponent` | combat, through the hurtbox | `HealthComponent.health_changed` |
 | Current health, between scenes | `PlayerRuntimeState.current_health` | `Player`, on every `health_changed` | read once, when the next player spawns |
+| Stamina (M11.5) | `PlayerCombat` — per player, not carried between scenes | `PlayerCombat` (`try_spend_stamina()`, `restore_stamina()`, its regeneration) | `stamina_changed` |
 | Run tally | `DungeonRunStats` | its own signal handlers | `stats_changed` |
 | Dungeon progress | `DungeonController`, `RoomController` | their own signal handlers | `objective_changed`, `room_cleared`, `dungeon_completed` |
 
@@ -932,9 +937,10 @@ The gameplay it carries is the one M2–M9 shipped — the three-hit light combo
 i-frames and its cancel windows, the same damage numbers — reorganised so that each step of an attack
 has one owner and the animation is never the source of truth. M11.2 (Light Attack Combo Chain) made
 the combo a real chain on that foundation, M11.3 (Heavy Attack & Attack Variants) added a second
-attack type on the same controller, and M11.4 (Dodge & I-Frames) made the dodge's phases and its
-invulnerability explicit: see *Light attack combo (M11.2)*, *Attack types (M11.3)* and *Dodge and
-i-frames (M11.4)* below.
+attack type on the same controller, M11.4 (Dodge & I-Frames) made the dodge's phases and its
+invulnerability explicit, and M11.5 (Stamina & Combat Resource Management) made the dodge cost
+stamina: see *Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)* and
+*Stamina (M11.5)* below.
 
 ```
 Input          CameraRig (attack_light, attack_heavy — only while the mouse is captured) and
@@ -943,7 +949,8 @@ Input          CameraRig (attack_light, attack_heavy — only while the mouse is
    v
 Combat         PlayerCombat.request_light_attack() / request_heavy_attack() / request_dodge()
    |             combat state, attack timeline, input buffer, combo chain, hit window,
-   |             dodge timing and i-frames. Emits attack_started(attack).
+   |             dodge timing and i-frames, stamina. Emits attack_started(attack) and
+   |             stamina_changed(current, maximum) -> PlayerStaminaHUD.
    v
 Attack         AttackData, from PlayerCombatData.light_combo / heavy_combo: windup / active / recovery,
    |             combo and dodge-cancel windows, damage multiplier, movement multiplier
@@ -982,7 +989,7 @@ One enum, `PlayerCombat.State`, instead of an attack state beside an `_is_dodgin
 
 | State | Meaning | Attack press | Dodge press |
 | --- | --- | --- | --- |
-| `IDLE` | free; no chain | starts Attack 1 now | starts a dodge (off cooldown) |
+| `IDLE` | free; no chain | starts Attack 1 now | starts a dodge (off cooldown, with the stamina for it) |
 | `WINDUP` | an attack is winding up; the hitbox is shut | held by the buffer, if the attack has a next | refused |
 | `ACTIVE` | the hit window: the hitbox is open | held by the buffer, if the attack has a next | refused |
 | `RECOVERY` | the hitbox is shut again; the player is still committed | queues the next attack inside the combo window; held before it; ignored after it | cancels the attack, once past the attack's `dodge_cancel_recovery_fraction` |
@@ -1147,9 +1154,9 @@ invulnerability explicit, and checks it against real enemy and boss attacks.
 `_unhandled_input` turns it into `PlayerCombat.request_dodge()`; nothing below it reads a device.
 
 **When**: `request_dodge()` passes one gate, `can_dodge()` — not already dodging, not dead, off
-cooldown, and not committed to an attack short of its dodge-cancel window. It is the one place a
-future stamina check joins; nothing else decides whether a dodge may start. A refused dodge is not
-held: dodges are never buffered.
+cooldown, not committed to an attack short of its dodge-cancel window, and (since M11.5) the stamina
+to pay for it. Nothing else decides whether a dodge may start. A refused dodge is not held: dodges
+are never buffered.
 
 **Phases** — `PlayerCombat.DodgePhase`, inside the `DODGING` state, from `PlayerCombatData`:
 
@@ -1206,6 +1213,89 @@ reason set.
 The cancel fractions are the attacks' own: Light 1 from 0% of its recovery, Light 2 from 35%,
 Light 3 and the heavy from 60% — so a dodge never skips all of the heavy's recovery. There is no
 cancel out of windup or active, no attack out of a dodge and no dodge buffering.
+
+### Stamina (M11.5)
+
+The player's first limited combat resource. It pays for the dodge, and for nothing else yet.
+
+**One owner.** `PlayerCombat` holds the stamina left and is the only code that changes it; the
+configuration is four fields of `PlayerCombatData` (`resources/characters/player_combat.tres`), next
+to the dodge it pays for. No new component and no new resource: the dodge's gate and its cost are in
+the same controller, which is what makes the payment atomic, and the numbers sit with the rest of the
+player's combat tuning. The shared asset is never written: `PlayerCombat` copies `max_stamina` into
+its own `_max_stamina` in `_ready()` and keeps `_stamina` beside it.
+
+| Field (`PlayerCombatData`) | Value | Meaning |
+| --- | --- | --- |
+| `max_stamina` | 100 | the ceiling, and what every player starts with |
+| `dodge_stamina_cost` | 25 | paid in full when a dodge starts — four dodges from full |
+| `stamina_regen_delay` | 0.8 s | nothing comes back until this long after the last spend's action ended |
+| `stamina_regen_rate` | 40 / s | then this much per second, up to the ceiling — 2.5 s from empty |
+
+First values, chosen for the ROADMAP's "stamina gates the dodge without making ordinary combat feel
+rationed": earning one dodge back takes the 0.8 s delay after the dodge and 0.63 s of regeneration.
+
+**The API** — the one way stamina changes:
+
+| Call | Does |
+| --- | --- |
+| `get_stamina()`, `get_max_stamina()` | read |
+| `can_spend_stamina(amount)` | whether all of `amount` is there |
+| `try_spend_stamina(amount) -> bool` | spends all of it and restarts the delay, or spends nothing and says so; never part of it |
+| `restore_stamina(amount)` | gives back up to the ceiling; does not touch the delay |
+| `is_regenerating_stamina()` | below the ceiling, delay over, not dodging, alive |
+| `stamina_changed(current, maximum)` | emitted on a real change only |
+
+Every change ends in one private setter that clamps into `0..max`, snaps a value within
+`STAMINA_EPSILON` (0.0001) of either edge onto it — so neither a negative zero nor a sliver below
+full survives float rounding — and emits only if the value moved. `can_spend_stamina()` allows the
+same epsilon, so regeneration's rounding cannot refuse a dodge the bar shows as paid for.
+
+**The dodge pays atomically.** `request_dodge()` runs `can_dodge()` — which includes the stamina —
+and, in the same call, spends `dodge_stamina_cost` and starts the dodge. With less than the cost
+there is no dodge at all: no `DODGING`, no i-frames, no movement, no partial dodge, and nothing spent.
+A dodge refused for any other reason (dodging, cooldown, an attack not yet cancellable, dead) spends
+nothing either, and since dodges are never buffered nothing is reserved: a later press checks the
+stamina there is then. A paid dodge is exactly M11.4's — same phases, i-frames, distance and
+collisions.
+
+**Regeneration.** Each physics tick while no dodge runs: the delay counts down, then stamina rises by
+`stamina_regen_rate × delta` until it reaches the ceiling, where it stops and signals nothing more.
+
+- Every spend restarts the delay: there is one delay and one regeneration, never two timers.
+- The delay does not run during a dodge, so it counts from the dodge's end — a dodge's own length
+  never counts as waiting — and a dodge made while regenerating stops it.
+- Attacks cost nothing and do not hold regeneration up: the rule is "a spend delays regeneration",
+  not "being in combat does".
+- A dead player does not regenerate; `reset()` leaves stamina alone — it is a resource, not an action.
+- On `delta`, like everything else here: the same second of regeneration gives 40 at 30, 60 or 144 Hz.
+
+**Exhaustion** is only this: at 0 the dodge is refused. Walking, the light combo and the heavy are
+untouched — there is no exhaustion state, no slowed movement and no penalty.
+
+**Lifecycle.** Stamina lives and dies with its player, like the combat state: every new player — a
+New Game, a gate, the exit, a restart after death — starts full. It is not in `PlayerRuntimeState`,
+which holds only what must outlive a scene; full stamina comes back in about three seconds anyway, so
+carrying it through a gate would buy nothing. Health, which does not come back, still carries.
+
+**What costs nothing.** The light combo, as before. The heavy attack too, on purpose: it already pays
+with commitment — 0.95 s against Light 1's 0.46 s, half walking speed, no dodge until 60% into its
+recovery — and a stamina cost on top would change M11.3's balance and ration ordinary attacks, which
+is what the ROADMAP says stamina must not do. A cost can be added later as data if the design asks.
+
+**Sprint** does not exist in the game — there is no sprint action or sprint speed — so there is
+nothing to drain. When it arrives it spends through the same owner, per second on `delta`
+(`try_spend_stamina(rate × delta)`), stops at 0, and holds regeneration while it runs, as the dodge
+does.
+
+**The HUD.** `PlayerStaminaHUD` (`scripts/ui/player_stamina_hud.gd`, `scenes/ui/player_stamina_hud.tscn`)
+is a thin bar under the health bar. It hears `stamina_changed` and shows `current / maximum`; it holds
+no stamina, computes no regeneration, never decides whether a dodge can be paid for, and never polls.
+Because the signal carries the maximum, a future change of ceiling reaches it with no change to it.
+
+**Later.** M16's progression, equipment or passives may raise the ceiling: `_max_stamina` is
+already a per-player runtime value, and changing it would be one setter beside
+`HealthComponent.set_max_health()`, emitting `stamina_changed`. Nothing of that is built.
 
 ### Damage flow
 
@@ -1265,21 +1355,23 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
   Before M11.1 a dead player could keep swinging until the dungeon reloaded.
 - **A scene change mid-swing or mid-dodge** frees the whole combat with its player; `m11_combat_run`
   leaves the hub with the hit window open, and `m11_dodge_run` leaves the hub and the dungeon in the
-  i-frames, and each checks that nothing survives it.
+  i-frames, and each checks that nothing survives it. `m11_stamina_run` leaves them mid-dodge with
+  stamina spent: the next player is full, with one listener on `stamina_changed` (its bar).
 
 ### Debug and input actions
 
 - `PlayerCombat.debug_log_enabled` (off by default, inspector only) prints every state change, every
-  dodge-phase change and every queued follow-up with the current attack, its place in the chain, the
-  queued attack, the buffer, the dodge phase and whether the i-frames are on. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
+  dodge-phase change, every queued follow-up, every stamina spend, a dodge refused for stamina and
+  stamina reaching full, with the current attack, its place in the chain, the queued attack, the
+  buffer, the dodge phase, whether the i-frames are on, and the stamina with its pending delay. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
 - The input actions are `attack_light` (left mouse button), `attack_heavy` (right mouse button, M11.3)
   and `dodge`. The heavy's binding is temporary until key rebinding (M19). New ones follow the same
   pattern — `target_lock` — and are added with their features, not before.
 
 ### Left for the next M11 steps
 
-- **Stamina**: maximum and rates in `PlayerCombatData`, the current value on `PlayerCombat`.
-- **Stamina** for the dodge: a check in `can_dodge()`, a cost when `request_dodge()` starts one.
+- **Sprint**, when it exists: a drain per second through `try_spend_stamina()`, stopping at 0.
+- **A changing stamina ceiling** (M16): a `set_max_stamina()` on `PlayerCombat`.
 - **Dodge 2.0**: buffering an attack out of a dodge, cancelling into a dodge earlier, a perfect dodge.
 - **Combo 2.0**: a follow-up cutting recovery short, windows reaching into the active phase, branches
   between chains (a heavy finisher, a light follow-up after a heavy), charged attacks, launchers and

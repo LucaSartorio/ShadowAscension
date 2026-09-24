@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=31 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_controller.gd" id="1_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -19,6 +19,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/active_shadow_hud.tscn" id="95_shadowhud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="96_summary"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_health_hud.tscn" id="89_hphud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/player_stamina_hud.tscn" id="89_sthud"]
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_run_stats.gd" id="97_runstats"]
 
 [sub_resource type="Environment" id="env"]
@@ -263,5 +264,7 @@ visible = false
 script = ExtResource("97_runstats")
 
 [node name="PlayerHealthHUD" parent="." instance=ExtResource("89_hphud")]
+
+[node name="PlayerStaminaHUD" parent="." instance=ExtResource("89_sthud")]
 
 [node name="RunSummary" parent="." instance=ExtResource("96_summary")]

@@ -584,6 +584,9 @@ func _fresh() -> void:
 	_player.hurtbox.set_invulnerable(false)
 	_health.is_dead = false
 	_health.current_health = _health.max_health
+	# Every test starts with full stamina, as a new player does; what stamina
+	# allows and costs is stamina_test's (M11.5).
+	_combat.restore_stamina(_combat.get_max_stamina())
 	await _frames(4)
 
 

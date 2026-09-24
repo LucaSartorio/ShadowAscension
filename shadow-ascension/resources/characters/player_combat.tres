@@ -16,3 +16,7 @@ dodge_duration = 0.35
 invulnerability_start = 0.06
 invulnerability_end = 0.24
 dodge_cooldown = 0.15
+dodge_stamina_cost = 25.0
+max_stamina = 100.0
+stamina_regen_rate = 40.0
+stamina_regen_delay = 0.8

@@ -122,6 +122,7 @@ func _phase_ui_layout() -> void:
 	# pixels is the one HUD fault a screenshot would show a first-time viewer.
 	var boxes: Dictionary = {
 		"salute": _rect(current_scene, "PlayerHealthHUD/Root"),
+		"stamina": _rect(current_scene, "PlayerStaminaHUD/Root"),
 		"livello/XP": _rect(current_scene, "ProgressionHUD/Root"),
 		"obiettivo": _rect(current_scene, "DungeonObjectiveUI/Root/ObjectiveLabel"),
 		"ombra attiva": _rect(current_scene, "ActiveShadowHUD/Root"),

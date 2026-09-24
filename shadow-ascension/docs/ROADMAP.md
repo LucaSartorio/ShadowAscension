@@ -338,7 +338,8 @@ having to be rewritten again and again.
 | **M11.2** Light Attack Combo Chain | **Complete** | Attack 1 → 2 → 3 as a real chain: a follow-up is accepted only inside the attack's combo window (or just before it, by a 0.15 s buffer) and the chain ends with any attack that did not accept one; one `AttackData` asset per attack, each naming its animation |
 | **M11.3** Heavy Attack & Attack Variants | **Complete** | a heavy attack on its own input (`attack_heavy`): a one-attack chain on the same controller, ×2.0 damage, slower and more committed; light and heavy never interrupt each other's chains |
 | **M11.4** Dodge & I-Frames | **Complete** | the dodge's phases made explicit (startup, invulnerable, recovery) and the i-frames driven by them; invulnerability decided by the hurtbox, per reason, so the dodge only ends its own; one `can_dodge()` gate for the stamina to come; checked against real enemy and boss attacks |
-| M11.5 onwards | Not started | the rest of the deliverables below |
+| **M11.5** Stamina & Combat Resource Management | **Complete** | stamina, the player's first limited resource: 100, owned by `PlayerCombat`, configured in `PlayerCombatData`; a dodge costs 25, paid atomically when it starts, and does not start without it; regeneration at 40/s after a 0.8 s delay restarted by every spend; a HUD bar driven by `stamina_changed`. Attacks stay free; sprint does not exist yet, so nothing drains |
+| M11.6 onwards | Not started | the rest of the deliverables below |
 
 **Goal**
 Turn prototype combat into a real action-RPG combat system.

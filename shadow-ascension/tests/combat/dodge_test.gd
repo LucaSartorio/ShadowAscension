@@ -58,6 +58,9 @@ func _reset_player() -> void:
 	_player.camera_rig.rotation.y = 0.0
 	_player.velocity = Vector3.ZERO
 	_player.combat.reset()
+	# Full stamina for every test, as a new player has; its rules are
+	# stamina_test's (M11.5).
+	_player.combat.restore_stamina(_player.combat.get_max_stamina())
 	_player._dodge_direction = Vector3.ZERO
 	if _player.hurtbox != null:
 		_player.hurtbox.set_invulnerable(false)

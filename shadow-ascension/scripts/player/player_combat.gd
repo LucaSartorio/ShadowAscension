@@ -13,13 +13,13 @@ extends Node
 ##                               then a cooldown before the next dodge
 ##
 ## It owns the combat state, the attack timeline, the attack chains, the input
-## buffer, the hit window, and the dodge's timing and i-frames. Everything
-## else is someone else's: the devices are read by the player (camera rig and
-## player script), which only calls request_*(); the body is moved by the player,
-## which asks this what the current action allows; the representation is played
-## by the player on attack_started. A hit leaves through the hitbox as a
-## DamageInfo, and whatever it lands on resolves it — this never touches a
-## health bar, an enemy, XP or the dungeon.
+## buffer, the hit window, the dodge's timing and i-frames, and the stamina that
+## pays for a dodge. Everything else is someone else's: the devices are read by
+## the player (camera rig and player script), which only calls request_*(); the
+## body is moved by the player, which asks this what the current action allows;
+## the representation is played by the player on attack_started. A hit leaves
+## through the hitbox as a DamageInfo, and whatever it lands on resolves it —
+## this never touches a health bar, an enemy, XP or the dungeon.
 ##
 ## Attack chains. Every intent names a chain of attacks: the light combo
 ## (Light 1 -> 2 -> 3, M11.2) and the heavy attack, a chain of one (M11.3). A
@@ -40,6 +40,16 @@ extends Node
 ## attacker anything, and the attacker never asks. Where the dodge goes and how
 ## fast is the player's: this only says when.
 ##
+## Stamina (M11.5). The player's one limited combat resource, and this is its
+## only owner: the configuration (maximum, regeneration, costs) is the data's,
+## the stamina left is here, and nothing else writes it. A dodge pays its cost in
+## full when it starts — the check and the spend are the same call — and does
+## not start at all without it. Every spend restarts the regeneration delay,
+## which only runs once the action that spent is over; after it, stamina comes
+## back at a rate per second up to the maximum, and stops there. Attacks cost
+## nothing and do not hold regeneration up. The HUD hears stamina_changed; it
+## holds no stamina of its own.
+##
 ## One timing source: this node's _physics_process, on delta. It runs after the
 ## player's own (a child processes after its parent), pauses with the tree, and
 ## is freed with the player, so nothing of it outlives a scene.
@@ -47,6 +57,9 @@ extends Node
 ## An attack began — first of a chain or the next one. The presentation listens
 ## (facing, animation); nothing that decides a hit does.
 signal attack_started(attack: AttackData)
+## The stamina left or its maximum changed. Emitted only on a real change: never
+## while full, never while waiting to regenerate.
+signal stamina_changed(current: float, maximum: float)
 
 ## What the player is doing in combat. WINDUP, ACTIVE and RECOVERY are the three
 ## phases of an attack. DEAD is never stored: it is read from the health
@@ -63,13 +76,19 @@ const NO_CHAIN: Array[AttackData] = []
 ## The reason the dodge gives the hurtbox for refusing hits, so ending the
 ## i-frames ends only the dodge's invulnerability, never another system's.
 const IFRAMES_REASON: StringName = &"dodge_iframes"
+## Float slack on stamina: a value this close to a cost pays it, and one this
+## close to empty or full is empty or full, so regeneration's rounding can
+## neither refuse a dodge the bar shows as paid for nor leave a sliver behind.
+const STAMINA_EPSILON: float = 0.0001
 
 @export var data: PlayerCombatData
 
 @export_group("DEBUG")
 ## DEBUG ONLY. Off by default; the game never needs it. Prints every state and
-## dodge-phase change with the attack, its place in the chain, what is waiting to
-## follow it and whether the i-frames are on — for tuning windows, not for play.
+## dodge-phase change, every stamina spend, a dodge refused for stamina and
+## stamina refilling, each with the attack, its place in the chain, what is
+## waiting to follow it, whether the i-frames are on and the stamina with its
+## regeneration delay — for tuning, not for play.
 @export var debug_log_enabled: bool = false
 
 # Handed over by the player in setup().
@@ -95,12 +114,23 @@ var _buffered_attack: float = 0.0
 var _dodge_phase: DodgePhase = DodgePhase.NONE
 var _dodge_cooldown_remaining: float = 0.0
 var _iframes_active: bool = false
+## This player's stamina ceiling, copied from the data so it can move without
+## the shared asset being written, and the stamina left, always within 0..max.
+var _max_stamina: float = 0.0
+var _stamina: float = 0.0
+## Seconds before stamina may regenerate, restarted by every spend; it does not
+## run while a dodge is under way.
+var _stamina_regen_delay_remaining: float = 0.0
 
 
 func _ready() -> void:
 	if data == null:
 		push_warning("%s has no PlayerCombatData; using the class defaults, with no attacks." % name)
 		data = PlayerCombatData.new()
+	# Every player starts full: stamina lives and dies with its scene, and a new
+	# one — a new game, a gate, a restart after death — is a new player.
+	_max_stamina = maxf(data.max_stamina, 0.0)
+	_stamina = _max_stamina
 
 
 ## Called once by the player with the parts of itself this drives or reads.
@@ -153,13 +183,18 @@ func _request(chain: Array[AttackData]) -> bool:
 	return false
 
 
-## A dodge was asked for. Starts one if can_dodge() allows it; an attack inside
-## its dodge-cancel window is cancelled, and the chain with it. Anything else —
-## dodging already, on cooldown, dead, an attack not yet cancellable — refuses
-## it, and nothing is held: a dodge is never buffered. True when a dodge started.
+## A dodge was asked for. Starts one if can_dodge() allows it, paying its stamina
+## in the same call; an attack inside its dodge-cancel window is cancelled, and
+## the chain with it. Anything else — dodging already, on cooldown, dead, an
+## attack not yet cancellable, too little stamina — refuses it, costs nothing, and
+## holds nothing: a dodge is never buffered, so a later press checks again.
+## True when a dodge started.
 func request_dodge() -> bool:
 	if not can_dodge():
+		if not can_spend_stamina(data.dodge_stamina_cost):
+			_log("dodge refused: stamina %.1f < %.1f" % [_stamina, data.dodge_stamina_cost])
 		return false
+	_spend_stamina(data.dodge_stamina_cost)
 	if is_attacking():
 		_stop_attack()
 	_end_chain()
@@ -170,7 +205,8 @@ func request_dodge() -> bool:
 
 ## Drops whatever combat was doing and starts clean: no attack and no hit window,
 ## no chain, nothing queued or buffered, no dodge and no i-frames, no cooldown.
-## What a death does.
+## What a death does. Stamina is a resource, not an action, and is left as it is:
+## a dead player does not regenerate, and the next player starts full.
 func reset() -> void:
 	_stop_attack()
 	_end_chain()
@@ -197,15 +233,17 @@ func is_dodging() -> bool:
 
 
 ## Whether a dodge may start now: not dodging already, not dead, off cooldown,
-## and not committed to an attack short of its dodge-cancel window. The one gate
-## every dodge passes — where a stamina check will join it.
+## not committed to an attack short of its dodge-cancel window, and the stamina
+## to pay for it. The one gate every dodge passes.
 func can_dodge() -> bool:
 	var state: State = get_state()
 	if state == State.DODGING or state == State.DEAD:
 		return false
 	if _dodge_cooldown_remaining > 0.0:
 		return false
-	return not is_attacking() or _in_dodge_cancel_window()
+	if is_attacking() and not _in_dodge_cancel_window():
+		return false
+	return can_spend_stamina(data.dodge_stamina_cost)
 
 
 func get_dodge_phase() -> DodgePhase:
@@ -261,12 +299,91 @@ func calculate_damage(attack: AttackData) -> float:
 	return _progression.get_effective_damage(base)
 
 
+# --- stamina ------------------------------------------------------------------------------
+#
+# The one way stamina changes. Nothing else writes _stamina: a cost goes through
+# try_spend_stamina() (or, for the dodge, the same check and spend inside
+# request_dodge()), and whatever gives it back through restore_stamina().
+
+func get_stamina() -> float:
+	return _stamina
+
+
+func get_max_stamina() -> float:
+	return _max_stamina
+
+
+## Whether `amount` is there to spend, all of it. Nothing is ever paid in part.
+func can_spend_stamina(amount: float) -> bool:
+	return _stamina + STAMINA_EPSILON >= amount
+
+
+## Spends `amount` if all of it is there, and says whether it did. A spend
+## restarts the regeneration delay; a refusal changes nothing. Nothing is spent
+## for an amount of zero or less.
+func try_spend_stamina(amount: float) -> bool:
+	if not can_spend_stamina(amount):
+		return false
+	_spend_stamina(amount)
+	return true
+
+
+## Gives back `amount`, up to the maximum. It does not touch the regeneration
+## delay: what is restored is not what regenerates.
+func restore_stamina(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	_set_stamina(_stamina + amount)
+
+
+func is_regenerating_stamina() -> bool:
+	return _stamina < _max_stamina and _stamina_regen_delay_remaining <= 0.0 \
+		and not is_dodging() and get_state() != State.DEAD
+
+
+## The unchecked half of a spend: only ever called right after the check.
+func _spend_stamina(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	_stamina_regen_delay_remaining = data.stamina_regen_delay
+	_set_stamina(_stamina - amount)
+	_log("stamina -%.1f" % amount)
+
+
+## Where every change to the stamina left ends: clamped into 0..max, snapped to
+## an edge within STAMINA_EPSILON of it, and announced only if it moved.
+func _set_stamina(value: float) -> void:
+	var clamped: float = clampf(value, 0.0, _max_stamina)
+	if clamped < STAMINA_EPSILON:
+		clamped = 0.0
+	elif clamped > _max_stamina - STAMINA_EPSILON:
+		clamped = _max_stamina
+	if clamped == _stamina:
+		return
+	_stamina = clamped
+	stamina_changed.emit(_stamina, _max_stamina)
+	if _stamina == _max_stamina:
+		_log("stamina full")
+
+
+## The regeneration delay, then regeneration. Called only while no dodge runs,
+## so a dodge holds both: the delay counts from the end of the action that spent.
+func _advance_stamina(delta: float) -> void:
+	if _stamina >= _max_stamina or get_state() == State.DEAD:
+		return
+	if _stamina_regen_delay_remaining > 0.0:
+		_stamina_regen_delay_remaining = maxf(0.0, _stamina_regen_delay_remaining - delta)
+		return
+	_set_stamina(_stamina + data.stamina_regen_rate * delta)
+
+
 # --- the timeline ---------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
 	if _state == State.DODGING:
 		_advance_dodge(delta)
 		return
+	_advance_stamina(delta)
 	if _dodge_cooldown_remaining > 0.0:
 		_dodge_cooldown_remaining = maxf(0.0, _dodge_cooldown_remaining - delta)
 	if is_attacking():
@@ -411,10 +528,11 @@ func _enter(state: State) -> void:
 func _log(what: String) -> void:
 	if not debug_log_enabled:
 		return
-	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs  dodge=%s  iframes=%s" % [
+	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs  dodge=%s  iframes=%s  stamina=%.1f/%.0f (regen in %.2fs)" % [
 		what, _attack.id if _attack != null else &"-", _combo_index + 1, _chain.size(),
 		_next_attack.id if _next_attack != null else &"-", _buffered_attack,
-		DodgePhase.keys()[_dodge_phase], _iframes_active])
+		DodgePhase.keys()[_dodge_phase], _iframes_active,
+		_stamina, _max_stamina, _stamina_regen_delay_remaining])
 
 
 func _set_iframes(value: bool) -> void:

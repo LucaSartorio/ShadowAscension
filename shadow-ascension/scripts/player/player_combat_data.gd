@@ -1,10 +1,10 @@
 class_name PlayerCombatData
 extends Resource
 
-## The player's combat configuration: its base damage, its attacks, and the
-## windows that decide what it may do and when. Shared and never written in
-## play — how a fight is going (the state, the timers, the combo position) lives
-## on PlayerCombat.
+## The player's combat configuration: its base damage, its attacks, the windows
+## that decide what it may do and when, and the stamina that pays for a dodge.
+## Shared and never written in play — how a fight is going (the state, the
+## timers, the combo position, the stamina left) lives on PlayerCombat.
 ##
 ## How the dodge MOVES is not here: its speed scales with AGI beside the walking
 ## speed, and both belong to the player's movement.
@@ -40,3 +40,15 @@ extends Resource
 ## Seconds after a dodge ends before another may start. Attacks and walking are
 ## free in it; only a second dodge waits.
 @export var dodge_cooldown: float = 0.15
+## Stamina a dodge costs, paid in full when it starts. With less than this left,
+## no dodge starts — never a shorter or cheaper one.
+@export var dodge_stamina_cost: float = 25.0
+
+@export_group("Stamina")
+## The most stamina the player holds, and what every player starts with.
+@export var max_stamina: float = 100.0
+## Stamina recovered per second while regenerating.
+@export var stamina_regen_rate: float = 40.0
+## Seconds without spending before stamina starts to come back, counted from the
+## end of the action that spent it — a dodge's own length never counts.
+@export var stamina_regen_delay: float = 0.8
