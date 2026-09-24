@@ -325,10 +325,16 @@ The accepted attack follows the moment the current one is over. An attack that d
 follow-up ends the chain, so pressing again after an attack has fully finished always starts Attack 1;
 Attack 3 always ends it. Damage is 20 / 25 / 35 (×1.0 / ×1.25 / ×1.75 of the base 20), as since M2.
 
-**Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
-timing windows or interactions are committed yet:
+**M11.3 added the heavy attack**: a single, slower, harder blow on its own button — 40 damage (×2.0),
+0.35 s of windup and 0.45 s of recovery against Light 1's 0.12 s and 0.22 s, and half walking speed
+while it runs. It is a separate move, not part of the light chain: pressed during a light combo it is
+ignored, and a light pressed during a heavy is ignored too; once free, each button starts its own
+attack (Light 1, or the heavy). No charge, no stamina cost and no stagger yet.
 
-- heavy attack
+**Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
+timing windows or interactions are committed yet (the heavy attack, the first of them, shipped in
+M11.3):
+
 - stamina, and sprint gated by it
 - hit reactions, stagger, knockback
 - critical hits
@@ -390,6 +396,7 @@ shadow is summoned, and their on-screen hints appear with it.
 | Move | `W` `A` `S` `D` |
 | Camera | mouse |
 | Light attack (3-hit combo) | left mouse button |
+| Heavy attack | right mouse button (temporary binding) |
 | Dodge (i-frames) | `Space` |
 | Interact — gate, exit, loot, remnant | `E` |
 | Character sheet | `C` |

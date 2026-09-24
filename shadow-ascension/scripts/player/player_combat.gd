@@ -5,13 +5,14 @@ extends Node
 ##
 ## It turns an intent into a committed action and runs that action's timeline:
 ##
-##     request_attack() -> WINDUP -> ACTIVE (hitbox open) -> RECOVERY -> IDLE
-##                                                               \-> the next attack, if one
-##                                                                   was accepted in the window
-##     request_dodge()  -> DODGING (i-frames inside it) -> IDLE, then a cooldown
+##     request_light_attack() -> WINDUP -> ACTIVE (hitbox open) -> RECOVERY -> IDLE
+##     request_heavy_attack()                                         \-> the next attack of
+##                                                                        the chain, if one was
+##                                                                        accepted in the window
+##     request_dodge()        -> DODGING (i-frames inside it) -> IDLE, then a cooldown
 ##
-## It owns the combat state, the attack timeline, the light combo chain, the
-## input buffer, the hit window, and the dodge's timing and i-frames. Everything
+## It owns the combat state, the attack timeline, the attack chains, the input
+## buffer, the hit window, and the dodge's timing and i-frames. Everything
 ## else is someone else's: the devices are read by the player (camera rig and
 ## player script), which only calls request_*(); the body is moved by the player,
 ## which asks this what the current action allows; the representation is played
@@ -19,12 +20,16 @@ extends Node
 ## DamageInfo, and whatever it lands on resolves it — this never touches a
 ## health bar, an enemy, XP or the dungeon.
 ##
-## The light combo (M11.2). A chain runs only while each attack accepts the next
-## one: a press inside an attack's combo window — or just before it, held by the
-## input buffer — queues the next attack of the chain, which starts the moment
-## the current one is over. Anything else ends the chain with the attack, and the
-## next press starts it again from the first attack. Nothing of the chain
-## survives the player going free.
+## Attack chains. Every intent names a chain of attacks: the light combo
+## (Light 1 -> 2 -> 3, M11.2) and the heavy attack, a chain of one (M11.3). A
+## free player starts the chain's first attack. A chain runs on only while each
+## attack accepts the next one: a press FOR THE SAME CHAIN inside an attack's
+## combo window — or just before it, held by the input buffer — queues the next
+## attack, which starts the moment the current one is over. Anything else ends the
+## chain with the attack. A press for another chain is ignored while an attack
+## runs: chains do not branch into each other yet. Nothing of a chain survives
+## the player going free, so after any attack the next press starts a chain from
+## its first attack.
 ##
 ## One timing source: this node's _physics_process, on delta. It runs after the
 ## player's own (a child processes after its parent), pauses with the tree, and
@@ -39,8 +44,10 @@ signal attack_started(attack: AttackData)
 ## component, so combat cannot be dead while the body lives, or the other way.
 enum State { IDLE, WINDUP, ACTIVE, RECOVERY, DODGING, DEAD }
 
-## No attack: the chain has not started, or is over.
+## No attack: no chain has started, or it is over.
 const NO_ATTACK: int = -1
+## The chain while free: none.
+const NO_CHAIN: Array[AttackData] = []
 
 @export var data: PlayerCombatData
 
@@ -59,8 +66,9 @@ var _progression: PlayerProgression = null
 var _state: State = State.IDLE
 ## Time spent in the current state, reset on every change.
 var _state_elapsed: float = 0.0
-## The attack being performed, and its index in the light combo; null and
-## NO_ATTACK while free.
+## The chain being performed — one of the data's chains, by reference — the
+## attack, and its index in that chain; NO_CHAIN, null and NO_ATTACK while free.
+var _chain: Array[AttackData] = NO_CHAIN
 var _attack: AttackData = null
 var _combo_index: int = NO_ATTACK
 ## The attack accepted to follow this one, or null. Set at most once per attack,
@@ -92,23 +100,35 @@ func setup(hitbox: Hitbox, hurtbox: Hurtbox, health: HealthComponent,
 
 # --- intents ------------------------------------------------------------------------------
 
-## A light attack was asked for.
+## A light attack was asked for: the light combo. True when an attack started.
+func request_light_attack() -> bool:
+	return _request(data.light_combo)
+
+
+## A heavy attack was asked for: a chain of one. True when an attack started.
+func request_heavy_attack() -> bool:
+	return _request(data.heavy_combo)
+
+
+## What any attack press does, whichever chain it asks for:
 ##
-## - Free: the first attack of the chain starts now.
-## - Inside the current attack's combo window: the next attack is queued.
-## - Earlier in an attack that has a next one: the press is held for
-##   `input_buffer_time`, and queues the next attack if the window opens in time.
-## - Anything else — after the window, during the chain's last attack, a
-##   follow-up already queued, dodging, dead — does nothing.
-##
-## True when an attack started.
-func request_attack() -> bool:
+## - Free: the chain's first attack starts now.
+## - For the running chain, inside the current attack's combo window: the next
+##   attack is queued.
+## - For the running chain, earlier in an attack that has a next one: the press
+##   is held for `input_buffer_time`, and queues the next attack if the window
+##   opens in time.
+## - Anything else — another chain, after the window, during a chain's last
+##   attack, a follow-up already queued, dodging, dead — does nothing. Two
+##   presses in one frame therefore resolve in arrival order: the first starts
+##   its chain, the second is judged against it.
+func _request(chain: Array[AttackData]) -> bool:
 	var state: State = get_state()
 	if state == State.IDLE:
-		return _start_attack(0)
+		return _start_attack(chain, 0)
 	if not is_attacking() or state == State.DEAD:
 		return false
-	if _next_attack != null or not _has_next_attack():
+	if not is_same(chain, _chain) or _next_attack != null or not _has_next_attack():
 		return false
 	if _in_combo_window():
 		_queue_next_attack()
@@ -170,10 +190,15 @@ func get_current_attack() -> AttackData:
 	return _attack
 
 
-## Where the current attack sits in the light combo (0 for the first), or
-## NO_ATTACK while free.
+## Where the current attack sits in its chain (0 for the first), or NO_ATTACK
+## while free.
 func get_combo_index() -> int:
 	return _combo_index
+
+
+## Whether the running chain is `chain` — `data.light_combo` or `data.heavy_combo`.
+func is_running_chain(chain: Array[AttackData]) -> bool:
+	return is_same(chain, _chain)
 
 
 ## The attack accepted to follow the current one, or null.
@@ -250,10 +275,10 @@ func _advance_dodge(delta: float) -> void:
 		_dodge_cooldown_remaining = data.dodge_cooldown
 
 
-# --- the light combo ------------------------------------------------------------------------
+# --- chains -----------------------------------------------------------------------------------
 
 func _has_next_attack() -> bool:
-	return _combo_index + 1 < data.light_combo.size()
+	return _combo_index + 1 < _chain.size()
 
 
 ## The window in which the current attack accepts the next one: a stretch of its
@@ -270,18 +295,18 @@ func _combo_window_passed() -> bool:
 
 
 func _queue_next_attack() -> void:
-	_next_attack = data.light_combo[_combo_index + 1]
+	_next_attack = _chain[_combo_index + 1]
 	_buffered_attack = 0.0
 	_log("queued %s" % _next_attack.id)
 
 
-## Starts the attack at `index` in the light combo — a fresh instance: its own
-## timeline, its own hit window, nobody hit yet.
-func _start_attack(index: int) -> bool:
-	var combo: Array[AttackData] = data.light_combo
-	if index < 0 or index >= combo.size() or combo[index] == null:
+## Starts the attack at `index` in `chain` — a fresh instance: its own timeline,
+## its own hit window, nobody hit yet.
+func _start_attack(chain: Array[AttackData], index: int) -> bool:
+	if index < 0 or index >= chain.size() or chain[index] == null:
 		return false
-	_attack = combo[index]
+	_chain = chain
+	_attack = chain[index]
 	_combo_index = index
 	_next_attack = null
 	_buffered_attack = 0.0
@@ -311,7 +336,7 @@ func _close_hit_window() -> void:
 ## The attack is over: the queued one follows at once, or the chain ends here.
 func _end_attack() -> void:
 	if _next_attack != null:
-		_start_attack(_combo_index + 1)
+		_start_attack(_chain, _combo_index + 1)
 		return
 	_attack = null
 	_end_chain()
@@ -326,6 +351,7 @@ func _stop_attack() -> void:
 
 ## Nothing of the chain is kept: the next attack will be the first.
 func _end_chain() -> void:
+	_chain = NO_CHAIN
 	_combo_index = NO_ATTACK
 	_next_attack = null
 	_buffered_attack = 0.0
@@ -349,7 +375,7 @@ func _log(what: String) -> void:
 	if not debug_log_enabled:
 		return
 	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs" % [
-		what, _attack.id if _attack != null else &"-", _combo_index + 1, data.light_combo.size(),
+		what, _attack.id if _attack != null else &"-", _combo_index + 1, _chain.size(),
 		_next_attack.id if _next_attack != null else &"-", _buffered_attack])
 
 

@@ -1,14 +1,16 @@
-[gd_resource type="Resource" script_class="PlayerCombatData" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="PlayerCombatData" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_combat_data.gd" id="1_data"]
 [ext_resource type="Resource" path="res://resources/characters/player_attacks/light_attack_1.tres" id="2_light_1"]
 [ext_resource type="Resource" path="res://resources/characters/player_attacks/light_attack_2.tres" id="3_light_2"]
 [ext_resource type="Resource" path="res://resources/characters/player_attacks/light_attack_3.tres" id="4_light_3"]
+[ext_resource type="Resource" path="res://resources/characters/player_attacks/heavy_attack_1.tres" id="5_heavy_1"]
 
 [resource]
 script = ExtResource("1_data")
 base_damage = 20.0
 light_combo = Array[Resource]([ExtResource("2_light_1"), ExtResource("3_light_2"), ExtResource("4_light_3")])
+heavy_combo = Array[Resource]([ExtResource("5_heavy_1")])
 input_buffer_time = 0.15
 dodge_duration = 0.35
 invulnerability_start = 0.06

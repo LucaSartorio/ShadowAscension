@@ -47,7 +47,8 @@ script = ExtResource("1_player")
 placeholder_attack_tilts = Dictionary[StringName, float]({
 &"light_attack_01": 6.0,
 &"light_attack_02": 10.0,
-&"light_attack_03": 15.0
+&"light_attack_03": 15.0,
+&"heavy_attack_01": 22.0
 })
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

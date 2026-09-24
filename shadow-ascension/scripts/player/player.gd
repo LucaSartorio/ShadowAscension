@@ -64,6 +64,7 @@ func _ready() -> void:
 	attack_hitbox.source = self
 	_wire_components()
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
+	camera_rig.attack_heavy_pressed.connect(_on_attack_heavy_pressed)
 	combat.attack_started.connect(_on_attack_started)
 	base_max_health = health_component.max_health
 	if progression != null:
@@ -177,7 +178,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_attack_light_pressed() -> void:
-	combat.request_attack()
+	combat.request_light_attack()
+
+
+func _on_attack_heavy_pressed() -> void:
+	combat.request_heavy_attack()
 
 
 func _on_dodge_pressed() -> void:

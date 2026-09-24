@@ -336,7 +336,8 @@ having to be rewritten again and again.
 | --- | --- | --- |
 | **M11.1** Combat Foundation 2.0 | **Complete** | the player's combat on its own controller (`PlayerCombat`): explicit state and attack timeline, input buffer, combo window, attacks as `AttackData`, a `DamageInfo` from hitbox to health, one damage calculation; the existing combo, dodge and numbers unchanged |
 | **M11.2** Light Attack Combo Chain | **Complete** | Attack 1 → 2 → 3 as a real chain: a follow-up is accepted only inside the attack's combo window (or just before it, by a 0.15 s buffer) and the chain ends with any attack that did not accept one; one `AttackData` asset per attack, each naming its animation |
-| M11.3 onwards | Not started | the rest of the deliverables below |
+| **M11.3** Heavy Attack & Attack Variants | **Complete** | a heavy attack on its own input (`attack_heavy`): a one-attack chain on the same controller, ×2.0 damage, slower and more committed; light and heavy never interrupt each other's chains |
+| M11.4 onwards | Not started | the rest of the deliverables below |
 
 **Goal**
 Turn prototype combat into a real action-RPG combat system.

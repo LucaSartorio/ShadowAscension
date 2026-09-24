@@ -389,10 +389,10 @@ func _frame_rate_tests() -> void:
 		# A lambda captures locals by value, so the clock it reads is a one-slot array.
 		var clock: Array[float] = [0.0]
 		bare.attack_started.connect(func(_attack: AttackData) -> void: starts.append(clock[0]))
-		bare.request_attack()
+		bare.request_light_attack()
 		while clock[0] < 3.0 and bare.get_state() != PlayerCombat.State.IDLE:
 			if bare.get_state() == PlayerCombat.State.RECOVERY and bare.get_queued_attack() == null:
-				bare.request_attack()
+				bare.request_light_attack()
 			bare._physics_process(dt)
 			clock[0] += dt
 		var ok: bool = starts.size() == 3
@@ -408,9 +408,9 @@ func _frame_rate_tests() -> void:
 
 		# Too early at this rate too: a press right after the start is dropped.
 		bare.reset()
-		bare.request_attack()
+		bare.request_light_attack()
 		bare._physics_process(dt)
-		bare.request_attack()
+		bare.request_light_attack()
 		while bare.get_state() != PlayerCombat.State.IDLE:
 			bare._physics_process(dt)
 		_record(bare.get_combo_index() == PlayerCombat.NO_ATTACK and starts.size() == 4,

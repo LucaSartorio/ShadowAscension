@@ -1,7 +1,10 @@
 class_name CameraRig
 extends Node3D
 
+## The attack buttons, as intents. Here rather than on the player because a
+## click while the cursor is free captures it instead of attacking.
 signal attack_light_pressed
+signal attack_heavy_pressed
 
 @export var mouse_sensitivity: float = 0.005
 @export var minimum_pitch: float = -1.2
@@ -36,8 +39,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_pressed("attack_light"):
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			attack_light_pressed.emit()
-		else:
-			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-		get_viewport().set_input_as_handled()
+		_attack_pressed(attack_light_pressed)
+	elif event.is_action_pressed("attack_heavy"):
+		_attack_pressed(attack_heavy_pressed)
+
+
+func _attack_pressed(intent: Signal) -> void:
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		intent.emit()
+	else:
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	get_viewport().set_input_as_handled()

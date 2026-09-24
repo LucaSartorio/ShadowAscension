@@ -418,7 +418,7 @@ func _player_death_tests() -> void:
 	_record(was_open and _combat.get_state() == PlayerCombat.State.DEAD
 			and _combat.get_current_attack() == null and not _player.attack_hitbox.is_active(),
 		"P1) killed mid-swing: combat is DEAD, the attack is gone, the hitbox shut")
-	var attacked: bool = _combat.request_attack()
+	var attacked: bool = _combat.request_light_attack()
 	var dodged: bool = _combat.request_dodge()
 	await get_tree().physics_frame
 	_record(not attacked and not dodged and not _combat.has_buffered_attack()
@@ -468,7 +468,7 @@ func _frame_rate_tests() -> void:
 		bare.set_physics_process(false)
 		var attack: AttackData = _shipped.light_combo[0]
 
-		bare.request_attack()
+		bare.request_light_attack()
 		var windup: float = _step_until(bare, PlayerCombat.State.ACTIVE, dt)
 		var active: float = _step_until(bare, PlayerCombat.State.RECOVERY, dt)
 		var recovery: float = _step_until(bare, PlayerCombat.State.IDLE, dt)
@@ -478,8 +478,8 @@ func _frame_rate_tests() -> void:
 				hz, windup, active, recovery, attack.windup, attack.active, attack.recovery])
 
 		bare.reset()
-		bare.request_attack()
-		bare.request_attack()
+		bare.request_light_attack()
+		bare.request_light_attack()
 		var held: float = 0.0
 		while bare.has_buffered_attack() and held < 2.0:
 			bare._physics_process(dt)

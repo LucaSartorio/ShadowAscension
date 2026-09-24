@@ -12,8 +12,9 @@ definitive art production starts at M13, deliberately, once the systems that con
 moving.
 
 M10 — Core Refactor & Game Architecture, the first milestone of the Core Production Foundation
-phase, is complete. **M11 — Combat System 2.0** is in progress: M11.1, the combat foundation, and
-M11.2, the light attack combo chain, are done; the phase runs to Alpha 1 at M20.
+phase, is complete. **M11 — Combat System 2.0** is in progress: M11.1 (the combat foundation), M11.2
+(the light attack combo chain) and M11.3 (the heavy attack) are done; the phase runs to Alpha 1 at
+M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub

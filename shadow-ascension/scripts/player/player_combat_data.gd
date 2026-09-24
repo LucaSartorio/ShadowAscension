@@ -16,6 +16,10 @@ extends Resource
 ## AttackData asset, so one can be retuned without touching the others or the
 ## controller. After the last, the chain is over.
 @export var light_combo: Array[AttackData] = []
+## The heavy attack: a chain of one — a single, slower, harder attack with no
+## follow-up. A chain like the light combo, so the controller runs it the same
+## way and a longer heavy chain would be data, not code.
+@export var heavy_combo: Array[AttackData] = []
 ## How long a press made shortly before an attack's combo window opens is
 ## remembered. It queues the next attack if the window opens in time, and is
 ## dropped otherwise — a press made earlier than this simply does nothing.

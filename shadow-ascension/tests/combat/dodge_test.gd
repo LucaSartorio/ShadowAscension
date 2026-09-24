@@ -236,7 +236,7 @@ func _test_attack_1_cancelable_during_recovery() -> void:
 
 func _test_attack_2_cancel_window() -> void:
 	_reset_player()
-	_player.combat._start_attack(1)  # Attack 2, directly
+	_player.combat._start_attack(_player.combat.data.light_combo, 1)  # Attack 2, directly
 	# Attack 2: startup 0.14 + active 0.14 = 0.28 → recovery. Fraction 0.35 * 0.24 = 0.084s
 	await _wait(0.32)  # 0.04s into recovery (< 0.084)
 	_player._on_dodge_pressed()
@@ -250,7 +250,7 @@ func _test_attack_2_cancel_window() -> void:
 
 func _test_attack_3_cancel_window() -> void:
 	_reset_player()
-	_player.combat._start_attack(2)  # Attack 3, directly
+	_player.combat._start_attack(_player.combat.data.light_combo, 2)  # Attack 3, directly
 	# Attack 3: startup 0.18 + active 0.16 = 0.34 → recovery. Fraction 0.6 * 0.32 = 0.192s
 	await _wait(0.42)  # 0.08s into recovery (< 0.192)
 	_player._on_dodge_pressed()
@@ -290,7 +290,7 @@ func _test_queued_input_cleared_by_dodge() -> void:
 
 func _test_next_attack_after_dodge_is_attack_1() -> void:
 	_reset_player()
-	_player.combat._start_attack(2)  # Attack 3, directly
+	_player.combat._start_attack(_player.combat.data.light_combo, 2)  # Attack 3, directly
 	await _wait(0.55)  # into recovery past 60% cancel
 	_player._on_dodge_pressed()
 	await _wait(_player.combat.data.dodge_duration + _player.combat.data.dodge_cooldown + 0.1)

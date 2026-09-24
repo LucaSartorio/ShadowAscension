@@ -8,10 +8,10 @@
 
 **M11 — Combat System 2.0** (In progress)
 
-**M11.1 — Combat Foundation 2.0** and **M11.2 — Light Attack Combo Chain** are complete: the player's
-combat runs on its own controller (`PlayerCombat`), and the light attack is a real three-hit chain on
-it — Attack 1 → 2 → 3, each follow-up accepted only in the previous attack's combo window. M11.3 is
-next; heavy attack, stamina, hit reactions, crits and targeting are not built yet. The architecture
+**M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain** and **M11.3 — Heavy Attack &
+Attack Variants** are complete: the player's combat runs on its own controller (`PlayerCombat`); the
+light attack is a real three-hit chain on it, and the heavy attack a second, slower chain of one on
+its own button. M11.4 is next; stamina, hit reactions, crits and targeting are not built yet. The architecture
 is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
@@ -19,7 +19,7 @@ is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROAD
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1, M11.2 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.3 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -35,6 +35,49 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.3 — Heavy Attack & Attack Variants** (Completed). A second attack type, built as a second
+  chain on the M11.1 controller rather than a second system:
+
+    - **Input**: a new action, `attack_heavy`, on the right mouse button (free until now; temporary
+      until key rebinding at M19). `CameraRig` turns it into an intent the way it does the light
+      button — a click while the cursor is free captures it instead — and the player calls
+      `PlayerCombat.request_heavy_attack()`. `request_attack()` became `request_light_attack()`.
+    - **Data**: `resources/characters/player_attacks/heavy_attack_1.tres`, an ordinary `AttackData`
+      (`id` `heavy_attack_1`, `animation` `heavy_attack_01`), in a new `PlayerCombatData.heavy_combo` —
+      a chain of one. No new resource class and no attack-type enum: the chain is the type.
+    - **Numbers** (first values, not a balance pass): ×2.0 → **40** damage against Light 1's 20;
+      windup 0.35 s, active 0.15 s, recovery 0.45 s (0.95 s against 0.46 s); movement ×0.5 while it
+      runs; a dodge can cancel it from 60% of its recovery, as the dodge already did for Light 3.
+    - **Controller**: the chain rules (index, window, queue, buffer) now read the running chain,
+      held by reference, instead of the light combo; everything else is M11.2's code unchanged.
+    - **Policy**: while an attack runs, only a press of its own chain counts. Heavy during a light
+      chain, light during a heavy, heavy during a heavy: ignored, nothing held. Two presses in one
+      frame: the first starts its chain, the second is ignored. After any attack, the next light
+      press is Light 1 and the next heavy press is the heavy. No branch between chains.
+    - **Presentation**: a 22° placeholder roll for `heavy_attack_01`, over the heavy's own timeline.
+
+  Tests: **`tests/combat/heavy_attack_test.tscn`** (26) — the binding; start from IDLE; windup,
+  active and recovery with the hitbox open only in the active phase; more commitment and more damage
+  than any light attack; one hit per target, two targets, a second heavy hitting again; a killing
+  blow with one death and nothing after; heavy spam; heavy through a light chain, light through a
+  heavy, both in the same frame, and both mashed for three seconds; half speed and a held aim; death
+  mid-heavy; 30 and 144 Hz; and the every-frame watcher (no impossible state).
+  **`tests/core/m11_heavy_run.gd`** (23) — New Game → hub → through the gate mid-heavy (no ghost
+  attack) → a light combo and a heavy through two enemies in one hitbox, the heavy killing both, each
+  paid once → a heavy killing blow → the shadow's kill at 70/30 → a light combo and a heavy on the
+  boss, a heavy to finish it → out mid-heavy → hub (XP, shadow XP, health, no orphans) → a second
+  dungeon: a heavy, then the light combo from Light 1, with the first dungeon's listeners. The light
+  combo's own suites (`light_combo_test`, `m11_combo_run`) pass unchanged; the only existing test
+  edits are the rename to `request_light_attack()` and `_start_attack()` taking its chain.
+
+  **1614 assertions across 41 suites, zero failures, zero runtime errors, zero exit-time leaks**
+  (`tests/run_all.gd`). The 39 existing suites keep M11.2's 1565; the two new ones add 49. Zero parser
+  warnings in the game's scripts and the new tests; cold-cache reimport, headless boot and a headless
+  run of the game are clean.
+
+  Left for M11.4 and later: stamina, Dodge 2.0, hit reactions / stagger / knockback, crits, target
+  lock; for the attacks themselves, branches between chains, charged attacks and finishers.
 
 - **M11.2 — Light Attack Combo Chain** (Completed). The three-hit light combo already existed; what
   it lacked was being a chain. After M11.1 a press was held for 0.4 s and the chain stayed open for
