@@ -8,10 +8,11 @@
 
 **M11 — Combat System 2.0** (In progress)
 
-**M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain** and **M11.3 — Heavy Attack &
-Attack Variants** are complete: the player's combat runs on its own controller (`PlayerCombat`); the
-light attack is a real three-hit chain on it, and the heavy attack a second, slower chain of one on
-its own button. M11.4 is next; stamina, hit reactions, crits and targeting are not built yet. The architecture
+**M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain**, **M11.3 — Heavy Attack &
+Attack Variants** and **M11.4 — Dodge & I-Frames** are complete: the player's combat runs on its own
+controller (`PlayerCombat`); the light attack is a real three-hit chain on it, the heavy attack a
+second, slower chain of one on its own button, and the dodge has explicit phases whose i-frames the
+hurtbox enforces. M11.5 is next; stamina, hit reactions, crits and targeting are not built yet. The architecture
 is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
@@ -19,7 +20,7 @@ is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROAD
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.3 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.4 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -35,6 +36,56 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.4 — Dodge & I-Frames** (Completed). The dodge existed since M2 and moved into `PlayerCombat`
+  at M11.1 — direction, speed, collisions, cooldown and cancel windows were already there. M11.4
+  makes its timing explicit and its invulnerability trustworthy, without changing a number:
+
+    - **Phases**: `PlayerCombat.DodgePhase` — `STARTUP` (0–0.06 s), `INVULNERABLE` (0.06–0.24 s),
+      `RECOVERY` (0.24–0.35 s) — inside the `DODGING` state, from `PlayerCombatData`
+      (`invulnerability_start`, `invulnerability_end`, `dodge_duration`); then IDLE and a 0.15 s
+      cooldown on the next dodge only. The phase switches the i-frames, so the two cannot disagree.
+    - **I-frames are the hurtbox's decision**: `Hurtbox.set_invulnerable(value, reason)` keeps a set
+      of reasons, and `receive_hit()` refuses hits while any holds. The dodge sets and clears only
+      `IFRAMES_REASON`. Before, invulnerability was one shared flag and a dodge ending cleared it for
+      everyone. The attacker never checks the dodge: its hitbox connects and the hurtbox drops the hit
+      — no damage, no `health_changed`, no HUD change.
+    - **One gate**: `can_dodge()` — not dodging, not dead, off cooldown, and outside any attack or
+      inside its dodge-cancel window. `request_dodge()` goes through it; it is where stamina will go.
+    - **Policies** (unchanged, now tested): a dodge is refused in windup and active and before each
+      attack's cancel fraction (Light 1 0%, Light 2 35%, Light 3 and heavy 60% of recovery), and
+      cancels the attack, the chain and any queued follow-up after it; a refused dodge is never held;
+      light and heavy presses during a dodge are ignored, and after it Light 1 / the heavy start at
+      once. `reset()` (and so death) ends the dodge and its i-frames.
+    - **Movement** (unchanged): camera-relative direction fixed at the start, backstep with no key,
+      11.5 m/s × AGI for the whole dodge (about 4 m), `move_and_slide()` with gravity.
+
+  Tests: **`tests/combat/dodge_iframes_test.tscn`** (37) — the binding; the lifecycle through every
+  phase and the cooldown; forward, back, left, right, no key and a turned camera; steady speed, the
+  distance, gravity, a wall; the i-frame edges frame by frame (the last startup frame and the first
+  recovery frame hurt, the first and last invulnerable frames do not); a real enemy-layer hitbox
+  before, in and after the i-frames; another reason outliving the dodge and not ending it; reset and
+  death mid-dodge; spam (twenty presses, one dodge; held for three seconds, dodges spaced by the
+  cooldown); cancelling Light 1, Light 2, the heavy's windup and recovery; attacks pressed during a
+  dodge; 30 and 144 Hz; and the every-frame watcher (phase, state, i-frames and hitbox agree).
+  **`tests/core/m11_dodge_run.gd`** (26) — through the gate and out of the dungeon mid-i-frames, each
+  arriving player clean; take a basic enemy's swing, dodge the next (no damage, no HUD change), take
+  the one after; a light combo and a heavy through two enemies; the shadow's kill at 70/30; the same
+  take/dodge/take on the boss, then combo and heavy to finish it; the hub (XP, level, shadow XP,
+  health, no orphans); a second dungeon with the same listeners. Every existing suite passes
+  unchanged — no existing test was edited.
+
+  **1677 assertions across 43 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 41 existing suites keep M11.3's 1614; the two new ones add 63. Zero
+  parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot and a
+  headless run of the game are clean.
+
+  Found, not fixed (M12): a basic enemy chasing a player who stands still can stop about 1.83 m away,
+  past its 1.8 m attack range, and wait there until the player moves (`ARCHITECTURE.md`, *Left for
+  the next M11 steps*).
+
+  Left for M11.5 and later: stamina (and its dodge cost, in `can_dodge()`), Dodge 2.0, hit reactions
+  / stagger / knockback, crits, target lock, combat feedback.
 
 - **M11.3 — Heavy Attack & Attack Variants** (Completed). A second attack type, built as a second
   chain on the M11.1 controller rather than a second system:

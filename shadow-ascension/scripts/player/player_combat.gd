@@ -9,7 +9,8 @@ extends Node
 ##     request_heavy_attack()                                         \-> the next attack of
 ##                                                                        the chain, if one was
 ##                                                                        accepted in the window
-##     request_dodge()        -> DODGING (i-frames inside it) -> IDLE, then a cooldown
+##     request_dodge()        -> DODGING: STARTUP -> INVULNERABLE -> RECOVERY -> IDLE,
+##                               then a cooldown before the next dodge
 ##
 ## It owns the combat state, the attack timeline, the attack chains, the input
 ## buffer, the hit window, and the dodge's timing and i-frames. Everything
@@ -31,6 +32,14 @@ extends Node
 ## the player going free, so after any attack the next press starts a chain from
 ## its first attack.
 ##
+## The dodge (M11.4). A directed burst of movement with a window of
+## invulnerability inside it: vulnerable for its first moment (STARTUP),
+## invulnerable in the middle (INVULNERABLE), vulnerable again for its tail
+## (RECOVERY), then free, with a short cooldown before another. The i-frames are
+## the hurtbox refusing hits for one reason of its own — this never tells an
+## attacker anything, and the attacker never asks. Where the dodge goes and how
+## fast is the player's: this only says when.
+##
 ## One timing source: this node's _physics_process, on delta. It runs after the
 ## player's own (a child processes after its parent), pauses with the tree, and
 ## is freed with the player, so nothing of it outlives a scene.
@@ -43,18 +52,24 @@ signal attack_started(attack: AttackData)
 ## phases of an attack. DEAD is never stored: it is read from the health
 ## component, so combat cannot be dead while the body lives, or the other way.
 enum State { IDLE, WINDUP, ACTIVE, RECOVERY, DODGING, DEAD }
+## Where a dodge is, NONE when there is none. The i-frames are INVULNERABLE,
+## exactly: the phase is what switches them.
+enum DodgePhase { NONE, STARTUP, INVULNERABLE, RECOVERY }
 
 ## No attack: no chain has started, or it is over.
 const NO_ATTACK: int = -1
 ## The chain while free: none.
 const NO_CHAIN: Array[AttackData] = []
+## The reason the dodge gives the hurtbox for refusing hits, so ending the
+## i-frames ends only the dodge's invulnerability, never another system's.
+const IFRAMES_REASON: StringName = &"dodge_iframes"
 
 @export var data: PlayerCombatData
 
 @export_group("DEBUG")
-## DEBUG ONLY. Off by default; the game never needs it. Prints every state change
-## with the attack, its place in the chain and what is waiting to follow it — for
-## tuning windows, not for play.
+## DEBUG ONLY. Off by default; the game never needs it. Prints every state and
+## dodge-phase change with the attack, its place in the chain, what is waiting to
+## follow it and whether the i-frames are on — for tuning windows, not for play.
 @export var debug_log_enabled: bool = false
 
 # Handed over by the player in setup().
@@ -77,6 +92,7 @@ var _next_attack: AttackData = null
 ## Seconds a press made before the combo window opened has left; 0 when there is
 ## none. One slot, not a queue: pressing again only renews it.
 var _buffered_attack: float = 0.0
+var _dodge_phase: DodgePhase = DodgePhase.NONE
 var _dodge_cooldown_remaining: float = 0.0
 var _iframes_active: bool = false
 
@@ -137,24 +153,18 @@ func _request(chain: Array[AttackData]) -> bool:
 	return false
 
 
-## A dodge was asked for. Refused while dodging, dead, on cooldown, or during an
-## attack before its dodge-cancel window; an attack inside that window is
-## cancelled, and the chain with it. True when a dodge started.
+## A dodge was asked for. Starts one if can_dodge() allows it; an attack inside
+## its dodge-cancel window is cancelled, and the chain with it. Anything else —
+## dodging already, on cooldown, dead, an attack not yet cancellable — refuses
+## it, and nothing is held: a dodge is never buffered. True when a dodge started.
 func request_dodge() -> bool:
-	var state: State = get_state()
-	if state == State.DODGING or state == State.DEAD:
-		return false
-	if _dodge_cooldown_remaining > 0.0:
+	if not can_dodge():
 		return false
 	if is_attacking():
-		if not _in_dodge_cancel_window():
-			return false
 		_stop_attack()
 	_end_chain()
 	_enter(State.DODGING)
-	# Off at the start as well as the end, exactly as the dodge always did: the
-	# window below switches it on only once the dodge is under way.
-	_set_iframes(false, true)
+	_enter_dodge_phase(DodgePhase.STARTUP)
 	return true
 
 
@@ -164,6 +174,7 @@ func request_dodge() -> bool:
 func reset() -> void:
 	_stop_attack()
 	_end_chain()
+	_dodge_phase = DodgePhase.NONE
 	_set_iframes(false)
 	_enter(State.IDLE)
 	_dodge_cooldown_remaining = 0.0
@@ -183,6 +194,22 @@ func is_attacking() -> bool:
 
 func is_dodging() -> bool:
 	return _state == State.DODGING
+
+
+## Whether a dodge may start now: not dodging already, not dead, off cooldown,
+## and not committed to an attack short of its dodge-cancel window. The one gate
+## every dodge passes — where a stamina check will join it.
+func can_dodge() -> bool:
+	var state: State = get_state()
+	if state == State.DODGING or state == State.DEAD:
+		return false
+	if _dodge_cooldown_remaining > 0.0:
+		return false
+	return not is_attacking() or _in_dodge_cancel_window()
+
+
+func get_dodge_phase() -> DodgePhase:
+	return _dodge_phase
 
 
 ## The attack being performed, or null.
@@ -267,12 +294,22 @@ func _advance_attack(delta: float) -> void:
 
 func _advance_dodge(delta: float) -> void:
 	_state_elapsed += delta
-	_set_iframes(_state_elapsed >= data.invulnerability_start
-		and _state_elapsed < data.invulnerability_end)
 	if _state_elapsed >= data.dodge_duration:
-		_set_iframes(false, true)
+		_enter_dodge_phase(DodgePhase.NONE)
 		_enter(State.IDLE)
 		_dodge_cooldown_remaining = data.dodge_cooldown
+	elif _state_elapsed >= data.invulnerability_end:
+		_enter_dodge_phase(DodgePhase.RECOVERY)
+	elif _state_elapsed >= data.invulnerability_start:
+		_enter_dodge_phase(DodgePhase.INVULNERABLE)
+
+
+func _enter_dodge_phase(phase: DodgePhase) -> void:
+	if phase == _dodge_phase:
+		return
+	_dodge_phase = phase
+	_set_iframes(phase == DodgePhase.INVULNERABLE)
+	_log("dodge %s" % DodgePhase.keys()[phase])
 
 
 # --- chains -----------------------------------------------------------------------------------
@@ -374,18 +411,18 @@ func _enter(state: State) -> void:
 func _log(what: String) -> void:
 	if not debug_log_enabled:
 		return
-	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs" % [
+	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs  dodge=%s  iframes=%s" % [
 		what, _attack.id if _attack != null else &"-", _combo_index + 1, _chain.size(),
-		_next_attack.id if _next_attack != null else &"-", _buffered_attack])
+		_next_attack.id if _next_attack != null else &"-", _buffered_attack,
+		DodgePhase.keys()[_dodge_phase], _iframes_active])
 
 
-## `force` writes the hurtbox even when the value has not changed.
-func _set_iframes(value: bool, force: bool = false) -> void:
-	if value == _iframes_active and not force:
+func _set_iframes(value: bool) -> void:
+	if value == _iframes_active:
 		return
 	_iframes_active = value
 	if _hurtbox != null:
-		_hurtbox.set_invulnerable(value)
+		_hurtbox.set_invulnerable(value, IFRAMES_REASON)
 
 
 func _on_owner_died() -> void:

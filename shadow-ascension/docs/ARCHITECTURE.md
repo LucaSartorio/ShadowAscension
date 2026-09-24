@@ -131,7 +131,7 @@ Systems are built from small, composable components attached to a scene root (e.
 
 - **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down. Emits `health_changed(current, maximum)` and `died`, and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
 - **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source` and `attack_id`, sends each target one `DamageInfo`, emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
-- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: honours `is_invulnerable` (dodge i-frames) and forwards the hit to the `HealthComponent` it is wired to.
+- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1).
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, and the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2).
 
@@ -308,7 +308,8 @@ The last two columns are there because a PASS/FAIL count cannot see them: M10.4'
 leaked GDScript instances on every run through the dungeon while every assertion passed. At the
 close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, **37 suites and
 1506 assertions**; at M11.2, **39 suites and 1565 assertions**;
-at M11.3, **41 suites and 1614 assertions**, all clean.
+at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**, all
+clean.
 
 **Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
 To see them all at once, put an `override.cfg` in the project root that raises each warning to an
@@ -930,9 +931,10 @@ M11.1 (Combat Foundation 2.0) rebuilt the player's combat as the foundation the 
 The gameplay it carries is the one M2–M9 shipped — the three-hit light combo, the dodge with its
 i-frames and its cancel windows, the same damage numbers — reorganised so that each step of an attack
 has one owner and the animation is never the source of truth. M11.2 (Light Attack Combo Chain) made
-the combo a real chain on that foundation, and M11.3 (Heavy Attack & Attack Variants) added a second
-attack type on the same controller: see *Light attack combo (M11.2)* and *Attack types (M11.3)*
-below.
+the combo a real chain on that foundation, M11.3 (Heavy Attack & Attack Variants) added a second
+attack type on the same controller, and M11.4 (Dodge & I-Frames) made the dodge's phases and its
+invulnerability explicit: see *Light attack combo (M11.2)*, *Attack types (M11.3)* and *Dodge and
+i-frames (M11.4)* below.
 
 ```
 Input          CameraRig (attack_light, attack_heavy — only while the mouse is captured) and
@@ -984,7 +986,7 @@ One enum, `PlayerCombat.State`, instead of an attack state beside an `_is_dodgin
 | `WINDUP` | an attack is winding up; the hitbox is shut | held by the buffer, if the attack has a next | refused |
 | `ACTIVE` | the hit window: the hitbox is open | held by the buffer, if the attack has a next | refused |
 | `RECOVERY` | the hitbox is shut again; the player is still committed | queues the next attack inside the combo window; held before it; ignored after it | cancels the attack, once past the attack's `dodge_cancel_recovery_fraction` |
-| `DODGING` | a dodge; the i-frames fall inside it | ignored | refused |
+| `DODGING` | a dodge: STARTUP, INVULNERABLE (the i-frames), RECOVERY | ignored | refused |
 | `DEAD` | read from the health component, never stored | refused | refused |
 
 Only what the current combat needs is built. There is no `STUNNED` — hit reactions and stagger are a
@@ -1136,6 +1138,75 @@ attack the chain is over: the next light press is Light 1, the next heavy press 
 between chains — a heavy finisher after Light 2, a light follow-up after a heavy — are deliberately
 not built; they would be a window accepting another chain's press, in data and in `_request()`.
 
+### Dodge and i-frames (M11.4)
+
+The dodge existed since M2 and moved into `PlayerCombat` at M11.1; M11.4 makes its phases and its
+invulnerability explicit, and checks it against real enemy and boss attacks.
+
+**Input**: the `dodge` action (`Space`; temporary until key rebinding at M19). The player's
+`_unhandled_input` turns it into `PlayerCombat.request_dodge()`; nothing below it reads a device.
+
+**When**: `request_dodge()` passes one gate, `can_dodge()` — not already dodging, not dead, off
+cooldown, and not committed to an attack short of its dodge-cancel window. It is the one place a
+future stamina check joins; nothing else decides whether a dodge may start. A refused dodge is not
+held: dodges are never buffered.
+
+**Phases** — `PlayerCombat.DodgePhase`, inside the `DODGING` state, from `PlayerCombatData`:
+
+```
+| STARTUP | INVULNERABLE | RECOVERY |  -> IDLE, then a cooldown before the next dodge
+0       0.06            0.24      0.35 s                               0.15 s
+```
+
+| Phase | Moving | Invulnerable | Attacks / another dodge |
+| --- | --- | --- | --- |
+| `STARTUP` (0–0.06 s) | yes | no | refused |
+| `INVULNERABLE` (0.06–0.24 s) | yes | **yes** | refused |
+| `RECOVERY` (0.24–0.35 s) | yes | no | refused |
+| cooldown (0.15 s after) | free | no | attacks allowed; another dodge refused |
+
+The phase is what switches the i-frames: entering `INVULNERABLE` sets them, leaving it clears them,
+so the two cannot disagree (`dodge_iframes_test` checks every frame). All four numbers are
+`PlayerCombatData` fields; the phase boundaries are `invulnerability_start`, `invulnerability_end`
+and `dodge_duration`, and the cooldown is `dodge_cooldown`. Timing is on `delta`, like the attacks.
+
+**Where and how fast** is the player's: the direction is fixed when the dodge starts, from the
+movement keys relative to the camera — the same `_input_direction()` walking uses — and with no key
+held it is a backstep, straight away from where the player faces. The body moves at
+`effective_dodge_speed` (11.5 m/s, scaled by AGI) for the whole dodge, about 4 m, through
+`move_and_slide()` with gravity as ever: walls, closed doors and enemies still stop it, and a dodge
+off a ledge falls. Keys pressed during the dodge change nothing. The facing does not turn during a
+dodge; the placeholder is a pitch of the model (`dodge_visual_tilt_degrees`, on the player).
+
+**I-frames are the hurtbox's decision.** The dodge calls
+`Hurtbox.set_invulnerable(true/false, PlayerCombat.IFRAMES_REASON)`; `Hurtbox.receive_hit()` refuses
+any hit while a reason holds. The attacker never asks and never knows: an enemy's or the boss's
+hitbox still connects (it emits `hit_landed`), the hurtbox simply does not pass the hit on, so health
+does not change, `health_changed` is not emitted and the health HUD does not move. Because
+invulnerability is kept per reason, the dodge ending its i-frames never ends another system's
+invulnerability, nor can another system end them; before M11.4 it was one shared flag, and a dodge
+starting or ending cleared it for everyone. There is no `ignore_iframes`: no damage in the game is
+meant to pass them yet. `HealthComponent.take_damage()` called directly — not through a hurtbox — is
+not a hit and does not consult it.
+
+**Never left invulnerable**: the i-frames end with their phase, and `reset()` — which a death runs —
+ends the dodge and them; a scene change frees the player, and every new hurtbox starts with no
+reason set.
+
+**Attacks and the dodge — the policies:**
+
+| Pressed | During | Result |
+| --- | --- | --- |
+| dodge | windup or active of any attack | refused, not held |
+| dodge | recovery of an attack, before its `dodge_cancel_recovery_fraction` | refused, not held |
+| dodge | recovery of an attack, from its cancel fraction on | the attack is cancelled (hitbox shut, chain and queue dropped), the dodge starts |
+| light / heavy | a dodge, any phase | ignored, not held; after it, Light 1 / the heavy start at once |
+| dodge | the cooldown after a dodge | refused |
+
+The cancel fractions are the attacks' own: Light 1 from 0% of its recovery, Light 2 from 35%,
+Light 3 and the heavy from 60% — so a dodge never skips all of the heavy's recovery. There is no
+cancel out of windup or active, no attack out of a dodge and no dodge buffering.
+
 ### Damage flow
 
 - **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's damage is
@@ -1188,17 +1259,19 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 
 ### Death and scene change
 
-- **The player dying mid-attack**: `PlayerCombat` hears its own `died` and resets — attack dropped,
-  hit window shut, dodge and i-frames ended, nothing buffered — and while dead refuses every intent.
+- **The player dying mid-attack or mid-dodge**: `PlayerCombat` hears its own `died` and resets —
+  attack dropped, hit window shut, dodge and i-frames ended, nothing buffered — and while dead refuses
+  every intent; the dodge's movement stops with it.
   Before M11.1 a dead player could keep swinging until the dungeon reloaded.
-- **A scene change mid-swing** frees the whole combat with its player; `m11_combat_run` leaves the
-  hub with the hit window open and checks that nothing survives it.
+- **A scene change mid-swing or mid-dodge** frees the whole combat with its player; `m11_combat_run`
+  leaves the hub with the hit window open, and `m11_dodge_run` leaves the hub and the dungeon in the
+  i-frames, and each checks that nothing survives it.
 
 ### Debug and input actions
 
-- `PlayerCombat.debug_log_enabled` (off by default, inspector only) prints every state change and
-  every queued follow-up with the current attack, its place in the chain, the queued attack and the
-  buffer. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
+- `PlayerCombat.debug_log_enabled` (off by default, inspector only) prints every state change, every
+  dodge-phase change and every queued follow-up with the current attack, its place in the chain, the
+  queued attack, the buffer, the dodge phase and whether the i-frames are on. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
 - The input actions are `attack_light` (left mouse button), `attack_heavy` (right mouse button, M11.3)
   and `dodge`. The heavy's binding is temporary until key rebinding (M19). New ones follow the same
   pattern — `target_lock` — and are added with their features, not before.
@@ -1206,7 +1279,8 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 ### Left for the next M11 steps
 
 - **Stamina**: maximum and rates in `PlayerCombatData`, the current value on `PlayerCombat`.
-- **Dodge 2.0**: stamina cost, buffering an attack out of a dodge, cancelling into a dodge earlier.
+- **Stamina** for the dodge: a check in `can_dodge()`, a cost when `request_dodge()` starts one.
+- **Dodge 2.0**: buffering an attack out of a dodge, cancelling into a dodge earlier, a perfect dodge.
 - **Combo 2.0**: a follow-up cutting recovery short, windows reaching into the active phase, branches
   between chains (a heavy finisher, a light follow-up after a heavy), charged attacks, launchers and
   air combos — each a change to data and to `_request()` / `_end_attack()`, not a second system.
@@ -1214,7 +1288,11 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
   a reaction needs, on the receiving side.
 - **Critical hits**: in `calculate_damage()`, or per hit where the hitbox builds its `DamageInfo`.
 - **Target lock**: the aim source of `_face_aim_direction()`.
-- `Hurtbox.is_invulnerable` is one flag, shared by the dodge and anything else that sets it.
+- **An enemy can stall out of reach** (found at M11.4, not fixed): a `BasicMeleeEnemy` chasing a
+  player who stands still can stop about 1.83 m away — its navigation counts it arrived within 0.25 m
+  of its slot on the 1.6 m ring, and 1.83 m is past its 1.8 m `attack_range`, so it neither closes
+  nor attacks until the player moves. Distance management is M12's; `m11_dodge_run` steps the player
+  in to 1.5 m before waiting for a swing.
 
 Still true from before M11: enemies are found by physics, not a registry; enemies acquire their
 target through `Player.GROUP` (choosing between player and shadow is M12's); new runtime state goes on

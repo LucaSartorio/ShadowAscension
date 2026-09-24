@@ -331,9 +331,19 @@ while it runs. It is a separate move, not part of the light chain: pressed durin
 ignored, and a light pressed during a heavy is ignored too; once free, each button starts its own
 attack (Light 1, or the heavy). No charge, no stamina cost and no stagger yet.
 
+**M11.4 made the dodge's timing explicit** (`Space`, as since M2). A dodge lasts **0.35 s** and covers
+about **4 m** (11.5 m/s, scaled by AGI) in the direction the movement keys point relative to the
+camera — straight back if none is held — and walls and enemies still stop it. It is invulnerable
+from **0.06 s to 0.24 s**: a short vulnerable start, the i-frames, a vulnerable tail. A hit landing in
+the i-frames does nothing at all; one landing before or after them hurts as usual. After a dodge,
+another one waits **0.15 s**; attacks do not. A dodge cancels an attack only late in its recovery —
+from the start of Light 1's, 35% into Light 2's, 60% into Light 3's and the heavy's — never out of a
+windup or a swing, and a dodge pressed too early is dropped, not saved for later. Attack buttons do
+nothing during a dodge. No stamina cost yet.
+
 **Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
-timing windows or interactions are committed yet (the heavy attack, the first of them, shipped in
-M11.3):
+timing windows or interactions are committed yet (the heavy attack and the dodge's timing shipped in
+M11.3 and M11.4):
 
 - stamina, and sprint gated by it
 - hit reactions, stagger, knockback

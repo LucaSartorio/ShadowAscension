@@ -26,9 +26,17 @@ extends Resource
 @export var input_buffer_time: float = 0.15
 
 @export_group("Dodge")
+## The whole dodge, in seconds: the player is committed to it, and moved by it,
+## from start to end.
+##
+##     | STARTUP | INVULNERABLE | RECOVERY |  -> free; cooldown before the next
+##     0    invulnerability_start   invulnerability_end   dodge_duration
 @export var dodge_duration: float = 0.35
-## The invulnerable part of a dodge, in seconds from its start.
+## The i-frames, in seconds from the start of the dodge. Before them the dodge is
+## already moving but still vulnerable; after them, until dodge_duration, it is
+## vulnerable again.
 @export var invulnerability_start: float = 0.06
 @export var invulnerability_end: float = 0.24
-## Seconds after a dodge ends before another may start.
+## Seconds after a dodge ends before another may start. Attacks and walking are
+## free in it; only a second dodge waits.
 @export var dodge_cooldown: float = 0.15
