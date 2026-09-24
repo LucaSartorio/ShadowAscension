@@ -25,6 +25,10 @@ enum RoomState { IDLE, ACTIVE, CLEARED }
 var _state: RoomState = RoomState.IDLE
 var _enemies: Array[RoomCombatant] = []
 var _alive: int = 0
+## Enemies already counted as dead. A death is counted once per combatant, not
+## once per announcement: every other listener of the same death — the XP, the
+## loot, the remnant, the run tally — latches the same way.
+var _counted_dead: Dictionary = {}
 
 
 func _ready() -> void:
@@ -102,7 +106,10 @@ func _start() -> void:
 		_clear()
 
 
-func _on_enemy_died(_combatant: RoomCombatant) -> void:
+func _on_enemy_died(combatant: RoomCombatant) -> void:
+	if combatant == null or _counted_dead.has(combatant):
+		return
+	_counted_dead[combatant] = true
 	_alive = maxi(0, _alive - 1)
 	if _state != RoomState.ACTIVE:
 		return

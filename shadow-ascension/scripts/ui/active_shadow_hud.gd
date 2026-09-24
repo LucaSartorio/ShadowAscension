@@ -121,7 +121,7 @@ func _on_summoned(instance: ShadowInstance, node: BasicMeleeShadow) -> void:
 		_on_health_changed(_health.current_health, _health.max_health)
 
 
-func _on_gone(_instance: ShadowInstance) -> void:
+func _on_gone(_gone: ShadowInstance) -> void:
 	_disconnect_current()
 	root.visible = false
 

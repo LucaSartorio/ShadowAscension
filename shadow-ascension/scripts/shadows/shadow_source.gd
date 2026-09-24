@@ -51,5 +51,5 @@ func spawn_remnant() -> ShadowRemnant:
 	return remnant
 
 
-func _on_died(_combatant: RoomCombatant) -> void:
+func _on_died(_dead: RoomCombatant) -> void:
 	spawn_remnant()

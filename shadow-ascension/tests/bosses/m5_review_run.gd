@@ -189,6 +189,7 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 	_record(telegraphs.size() == 4 and not shapes.has("none") and _distinct(shapes),
 		"F%d) each wind-up reads differently: %s" % [n, _shape_map(telegraphs)])
 	_record(locked_during_active, "F%d) facing stayed locked through every active window" % n)
+	_record(objective_held, "F%d) the objective read 'Sconfiggi il Boss' until the boss fell" % n)
 	_record(not bar.is_showing() and not bar.is_banner_showing(),
 		"F%d) the boss UI is gone" % n)
 	_record(dungeon.get_rooms()[2].is_cleared()
@@ -201,7 +202,7 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 
 ## The boss killed the player: the run must fail and reload, and the boss must
 ## come back whole and asleep in phase 1.
-func _fight_death(n: int, dungeon: DungeonController, boss: DungeonBoss, bar: BossHealthBar) -> void:
+func _fight_death(n: int, dungeon: DungeonController, boss: DungeonBoss, _bar: BossHealthBar) -> void:
 	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
 		"F%d) the boss reached phase 2 before it killed the player" % n)
 	var doomed_id: int = current_scene.get_instance_id()
@@ -240,12 +241,12 @@ func _exit_dungeon(n: int) -> void:
 ## rather than off the resource: a telegraph that is configured but never
 ## animated must not count as readable.
 func _track_telegraph_peak(store: Dictionary, name: String, boss: DungeonBoss) -> void:
-	var root: Node3D = boss.mesh_root
+	var mesh: Node3D = boss.mesh_root
 	var peak: Dictionary = store.get(name, {"pz": 0.0, "rx": 0.0, "ry": 0.0, "sy": 1.0})
-	peak["pz"] = maxf(peak["pz"], absf(root.position.z))
-	peak["rx"] = maxf(peak["rx"], absf(root.rotation.x))
-	peak["ry"] = maxf(peak["ry"], absf(root.rotation.y))
-	peak["sy"] = minf(peak["sy"], root.scale.y)
+	peak["pz"] = maxf(peak["pz"], absf(mesh.position.z))
+	peak["rx"] = maxf(peak["rx"], absf(mesh.rotation.x))
+	peak["ry"] = maxf(peak["ry"], absf(mesh.rotation.y))
+	peak["sy"] = minf(peak["sy"], mesh.scale.y)
 	store[name] = peak
 
 

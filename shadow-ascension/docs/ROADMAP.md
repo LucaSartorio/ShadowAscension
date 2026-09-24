@@ -275,18 +275,34 @@ rewriting it. No definitive art is produced in this phase.
 
 ## M10 — Core Refactor & Game Architecture
 
-**Status:** in progress. **M10.1 — Core Architecture Audit & Refactor Foundation** is complete: the
-audit, the single access path to persistent state, named owners for the state categories that exist,
-and the removal of the duplicated cross-system lookups. **M10.2 — Persistent State & Data
-Ownership** is complete: the character's progression and shadows have one source of truth each, held
-by the session and only viewed by the player scene, with one New Game reset point. **M10.3 —
-Data-Driven Foundation** is complete: `EnemyData` is the enemy archetype's single source of
-configuration, and the enemy, the boss and the player's progression no longer carry a second copy of
-their numbers in code or in their scenes. **M10.4 — Scene & Dependency Decoupling** is complete:
-gameplay no longer calls the UI, the player wires its own components, and whatever acts for a player
-acts for a specific one rather than the first a tree search finds. None of the four steps changed
-gameplay or added a feature. The deliverables below that remain — the rest of the data-resource set, each built when a
-system reads it, and the rest of the formal state split — belong to the later steps of M10.
+**Status: Complete** — closed by M10.5 on the M10 review (`tests/core/m10_review_run.gd`), with the
+whole suite clean through `tests/run_all.gd`. No gameplay changed and no feature was added.
+
+| Step | What it did |
+| --- | --- |
+| **M10.1** Core Architecture Audit & Refactor Foundation | the audit; one access path to the session; named owners for the state categories that exist; the duplicated cross-system lookups removed |
+| **M10.2** Persistent State & Data Ownership | the character's progression and shadows have one source of truth each, held by the session and only viewed by the player scene; one New Game reset point |
+| **M10.3** Data-Driven Foundation | `EnemyData`; no archetype number kept twice, in code or in a scene |
+| **M10.4** Scene & Dependency Decoupling | gameplay never calls the UI; the player wires its own components; whatever acts for a player acts for a specific one |
+| **M10.5** Core Architecture Validation & M10 Closure | the validation below, a committed test runner, and the fixes it found |
+
+How each exit criterion stands:
+
+- **Persistent data survives every scene change — met.** Level, XP, points, stats and shadows are
+  held by reference in the session; inventory and equipment by copy. Proved across repeated
+  transitions by `persistent_state_run`, `decoupling_run` and `m10_review_run` (three full cycles).
+- **Each listed data resource exists — revised, deliberately.** `EnemyData`, `ItemData` and
+  `ShadowData` exist and are their domain's single source; the player's is `ProgressionStats`.
+  `SkillData`, `DungeonData`, `GateData` and a wider `PlayerData` were **not** created, by the rule
+  M10.3 adopted: a resource is built when a system reads it, never as an empty file ahead of one.
+  They arrive with their systems — `PlayerData` at M11, `SkillData` at M17, `DungeonData` and
+  `GateData` at M18.
+- **The state categories are distinct — met for the three that exist.** Persistent Player State,
+  Run State and Dungeon State each have one owner. World State, Settings and Save Data have none
+  because nothing needs them yet; Settings and Save Data are M19.
+- **No behavioural regression — met.** Every M9 suite passes. Four were edited, none weakened: two
+  renames, one claim restated through the new API, and three checks in `qa_run` and `m5_review_run`
+  that had never tested anything now do.
 
 **Goal**
 Make the architecture solid enough to carry a far bigger project without the existing systems

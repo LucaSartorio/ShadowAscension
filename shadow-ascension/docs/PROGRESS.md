@@ -6,20 +6,18 @@
 
 ## Current Milestone
 
-**M10 — Core Refactor & Game Architecture** (In progress — M10.1 to M10.4 complete)
+**M11 — Combat System 2.0** (Not started)
 
-First milestone of the **Core Production Foundation** phase. M10.1 consolidated the M0–M9
-architecture without changing behaviour; M10.2 gave the character's persistent state a single
-source of truth; M10.3 did the same for configuration; M10.4 decoupled the scenes. The rest of the
-data-resource set and of the formal state split are the later steps.
-See `ROADMAP.md` for the deliverables and exit criteria.
+M10 — Core Refactor & Game Architecture is **complete**; M11 is next and nothing of it has been
+begun. The baseline it starts from — and what it needs to know about the combat code as it stands —
+is described in `ARCHITECTURE.md`, *Before M11*. See `ROADMAP.md` for M11's deliverables.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10.1 to M10.4 complete |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 next |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -35,6 +33,66 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M10 — Core Refactor & Game Architecture** (Completed). Closed on M10.5. The M0–M9 code now has
+  one source of truth per piece of state, configuration held once in its `.tres`, scenes that know
+  only what they need, and a test runner that sees errors and leaks as well as failures. How each
+  exit criterion stands — including the one revised on purpose, the data resources for systems that
+  do not exist yet — is in `ROADMAP.md`. No gameplay changed and no feature was added.
+
+- **M10.5 — Core Architecture Validation & M10 Closure** (Completed). An audit of what M10.1–M10.4
+  built, against the code rather than the documents, and the fixes it found.
+
+  What the audit checked and found holding: one source of truth for level, XP, stats and every
+  shadow's progression, with the player scene only a view; no runtime state in any configuration
+  resource and nothing written to one during play; no resource without a consumer and no archetype
+  number kept twice; no fragile path, name lookup or gameplay → UI call left; one autoload, holding
+  only the Persistent Player State; no lookup in any per-frame path except the enemies' cached one.
+  Every identifier the documents name was checked against the code, and the few that no longer
+  matched were corrected.
+
+  What it found and fixed:
+
+    - **A room could open with an enemy still standing.** `RoomController` counted death
+      announcements, not deaths: announcing one death twice took its count to zero and unlocked the
+      door. The game never announces twice — `report_death()` is latched — but every other listener
+      of a death latches per combatant, and the room did not. Reproduced, then fixed the same way.
+      `qa_run` had been triggering it since M9.2 without noticing, and M10.4's own suite did too.
+    - **Three checks that tested nothing.** `qa_run` guarded two actions behind `has_method()` for
+      methods that never existed — a second loot roll (`drop()`, the method is `drop_now()`) and a
+      re-check of a cleared room (`_check_cleared()`) — so #12 and #21 held by default, and #21 read
+      `<= 1`, which passes with no clear at all. `m5_review_run` computed whether the objective held
+      through the boss fight and never asserted it. All three now test what they say; `qa_run` also
+      checks, at the exact point the bug hid, that the room stays shut (#13b).
+    - **A superseded signal.** `HealthComponent.died_from(source)` duplicated what `last_damage_source`
+      and `report_death(killer)` already carry, and nothing connected to it. Removed.
+    - **The only parser warnings in the game scripts** — three parameters shadowing a member of the
+      same name in `ActiveShadowHUD`, `ShadowSource` and `LootDropper` — and the two redundant
+      `await`s in M10's own tests.
+
+  What changed in how the project is verified:
+
+    - **`tests/run_all.gd`**: every suite in its own process, with runtime errors and exit-time leaks
+      counted beside the failures, exiting non-zero unless all are clean. M10.4 described such a
+      runner; it had only existed as a local script.
+    - **`tests/core/m10_review_run.gd`** (46 assertions): three full hub → gate → dungeon → hub cycles
+      in one session, each fought partly through the shadow that re-summoned itself across the scene
+      change. After every cycle: one player, one shadow, the same listeners, the same 207 nodes in
+      memory and no orphans, XP exactly what was paid (70/30 on the shadow's kill, all of it on the
+      player's), a repeated death opening no room — then back to the menu for a new game that starts
+      from nothing. Run against the unfixed room, it fails three times; fixed, it passes.
+    - How to surface parser warnings headlessly is in `ARCHITECTURE.md` §10.
+
+  Left as it is, and why, in `ARCHITECTURE.md`: eight small public getters that had no caller before
+  M10 either (`is_engaged`, `get_remaining_enemies`, `count_of_type` and the like — read API, not
+  leftovers); the emitted-but-unheard events of existing systems (`dungeon_started`, `item_added`,
+  `exit_activated`…); the older test scripts' harmless warnings; and, for M11 onwards, the constraints
+  listed under *Before M11*.
+
+  **1430 assertions across 35 suites, zero failures, zero runtime errors, zero exit-time leaks**,
+  run through `tests/run_all.gd`. Against M10.4's 1381: 32 suites have the same pass counts, the new
+  suite adds 46, `m5_review_run` 2 (37 → 39) and `qa_run` 1 (100 → 101). Zero parser warnings in the
+  game's scripts and in M10's tests. Cold-cache reimport and headless boot are clean.
 
 - **M10.4 — Scene & Dependency Decoupling** (Completed). Every lookup in the code was classified
   against one question — does this system know only what it needs? — and the answer was mostly yes
@@ -68,8 +126,9 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
   `DungeonController` a static `find_for()` helper, and every flow run through the dungeon then
   reported GDScript instances and RIDs leaked at exit — while still passing every assertion, because
   the runner only counted `[PASS]` / `[FAIL]`. Bisecting to that one function and removing it cleared
-  it. The runner now records runtime errors and exit-time leaks per suite, so that class of regression
-  is visible.
+  it. The runner used from then on records runtime errors and exit-time leaks per suite, so that class
+  of regression is visible. (At the time it was a local script; M10.5 committed it as
+  `tests/run_all.gd`, so the claim holds for anyone running the suites.)
 
   Deliberately unchanged: enemies still acquire the player through the typed group, since target
   selection is M12's; and the arbitration of which interactable answers [E] still lives in

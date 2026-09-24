@@ -49,7 +49,7 @@ func drop_now() -> Array[Dictionary]:
 	return drops
 
 
-func _on_died(_combatant: RoomCombatant) -> void:
+func _on_died(_dead: RoomCombatant) -> void:
 	drop_now()
 
 

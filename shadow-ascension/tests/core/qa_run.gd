@@ -22,7 +22,6 @@ var _sword: ItemData = preload("res://resources/items/training_sword.tres")
 var _pass: int = 0
 var _fail: int = 0
 var _state: Node = null
-var _errors: Array[String] = []
 
 
 func _initialize() -> void:
@@ -99,9 +98,10 @@ func _qa_duplicate_rewards() -> void:
 	(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(500.0, p)
 	var source: ShadowSource = enemy.get_node("ShadowSource")
 	source.spawn_remnant()
-	var dropper: Node = enemy.get_node("LootDropper")
-	if dropper.has_method("drop"):
-		dropper.drop()
+	# Called directly, never behind has_method(): a renamed method must fail the
+	# test, not turn the roll into a silent no-op.
+	var dropper: LootDropper = enemy.get_node("LootDropper")
+	dropper.drop_now()
 	await _pause(0.5)
 	_record(p.progression.get_total_xp() - xp_before == reward,
 		"10) re-announcing the death pays no more XP")
@@ -111,6 +111,8 @@ func _qa_duplicate_rewards() -> void:
 		"12) and no second pile of loot (%d)" % _count(dungeon, "WorldItem"))
 	_record(stats.enemies_defeated == 1,
 		"13) the tally counted one kill, not three (%d)" % stats.enemies_defeated)
+	_record(not room.is_cleared() and not room.get_enemies()[1].has_died(),
+		"13b) and the room stays shut with its second enemy still up")
 
 	# One remnant, one attempt, whatever the caller does.
 	var remnant: ShadowRemnant = _first_remnant(dungeon)
@@ -171,9 +173,11 @@ func _qa_duplicate_rewards() -> void:
 		if not other.has_died():
 			await _kill(p, other)
 			await _pause(0.3)
-	room._check_cleared() if room.has_method("_check_cleared") else null
+	# Every death in the room announced again after it has cleared.
+	for dead in room.get_enemies():
+		dead.enemy_died.emit(dead)
 	await _pause(0.5)
-	_record(clears.size() <= 1, "21) a room reports itself cleared once (%d)" % clears.size())
+	_record(clears.size() == 1, "21) a room reports itself cleared once (%d)" % clears.size())
 
 	var completions: Array[int] = []
 	dungeon.dungeon_completed.connect(func() -> void: completions.append(1))

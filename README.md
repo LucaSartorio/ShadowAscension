@@ -4,15 +4,15 @@ Action RPG 3D in Godot 4.7 (GDScript). The Godot project lives in `shadow-ascens
 
 ## Status
 
-**Prototype / Core Foundation (M0–M9) complete — Vertical Slice, RC1.**
+**M0–M10 complete — Vertical Slice (RC1) on a consolidated architecture.**
 
 The slice runs from the main menu through a hub, a dungeon and a boss, and back, with progression,
 loot, equipment and the shadow mechanic all live. Everything you can see is a **placeholder**:
 definitive art production starts at M13, deliberately, once the systems that consume it stop
 moving.
 
-Next up is **M10 — Core Refactor & Game Architecture**, the first milestone of the Core Production
-Foundation phase that runs to Alpha 1 at M20.
+M10 — Core Refactor & Game Architecture, the first milestone of the Core Production Foundation
+phase, is complete. Next up is **M11 — Combat System 2.0**; the phase runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub
@@ -89,7 +89,14 @@ The end-to-end runs swap the running scene, so they are SceneTree scripts instea
 godot --headless --path . --script res://tests/<area>/<name>_run.gd
 ```
 
-Each prints `[PASS]` / `[FAIL]` lines and a `[SUMMARY]`.
+Each prints `[PASS]` / `[FAIL]` lines and a `[SUMMARY]`. To run all of them, each in its own
+process, with runtime errors and exit-time leaks counted alongside the failures:
+
+```powershell
+godot --headless --path . --script res://tests/run_all.gd
+```
+
+It takes about twenty minutes and exits non-zero unless every suite is clean.
 
 ## Documentation
 

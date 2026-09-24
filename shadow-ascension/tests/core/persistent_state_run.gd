@@ -38,7 +38,7 @@ func _initialize() -> void:
 	_state.reset_runtime_state()
 
 	await _phase_new_game()
-	await _phase_hub_xp()
+	_phase_hub_xp()
 	await _phase_into_the_dungeon()
 	await _phase_kills_pay_once()
 	await _phase_shadow_kill()

@@ -11,16 +11,19 @@ Operational rules for Claude Code (claude.ai/code) when working in this reposito
 Core pillars:
 - Player-driven combat with shadow/soul mechanics — **implemented** (M2, M8)
 - Curated dungeon runs — **implemented** (M4); semi-procedural composition is M18
-- Data-driven progression: enemies, skills, items, shadows as `Resource` assets — **partly
-  implemented**; completed across every domain at M10
+- Data-driven progression: enemies, skills, items, shadows as `Resource` assets — **implemented
+  for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
+  gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M9 complete — playable vertical slice at RC1.** Main menu, hub, gate, a
+**Current state: M0–M10 complete.** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
-shadow mechanic (extraction, collection, summoning, ally AI, commands, levels). Everything visible
-is a **placeholder**: definitive art production starts at M13.
+shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
+M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
+scenes. Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M10 — Core Refactor & Game Architecture**. See `shadow-ascension/docs/ROADMAP.md` for the
-M10–M20 plan and `shadow-ascension/docs/PROGRESS.md` for what shipped.
+Next: **M11 — Combat System 2.0** (not started). See `shadow-ascension/docs/ROADMAP.md` for the
+M11–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what shipped, and `docs/ARCHITECTURE.md`,
+*Before M11*, for what the combat code looks like today.
 
 ---
 
@@ -104,7 +107,7 @@ Every new feature MUST live in the correct directory. Do not create parallel/ad-
 - **Signals for decoupling.** Cross-system communication uses signals. Do not reach across the tree with `get_node("../../..")` when a signal or bus works.
 - **Gameplay never calls the UI.** The UI subscribes to gameplay signals; gameplay must work with no UI in the scene at all.
 - **An owner wires its parts.** A component does not look its siblings up by name: the entity's root hands them over (`Player._wire_components()` → `setup()`), and a node created at runtime is given what it needs when it is made. Anything acting for a player acts for a specific one — the one that summoned it, or the body that walked in — never "the first player in the group". See `docs/ARCHITECTURE.md`, *Scene communication*.
-- **No unnecessary globals.** Autoload (`AutoLoad`/singleton) ONLY for genuine global services (save system, event bus, audio bus, scene router). Gameplay state does not belong in autoload.
+- **No unnecessary globals.** Autoload (`AutoLoad`/singleton) ONLY for genuine global services (save system, event bus, audio bus, scene router). Gameplay state does not belong in autoload — with one documented exception: `PlayerRuntimeState` holds the Persistent Player State, the data that must outlive a scene change, and nothing else (`docs/ARCHITECTURE.md` §7).
 - **Single responsibility.** Each system owns one clear concern. If a script mixes input + combat + audio, split it.
 - **No logic duplication.** If the same rule appears twice, extract it (helper, base component, resource, or signal).
 
@@ -212,6 +215,9 @@ Style:
   that needs real scene changes. Each prints `[PASS]` / `[FAIL]` lines and a `[SUMMARY]`. The
   invocations are in the repository README.
 - Tests live under `tests/`, grouped by system, plus `tests/core/` for whole-game runs.
+- **`tests/run_all.gd` runs every suite** and reports passes, failures, runtime errors and exit-time
+  leaks per suite: `godot --headless --path . --script res://tests/run_all.gd`. A clean run is part of
+  closing a milestone; a suite that passes but leaks or errors is not clean.
 - A change that touches a system runs that system's suite **and** the end-to-end runs before it is
   called done.
 - After significant changes: **launch the project** and confirm zero runtime errors and zero parser warnings before declaring the task done.

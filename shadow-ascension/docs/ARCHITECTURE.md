@@ -129,7 +129,7 @@ Systems are built from small, composable components attached to a scene root (e.
 
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
-- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; emits `health_changed(current, maximum)`, `died`, `died_from(source)`. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
+- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; emits `health_changed(current, maximum)` and `died`, and records `last_damage_source` for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
 - **`Hitbox`** (`Area3D`) — active only during attack frames via `activate()` / `deactivate()`; emits `hit_landed(target, damage)`, and will not hit the same target twice within one activation.
 - **`Hurtbox`** (`Area3D`) — receives hits, honours `is_invulnerable` (dodge i-frames), and forwards damage to the `HealthComponent` it is wired to.
 - **`AttackStep`** (`Resource`) — one step of a combo as data: timings, damage and the window in which the next step can be buffered.
@@ -145,7 +145,7 @@ These two are directions, not commitments; the API is settled when the owning mi
 
 Communication rules for components:
 - Components never reach across the tree to poke other components on other actors. Interaction happens through hitboxes/hurtboxes, signals, or an event bus.
-- Components on the same actor may call each other directly (e.g. `HurtboxComponent` → `HealthComponent`) via a reference wired at `_ready()`.
+- Components on the same actor may call each other directly (e.g. `Hurtbox` → `HealthComponent`) via a reference wired at `_ready()`.
 
 ---
 
@@ -293,11 +293,35 @@ Two shapes, because two different things need testing:
 Both print `[PASS]` / `[FAIL]` lines and a closing `[SUMMARY]`; the invocations are in the
 repository README.
 
+**`tests/run_all.gd` runs all of them** (M10.5), each in its own Godot process, and reports every
+suite's passes, failures, **runtime errors and exit-time leaks**, exiting non-zero if any are present:
+
+```
+godot --headless --path . --script res://tests/run_all.gd
+```
+
+The last two columns are there because a PASS/FAIL count cannot see them: M10.4's first version
+leaked GDScript instances on every run through the dungeon while every assertion passed. At the
+close of M10 the run is **35 suites and 1430 assertions**, all clean.
+
+**Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
+To see them all at once, put an `override.cfg` in the project root that raises each warning to an
+error (`[debug]` then `gdscript/warnings/unused_variable=2`, and so on for the others), run
+`godot --headless --path . --check-only --script res://<file>.gd` over the scripts, and **delete the
+file afterwards** — it overrides the project settings for the editor too. At the close of M10 the
+game scripts have none; some older test scripts still carry harmless ones (redundant `await`s,
+unused locals), left alone because they are tests and not wrong. Two that were not harmless — a
+check computed and never asserted, and a call to a method that did not exist — were fixed.
+
 Rules that hold regardless:
 - **Manual validation** is still mandatory after any significant change: run `godot --path .` (or
   `--headless --quit` for a smoke check), confirm zero runtime errors, zero parser warnings.
 - A change that touches a system runs **that system's suite and the end-to-end runs** before it is
   called done. Several of the bugs closed in M9.2 were only visible end to end.
+- **Never guard a test's action behind `has_method()`.** A renamed method then turns the action
+  into a silent no-op and the assertion after it into a tautology: `qa_run` asked for a `drop()` and
+  a `_check_cleared()` that never existed, so two of its checks tested nothing for a whole milestone.
+  Call the method; if it goes away, the test should fail to compile.
 - **Write the test against the rule, not against the observation.** More than one apparent bug in
   M8–M9 turned out to be the harness: measuring speed in m/s where headless physics outruns wall
   clock, or placing an actor outside the level geometry. A failing assertion is a claim about the
@@ -748,8 +772,9 @@ unreachable point returns no path at all — which reads as a shadow that simply
 
 ### Kill attribution
 
-`HealthComponent` records `last_damage_source` and emits `died_from(source)` alongside the unchanged
-`died`; `Hurtbox` passes the source through instead of discarding it; `RoomCombatant.report_death()`
+`HealthComponent` records `last_damage_source` and emits the unchanged `died` (a separate
+`died_from(source)` signal, never connected, was removed in M10.5); `Hurtbox` passes the source
+through instead of discarding it; `RoomCombatant.report_death()`
 records the killer and exposes `get_killer()`. The `enemy_died(combatant)` signature did not change
 — whoever cares about the killer asks the combatant. `PlayerProgression` reads it to split the
 reward: the player keeps the whole of its own kills, and the shadow takes
@@ -889,6 +914,36 @@ Two consequences worth stating, because they are easy to lose:
 - **Animation drives presentation, not truth.** Damage windows come from the combat controller's
   timings, not from an animation's frame events, so retiming an animation cannot silently retune
   combat.
+
+## Before M11
+
+M11 (Combat System 2.0) can start without another refactor: persistence, UI ownership, `EnemyData`
+and the scene paths it would otherwise trip over are settled. What it should know about the combat
+code as it stands:
+
+- **The player's combat lives in `player.gd`**, beside movement and dodge — one script for the combo
+  state machine, the dodge and the movement. It is the obvious thing M11 splits into a component, and
+  `Player._wire_components()` is where that component is handed its siblings.
+- **Damage is a single float.** `Hitbox.damage` → `Hurtbox.receive_hit(amount, source)` →
+  `HealthComponent.receive_damage(amount, source)`. M11's damage model (physical, magic, critical,
+  armour penetration, status) needs a payload in place of the float; `source` is already a reference
+  to the attacker, which is what knockback direction and kill attribution need.
+- **Invulnerability exists**: `Hurtbox.set_invulnerable()` is what the dodge's i-frames drive today.
+- **The combo is data**: three `AttackStep`s, currently sub-resources of `player.tscn`. A heavy
+  attack or new steps extend `AttackStep`; the player's configuration resource (`PlayerData`) was
+  deferred to M11 precisely because this block changes there.
+- **The player's attack hitbox hangs under `VisualRoot`**, so it inherits the cosmetic attack and
+  dodge tilts. M11 decides the real hit volumes; M13 needs the hitbox off the visual node. The enemy
+  already has the right shape (`VisualRoot/AttackOrigin`, apart from the mesh).
+- **Finding enemies is physics, not a registry.** The shadow uses a detection `Area3D` on the enemy
+  body layer and the commander a ray; target lock can do the same. No enemy group is needed.
+- **Enemies acquire the player through `Player.GROUP`.** Choosing between the player and the shadow
+  is M12's; an M11 target lock is the player's side only.
+- **New runtime state goes where M10 says.** Stamina, stagger and combo position are the player's
+  runtime state, on the component; their maxima and rates are configuration, in a resource; nothing of
+  it belongs in `PlayerRuntimeState` unless the design says it must survive a scene change.
+- **The session is reached through `Player.session()`**, never the `PlayerRuntimeState` autoload
+  identifier — flow tests compile the game's scripts before autoloads exist.
 
 ## Content pipeline (M13+)
 

@@ -2,10 +2,9 @@ class_name HealthComponent
 extends Node
 
 signal health_changed(current: float, maximum: float)
+## Who dealt the final blow is `last_damage_source`, read at this moment by the
+## owner — a combatant passes it to RoomCombatant.report_death().
 signal died
-## Same moment as `died`, but carrying whoever dealt the final blow. Separate
-## rather than an argument on `died` so every existing listener keeps working.
-signal died_from(source: Node)
 
 @export var max_health: float = 100.0
 
@@ -32,7 +31,6 @@ func receive_damage(amount: float, source: Node = null) -> void:
 	if current_health <= 0.0:
 		is_dead = true
 		died.emit()
-		died_from.emit(source)
 
 
 ## Changes the ceiling without healing: current health is only ever clamped down

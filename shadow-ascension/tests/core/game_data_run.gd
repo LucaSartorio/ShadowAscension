@@ -34,7 +34,7 @@ func _initialize() -> void:
 	await _pause(0.8)
 	await _phase_enemies_share_configuration_only()
 	await _phase_boss()
-	await _phase_progression()
+	_phase_progression()
 	await _phase_editing_the_asset()
 	await _phase_shadow_template()
 	await _phase_reward_comes_from_the_asset()
