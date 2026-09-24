@@ -6,11 +6,12 @@
 
 ## Current Milestone
 
-**M10 — Core Refactor & Game Architecture** (In progress — M10.1 and M10.2 complete)
+**M10 — Core Refactor & Game Architecture** (In progress — M10.1, M10.2 and M10.3 complete)
 
 First milestone of the **Core Production Foundation** phase. M10.1 consolidated the M0–M9
 architecture without changing behaviour; M10.2 gave the character's persistent state a single
-source of truth. The data-resource set and the rest of the formal state split are the later steps.
+source of truth; M10.3 did the same for configuration. The rest of the data-resource set and of the
+formal state split are the later steps.
 See `ROADMAP.md` for the deliverables and exit criteria.
 
 ## Where the project is
@@ -18,7 +19,7 @@ See `ROADMAP.md` for the deliverables and exit criteria.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10.1 and M10.2 complete |
+| Core Production Foundation | M10–M12 | **In progress** — M10.1, M10.2 and M10.3 complete |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -34,6 +35,62 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M10.3 — Data-Driven Foundation** (Completed). Every archetype number now lives in exactly one
+  place: its `.tres`. The project was already data-driven in shape — `EnemyStats`, `BossStats`,
+  `BossAttack`, `ProgressionStats`, `ShadowData`, `AttackStep` and the item resources all existed
+  and were all read — so the milestone was not about creating resources. It was about the copies.
+
+  What the audit of every hardcoded value found:
+
+    - **Each enemy number existed three times**: in the resource script's defaults, in the `.tres`,
+      and as a literal on one of the 33 runtime fields `basic_melee_enemy.gd` seeds from it — plus a
+      fourth copy of max health in the enemy scene's `HealthComponent`. The script "knew" the basic
+      enemy's numbers.
+    - **The boss's copies had already drifted.** `dungeon_boss.gd` said 600 HP and so did
+      `dungeon_boss.tscn`; the asset has said 900 since M9.2. Nothing broke only because `reset_to()`
+      overwrote the scene's value and the script's copy was never read — but a boss spawned without
+      its asset would have been a 600 HP boss, and the scene's 600 is what caused the M9.2 bug.
+    - **The player's progression tuning had the same shape**: ten literal fields in
+      `PlayerProgression` mirroring `ProgressionStats`, and `PlayerProgressionData` (M10.2) repeating
+      its starting stat block.
+    - **Nothing wrote to a shared resource during play.** The copy-in-`_ready()` pattern was already
+      right, and tested (enemy test #21); materials and navigation meshes were already duplicated
+      before being changed. The only problem was the literals.
+
+  What changed:
+
+    - **`EnemyStats` is now `EnemyData`** (`scripts/enemies/enemy_data.gd`, asset
+      `resources/enemies/basic_melee_enemy.tres`), the name the roadmap and the rest of the data
+      layer use. Same fields, same values, plus inspector ranges so a negative health, speed or
+      reward cannot be typed in. The enemy's export keeps the name `stats`, as the boss's and the
+      progression's do, so no scene property was renamed.
+    - **The runtime fields carry no values of their own** in `BasicMeleeEnemy`, `DungeonBoss` and
+      `PlayerProgression`. Each is seeded in one apply function; with no asset assigned it warns
+      and seeds from a fresh instance of the resource class, so even the fallback reads the one set
+      of defaults. `PlayerProgressionData.from_stats()` does the same, and `Player` lost two literals
+      that repeated its own exports.
+    - **The scenes no longer carry health values** for the enemy (100), the boss (600) and the
+      shadow (80). Each owner sets its `HealthComponent` explicitly through `reset_to()` or `bind()`.
+
+  Deliberately not done, each for a stated reason in `ARCHITECTURE.md` (*Data-driven architecture*):
+  no `PlayerData` (one consumer, no variant, and M11 reshapes the block), no `SkillData`,
+  `DungeonData` or `GateData` (nothing reads them yet), no `BossData` (M12), the shadow's AI tuning
+  left on its scene (M17), and the 70/30 split left a rule constant. Only one enemy archetype exists,
+  so no variant assets were invented.
+
+  New suite: `tests/core/game_data_run.gd` (31 assertions) pins every configuration value the game
+  shipped with, proves each entity is seeded from its asset and nothing else, and — on the real
+  dungeon — damages and retunes one of two enemies sharing an `EnemyData` and checks that the other
+  and the asset are untouched. It does the same for the boss, for two shadows sharing a `ShadowData`,
+  and for an enemy given an edited copy of its asset, which is the editor workflow: change the
+  numbers, run, see them.
+
+  **1350 assertions across 33 suites, zero failures.** The 32 suites that existed before are
+  line-for-line identical to M10.2's result, so no behaviour moved; the other 31 are the new suite.
+  The fallback path — an entity with no asset — was checked field by field as well: the 60 literals
+  removed from the three scripts equal the resource classes' defaults, so even that path seeds the
+  same numbers as before. Cold-cache reimport and headless boot are clean.
 
 - **M10.2 — Persistent State & Data Ownership** (Completed). Level, XP, points, stats and every
   shadow's progression now have one source of truth each, held by the session; the player scene only
@@ -1107,7 +1164,7 @@ Carried forward from the prototype phase. Each item names where it now belongs.
 
 - **Manual editor playtest of the whole slice** — feel-tuning by hand, which no headless run can
   do. Not blocking, and the one kind of validation the automated suites cannot replace.
-- **Playtest-tune the enemy parameters** in `resources/enemies/basic_melee_enemy_stats.tres`. The
+- **Playtest-tune the enemy parameters** in `resources/enemies/basic_melee_enemy.tres`. The
   M9.2 baseline says the numbers are in target on paper; how they feel is a different question.
 - **Player-side death reaction** — input lockout and a visual state. Folds into hit reactions and
   stagger at **M11**.
@@ -1116,7 +1173,7 @@ Carried forward from the prototype phase. Each item names where it now belongs.
 - **Return the player to the gate on exit**, rather than to the hub's default spawn. Small, and
   best done alongside the hub build-out at **M15**.
 - **More enemy archetypes.** Now a deliverable of the archetype framework at **M12**, rather than
-  one-off `EnemyStats` assets.
+  one-off `EnemyData` assets.
 
 ---
 

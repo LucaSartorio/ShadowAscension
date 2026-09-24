@@ -279,9 +279,12 @@ rewriting it. No definitive art is produced in this phase.
 audit, the single access path to persistent state, named owners for the state categories that exist,
 and the removal of the duplicated cross-system lookups. **M10.2 — Persistent State & Data
 Ownership** is complete: the character's progression and shadows have one source of truth each, held
-by the session and only viewed by the player scene, with one New Game reset point. Neither step
-changed gameplay or added a feature. The deliverables below that remain — the full data-resource set
-and the rest of the formal state split — belong to the later steps of M10.
+by the session and only viewed by the player scene, with one New Game reset point. **M10.3 —
+Data-Driven Foundation** is complete: `EnemyData` is the enemy archetype's single source of
+configuration, and the enemy, the boss and the player's progression no longer carry a second copy of
+their numbers in code or in their scenes. None of the three steps changed gameplay or added a
+feature. The deliverables below that remain — the rest of the data-resource set, each built when a
+system reads it, and the rest of the formal state split — belong to the later steps of M10.
 
 **Goal**
 Make the architecture solid enough to carry a far bigger project without the existing systems

@@ -111,7 +111,7 @@ Every new feature MUST live in the correct directory. Do not create parallel/ad-
 ## 5. GDScript coding conventions
 
 Naming:
-- **Files & directories:** `snake_case` (e.g. `player_controller.gd`, `enemy_stats.tres`)
+- **Files & directories:** `snake_case` (e.g. `player_controller.gd`, `basic_melee_enemy.tres`)
 - **Classes / `class_name`:** `PascalCase` (e.g. `class_name PlayerController`)
 - **Variables & functions:** `snake_case`
 - **Constants & enum values:** `UPPER_SNAKE_CASE`
@@ -144,8 +144,9 @@ Style:
 ## 7. Resource conventions
 
 - Custom Resources under `resources/<domain>/` as `.tres` (text) assets, not `.res` (binary), for diff-ability.
-- Resource *scripts* (the `extends Resource` class definitions) live in `scripts/<domain>/` (e.g. `scripts/enemies/enemy_stats.gd` defines `class_name EnemyStats`, instances live in `resources/enemies/*.tres`).
+- Resource *scripts* (the `extends Resource` class definitions) live in `scripts/<domain>/` (e.g. `scripts/enemies/enemy_data.gd` defines `class_name EnemyData`, instances live in `resources/enemies/*.tres`).
 - Resources hold pure data + minimal derived getters. No per-frame logic, no scene-tree access.
+- **Configuration resources are never written during play.** They are shared by every entity of their kind. An entity that needs per-instance values copies them from its asset once in `_ready()` and works on the copies; those fields carry no literal values of their own, so a number exists in exactly one place — its `.tres`. See `docs/ARCHITECTURE.md` §5.
 - Reuse instances via `preload`/`load` — do not duplicate data in code.
 
 ---

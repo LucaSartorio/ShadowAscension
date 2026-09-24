@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="4_health"]
-[ext_resource type="Resource" path="res://resources/enemies/basic_melee_enemy_stats.tres" id="5_stats"]
+[ext_resource type="Resource" path="res://resources/enemies/basic_melee_enemy.tres" id="5_stats"]
 [ext_resource type="PackedScene" path="res://scenes/ui/enemy_health_bar_3d.tscn" id="20_bar"]
 [ext_resource type="Script" path="res://scripts/items/loot_dropper.gd" id="21_loot"]
 [ext_resource type="Resource" path="res://resources/items/loot/basic_melee_enemy_loot.tres" id="22_table"]
@@ -92,7 +92,6 @@ avoidance_mask = 1
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("4_health")
-max_health = 100.0
 
 [node name="Hurtbox" type="Area3D" parent="."]
 collision_layer = 16

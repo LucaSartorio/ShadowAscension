@@ -20,22 +20,26 @@ var available_stat_points: int = 0
 
 ## ALLOCATED stats only. Equipment adds on top when an effective value is asked
 ## for and is never written here, so taking a piece off cannot leave one inflated.
-var strength: int = 10
-var agility: int = 10
-var vitality: int = 10
-var intelligence: int = 10
+## No defaults of their own: the starting block is ProgressionStats', applied by
+## from_stats().
+var strength: int
+var agility: int
+var vitality: int
+var intelligence: int
 
 
 ## A new character, from the starting block `stats` defines. This is the only
 ## place starting values are ever applied: a player coming up in a scene attaches
 ## to the session's existing data instead of building its own.
+##
+## With no `stats`, ProgressionStats' own defaults are the starting block, so
+## this class keeps no second copy of it.
 static func from_stats(stats: ProgressionStats) -> PlayerProgressionData:
+	var source: ProgressionStats = stats if stats != null else ProgressionStats.new()
 	var data: PlayerProgressionData = PlayerProgressionData.new()
-	if stats == null:
-		return data
-	data.current_level = stats.starting_level
-	data.strength = stats.strength
-	data.agility = stats.agility
-	data.vitality = stats.vitality
-	data.intelligence = stats.intelligence
+	data.current_level = source.starting_level
+	data.strength = source.strength
+	data.agility = source.agility
+	data.vitality = source.vitality
+	data.intelligence = source.intelligence
 	return data

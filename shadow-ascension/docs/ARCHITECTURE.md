@@ -166,6 +166,47 @@ Rules:
 - Runtime state (current HP, active buffs) lives in components, not in Resources. Resources are definitions; components hold instance state.
 - Data schemas are extended additively when possible. When a field's meaning changes, existing `.tres` files are migrated in the same commit.
 
+### Configuration versus runtime state (M10.3)
+
+The two are kept apart because they have different lifetimes and different owners, and confusing
+them is how shared state leaks between entities.
+
+- **Configuration** is what a *kind* of thing is: an enemy archetype's health and speed, the XP
+  curve, a shadow type's growth per level. It is authored in the editor, saved as `.tres`, shared by
+  every entity of that kind, and **never written during play**.
+- **Runtime state** is how *one* thing is doing: this enemy's current health, this shadow's level,
+  this boss's phase-2 speed. It belongs to the entity (or, for the character, to the session) and
+  starts from the configuration.
+
+An entity that needs per-instance values **copies them out of its asset once, in `_ready()`**, and
+works on the copies: `BasicMeleeEnemy`, `DungeonBoss` and `PlayerProgression` each seed their own
+fields in one apply function. Those fields carry **no literal values of their own** — until M10.3
+they carried a second copy of every number, and the boss's had already drifted (600 HP in the script
+and in its scene, 900 in its asset). With no asset assigned, the apply function warns and falls back
+to a fresh instance of the resource class, so even the fallback's numbers exist in one place: the
+resource script's defaults, which are also what a new asset starts from in the editor. An
+archetype's real numbers are the ones saved in its `.tres`.
+
+Current health is never configuration. A `HealthComponent` is given its maximum by its owner through
+`reset_to()`, explicitly, after the owner has read its asset — the scenes carry no health value of
+their own for the enemy, the boss or the shadow.
+
+Sharing a configuration asset is safe exactly because nothing writes to it. No `.tres` here is
+`resource_local_to_scene`, and none needs to be; what *is* mutable and per-instance — materials, a
+navigation mesh, a collision shape — is duplicated by its owner before it is changed.
+`tests/core/game_data_run.gd` checks the rule on the real dungeon: two enemies sharing one
+`EnemyData`, one damaged and retuned, the other and the asset unchanged.
+
+| Resource | Responsible for | Main fields | Read by | Must NOT contain |
+| --- | --- | --- | --- | --- |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype | `xp_reward`, `max_health`, movement, perception, spacing, attack damage and timings, telegraph | `BasicMeleeEnemy._apply_stats()` | current health or any fight state; placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state |
+| `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
+| `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
+| `AttackStep` (`scripts/combat/`) | one step of the player's combo | damage, startup / active / recovery, dodge-cancel window, tilt | `Player` | combo position or timers |
+| `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
+| `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
+
 ---
 
 ## 6. Events and Signals
@@ -676,19 +717,39 @@ should be read as a description of the current code.
 
 ## Data-driven architecture (M10)
 
-The vertical slice is already partly data-driven: `EnemyStats`, `ProgressionStats`, `ItemData`,
-`LootTable`, `AttackStep`, `BossAttack` and `ShadowData` are all `Resource` assets today. M10
-finishes the job and gives every domain one named definition resource:
+The vertical slice is already partly data-driven: `EnemyData`, `BossStats`, `BossAttack`,
+`ProgressionStats`, `ItemData`, `LootTable`, `AttackStep` and `ShadowData` are all `Resource` assets
+today, described in §5. M10 finishes the job and gives every domain one named definition resource —
+each introduced when a system actually reads it, never as an empty file ahead of one:
 
-| Resource | Owns |
-| --- | --- |
-| `PlayerData` / `PlayerStats` | the player's definition and its stat rules |
-| `EnemyData` | an enemy archetype's definition |
-| `SkillData` | one skill: cost, cooldown, range, area, effects |
-| `ItemData` | one item (exists today; extended for the M16 slot set) |
-| `ShadowData` | one kind of shadow (exists today; extended for rank and skills) |
-| `DungeonData` | a dungeon's composition rules |
-| `GateData` | a gate: rank, contents, rewards |
+| Resource | Owns | State |
+| --- | --- | --- |
+| `PlayerData` / `PlayerStats` | the player's definition and its stat rules | progression rules exist as `ProgressionStats`; movement, dodge and combo are still `@export`s on the player scene (see below) |
+| `EnemyData` | an enemy archetype's definition | **exists since M10.3** — renamed from `EnemyStats`, no longer copied into literals |
+| `SkillData` | one skill: cost, cooldown, range, area, effects | not built — no skill exists (M17) |
+| `ItemData` | one item | exists; extended for the M16 slot set |
+| `ShadowData` | one kind of shadow | exists; extended for rank and skills (M17) |
+| `DungeonData` | a dungeon's composition rules | not built — one dungeon, one scene (M18) |
+| `GateData` | a gate: rank, contents, rewards | not built — one gate, configured on its node (M18) |
+
+**What M10.3 deliberately left in code**, and why:
+
+- **The player's movement, dodge and combo values** are `@export`s on `player.gd`, set on the one
+  player scene, and the combo's three `AttackStep`s are sub-resources of that scene. They are
+  already editable in the inspector and exist once. A `PlayerData` would have one consumer and no
+  variant, and M11 reshapes exactly this block (heavy attack, stamina, sprint), so it is built there.
+- **The summoned shadow's AI tuning** — follow distance, leash, attack timings, stuck recovery — is
+  `@export`s on `basic_melee_shadow.gd`, which is already per-type because `ShadowData.summon_scene`
+  names the scene. It moves with the shadow AI rebuild at M17.
+- **The boss's display name** is still an `@export` on its node; M12's boss framework decides
+  where boss identity lives.
+- **`PlayerProgression.SHADOW_KILL_SHARE` (0.70)** is a rule of the shadow system, defined once. If
+  the split ever varies — by shadow rank, say — it will vary per shadow, so the data it belongs to
+  is decided at M17 rather than guessed now.
+- **The gate, the exit, the doors and the dungeon's objective texts** are `@export`s on their nodes:
+  there is one of each, and `GateData` / `DungeonData` arrive with the gate ranks at M18.
+- Timing constants inside behaviour (`AVOIDANCE_FALLBACK_FRAMES`, prompt priorities, the id format)
+  are implementation, not design, and stay constants.
 
 The rule that already governs resources still holds: definitions are pure data with minimal derived
 getters, and `.tres` is preferred over `.res` for diff-ability. Instance state lives in components —

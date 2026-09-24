@@ -172,7 +172,6 @@ path_height_offset = 0.5
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("4_health")
-max_health = 600.0
 
 [node name="Hurtbox" type="Area3D" parent="."]
 collision_layer = 16

@@ -44,8 +44,8 @@ enum AttackState { IDLE, STARTUP, ACTIVE, RECOVERY }
 
 ## What the controller actually uses. Recomputed from the base values whenever
 ## the stats change — never from the previous effective value.
-var effective_movement_speed: float = 6.0
-var effective_dodge_speed: float = 11.5
+var effective_movement_speed: float
+var effective_dodge_speed: float
 ## The player's own maximum, before VIT. Captured once so raising VIT adds to the
 ## original ceiling rather than to an already-raised one.
 var base_max_health: float = 0.0

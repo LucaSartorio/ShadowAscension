@@ -23,7 +23,8 @@ const GROUP: StringName = &"boss"
 const PHASE_2_COLOR: Color = Color(0.72, 0.12, 0.16)
 
 @export var display_name: String = "Dungeon Boss"
-## Body tuning. Copied into the runtime fields below on _ready().
+## Body tuning: the one place this boss's numbers exist. Copied into the runtime
+## fields below on _ready(); the asset itself is never written to.
 @export var stats: BossStats
 ## The attack set, in no particular order — the decision layer picks per frame.
 @export var attacks: Array[BossAttack] = []
@@ -31,30 +32,33 @@ const PHASE_2_COLOR: Color = Color(0.72, 0.12, 0.16)
 ## seeded, not free-running.
 @export var decision_seed: int = 20260920
 
-# Runtime tuning, seeded from `stats`. Instance state — the Resource stays clean.
-var max_health: float = 600.0
-var movement_speed: float = 3.2
-var acceleration: float = 10.0
-var rotation_speed: float = 5.0
-var gravity: float = 20.0
-var preferred_combat_distance: float = 2.2
-var minimum_combat_distance: float = 1.4
-var chase_band: float = 1.0
-var navigation_radius: float = 0.8
-var max_attack_facing_angle: float = 30.0
-var max_consecutive_repeats: int = 2
-var reposition_timeout: float = 1.4
-var reposition_speed_fraction: float = 0.85
-var target_update_interval: float = 0.2
-var intro_duration: float = 0.8
-var death_topple_duration: float = 1.2
-var phase_2_health_fraction: float = 0.5
-var phase_transition_duration: float = 1.5
-var phase_2_movement_speed: float = 3.8
-var phase_2_reposition_timeout: float = 0.9
+# RUNTIME tuning: this boss's own values, seeded from `stats` in _apply_stats().
+# Instance state — phase 2 rewrites two of them mid-fight, and the shared asset
+# stays clean. They carry no values of their own; until M10.3 they carried a
+# copy of the numbers that had already drifted (600 HP here, 900 in the asset).
+var max_health: float
+var movement_speed: float
+var acceleration: float
+var rotation_speed: float
+var gravity: float
+var preferred_combat_distance: float
+var minimum_combat_distance: float
+var chase_band: float
+var navigation_radius: float
+var max_attack_facing_angle: float
+var max_consecutive_repeats: int
+var reposition_timeout: float
+var reposition_speed_fraction: float
+var target_update_interval: float
+var intro_duration: float
+var death_topple_duration: float
+var phase_2_health_fraction: float
+var phase_transition_duration: float
+var phase_2_movement_speed: float
+var phase_2_reposition_timeout: float
 ## Held so phase 2 can restore phase 1's values if the boss is ever reset.
-var _phase_1_movement_speed: float = 3.2
-var _phase_1_reposition_timeout: float = 1.4
+var _phase_1_movement_speed: float
+var _phase_1_reposition_timeout: float
 
 @onready var visual_root: Node3D = $VisualRoot
 ## Telegraph animations live here, below the facing node, so a wind-up can lean
@@ -128,30 +132,33 @@ func get_xp_reward() -> int:
 	return stats.xp_reward if stats != null else xp_reward
 
 
+## Seeds this boss from its asset. With none assigned it falls back to
+## BossStats' own defaults, so the fallback keeps no copy of the numbers here.
 func _apply_stats() -> void:
-	if stats == null:
-		push_warning("%s has no BossStats assigned; falling back to script defaults." % name)
-		return
-	max_health = stats.max_health
-	movement_speed = stats.movement_speed
-	acceleration = stats.acceleration
-	rotation_speed = stats.rotation_speed
-	gravity = stats.gravity
-	preferred_combat_distance = stats.preferred_combat_distance
-	minimum_combat_distance = stats.minimum_combat_distance
-	chase_band = stats.chase_band
-	navigation_radius = stats.navigation_radius
-	max_attack_facing_angle = stats.max_attack_facing_angle
-	max_consecutive_repeats = stats.max_consecutive_repeats
-	reposition_timeout = stats.reposition_timeout
-	phase_2_health_fraction = stats.phase_2_health_fraction
-	phase_transition_duration = stats.phase_transition_duration
-	phase_2_movement_speed = stats.phase_2_movement_speed
-	phase_2_reposition_timeout = stats.phase_2_reposition_timeout
-	reposition_speed_fraction = stats.reposition_speed_fraction
-	target_update_interval = stats.target_update_interval
-	intro_duration = stats.intro_duration
-	death_topple_duration = stats.death_topple_duration
+	var source: BossStats = stats
+	if source == null:
+		push_warning("%s has no BossStats assigned; falling back to BossStats' defaults." % name)
+		source = BossStats.new()
+	max_health = source.max_health
+	movement_speed = source.movement_speed
+	acceleration = source.acceleration
+	rotation_speed = source.rotation_speed
+	gravity = source.gravity
+	preferred_combat_distance = source.preferred_combat_distance
+	minimum_combat_distance = source.minimum_combat_distance
+	chase_band = source.chase_band
+	navigation_radius = source.navigation_radius
+	max_attack_facing_angle = source.max_attack_facing_angle
+	max_consecutive_repeats = source.max_consecutive_repeats
+	reposition_timeout = source.reposition_timeout
+	phase_2_health_fraction = source.phase_2_health_fraction
+	phase_transition_duration = source.phase_transition_duration
+	phase_2_movement_speed = source.phase_2_movement_speed
+	phase_2_reposition_timeout = source.phase_2_reposition_timeout
+	reposition_speed_fraction = source.reposition_speed_fraction
+	target_update_interval = source.target_update_interval
+	intro_duration = source.intro_duration
+	death_topple_duration = source.death_topple_duration
 
 
 ## Resolves each attack's hitbox once and wires its damage, so the per-frame path

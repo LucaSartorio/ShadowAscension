@@ -59,11 +59,13 @@ var equipment: PlayerEquipment = null
 @export var debug_xp_key: Key = KEY_F10
 @export var debug_xp_amount: int = 50
 
-# Runtime tuning, seeded from `stats`.
-var max_level: int = 100
-var stat_points_per_level: int = 5
-var base_xp_requirement: int = 100
-var xp_growth_factor: float = 1.25
+# Curve tuning, seeded from `stats` in _apply_tuning(). CONFIGURATION read into
+# this node, not state: nothing changes them in play, and they carry no values
+# of their own — the numbers live in ProgressionStats and nowhere in this script.
+var max_level: int
+var stat_points_per_level: int
+var base_xp_requirement: int
+var xp_growth_factor: float
 
 ## Where the character has got to. These are views onto the session's
 ## PlayerProgressionData, not copies of it: reading one reads the session, and
@@ -94,13 +96,13 @@ var intelligence: int:
 	get: return _data.intelligence
 	set(value): _data.intelligence = value
 
-# Derived-stat tuning, seeded from `stats`.
-var neutral_stat_value: int = 10
-var melee_damage_per_point: float = 0.03
-var movement_speed_per_point: float = 0.01
-var dodge_speed_per_point: float = 0.005
-var health_per_vitality_point: float = 8.0
-var ability_power_per_point: float = 0.03
+# Derived-stat tuning, seeded from `stats` the same way.
+var neutral_stat_value: int
+var melee_damage_per_point: float
+var movement_speed_per_point: float
+var dodge_speed_per_point: float
+var health_per_vitality_point: float
+var ability_power_per_point: float
 
 ## The session's character. A private stand-in until _ready() attaches to the
 ## real one, so nothing read before then can fail; a node with no session at all
@@ -136,19 +138,20 @@ func _ready() -> void:
 ## _ready() is exactly how a scene change used to put a character back to level
 ## 1. They are applied once per session, by PlayerProgressionData.from_stats().
 func _apply_tuning() -> void:
-	if stats == null:
-		push_warning("%s has no ProgressionStats assigned; falling back to script defaults." % name)
-		return
-	max_level = stats.max_level
-	stat_points_per_level = stats.stat_points_per_level
-	base_xp_requirement = stats.base_xp_requirement
-	xp_growth_factor = stats.xp_growth_factor
-	neutral_stat_value = stats.neutral_stat_value
-	melee_damage_per_point = stats.melee_damage_per_point
-	movement_speed_per_point = stats.movement_speed_per_point
-	dodge_speed_per_point = stats.dodge_speed_per_point
-	health_per_vitality_point = stats.health_per_vitality_point
-	ability_power_per_point = stats.ability_power_per_point
+	var source: ProgressionStats = stats
+	if source == null:
+		push_warning("%s has no ProgressionStats assigned; falling back to ProgressionStats' defaults." % name)
+		source = ProgressionStats.new()
+	max_level = source.max_level
+	stat_points_per_level = source.stat_points_per_level
+	base_xp_requirement = source.base_xp_requirement
+	xp_growth_factor = source.xp_growth_factor
+	neutral_stat_value = source.neutral_stat_value
+	melee_damage_per_point = source.melee_damage_per_point
+	movement_speed_per_point = source.movement_speed_per_point
+	dodge_speed_per_point = source.dodge_speed_per_point
+	health_per_vitality_point = source.health_per_vitality_point
+	ability_power_per_point = source.ability_power_per_point
 
 
 # --- XP curve -----------------------------------------------------------------

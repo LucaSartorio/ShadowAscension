@@ -426,7 +426,7 @@ func _test_enemy_is_resource_driven() -> void:
 	# not from values hardcoded on the node.
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 20))
-	var st: EnemyStats = _enemy.stats
+	var st: EnemyData = _enemy.stats
 	var has_resource: bool = st != null
 	var from_asset: bool = has_resource and st.resource_path.begins_with("res://resources/enemies/")
 	var seeded: bool = has_resource and is_equal_approx(_enemy.attack_damage, st.attack_damage) \
@@ -438,7 +438,7 @@ func _test_enemy_is_resource_driven() -> void:
 	_enemy.detection_range = 99.0
 	var isolated: bool = has_resource and is_equal_approx(st.detection_range, before)
 	_enemy.detection_range = before
-	_record(has_resource and from_asset and seeded and isolated, "21) enemy is driven by an EnemyStats asset (path=%s seeded=%s isolated=%s)" % [
+	_record(has_resource and from_asset and seeded and isolated, "21) enemy is driven by an EnemyData asset (path=%s seeded=%s isolated=%s)" % [
 		st.resource_path if has_resource else "<none>", seeded, isolated])
 
 

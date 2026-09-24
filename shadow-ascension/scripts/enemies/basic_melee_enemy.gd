@@ -8,9 +8,10 @@ signal engagement_changed(engaged: bool)
 enum State { IDLE, CHASE, REPOSITION, ATTACK, DEAD }
 enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 
-## Archetype tuning. Copied into the runtime fields below on _ready(); this
-## Resource is never written to at runtime.
-@export var stats: EnemyStats
+## The archetype's configuration: the one place its numbers exist. Copied into
+## the runtime fields below on _ready(); the asset itself is never written to,
+## because every enemy of the archetype shares it.
+@export var stats: EnemyData
 
 @export_group("Per-Instance")
 ## Bias of the approach bearing. Non-zero values make instances converge on
@@ -20,46 +21,47 @@ enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 @export var initial_attack_delay: float = 0.0
 @export var attack_cooldown_variation: float = 0.0
 
-# Runtime tuning, seeded from `stats` in _apply_stats(). These are instance
-# state: change them freely and the shared Resource stays untouched. The
-# literals are only the fallback for an enemy with no stats assigned.
-var max_health: float = 100.0
+# RUNTIME tuning: this instance's own values, seeded from `stats` in
+# _apply_stats() and read by the AI from then on. Instance state — change them
+# freely and the shared asset stays untouched. They carry no values of their
+# own: the archetype's numbers live in its EnemyData and nowhere in this script.
+var max_health: float
 
-var movement_speed: float = 3.8
-var acceleration: float = 12.0
-var rotation_speed: float = 7.0
-var gravity: float = 20.0
+var movement_speed: float
+var acceleration: float
+var rotation_speed: float
+var gravity: float
 
-var detection_range: float = 10.0
-var lose_target_range: float = 14.0
-var lose_target_delay: float = 1.0
-var eye_height: float = 1.2
-var line_of_sight_mask: int = 1
+var detection_range: float
+var lose_target_range: float
+var lose_target_delay: float
+var eye_height: float
+var line_of_sight_mask: int
 
-var attack_range: float = 1.8
-var preferred_combat_distance: float = 1.6
-var minimum_combat_distance: float = 1.15
-var enemy_spacing_radius: float = 0.8
+var attack_range: float
+var preferred_combat_distance: float
+var minimum_combat_distance: float
+var enemy_spacing_radius: float
 
-var attack_damage: float = 15.0
-var attack_startup: float = 0.35
-var attack_active: float = 0.15
-var attack_recovery: float = 0.65
-var attack_cooldown: float = 0.4
-var max_attack_facing_angle: float = 25.0
-var attack_startup_turn_fraction: float = 0.3
+var attack_damage: float
+var attack_startup: float
+var attack_active: float
+var attack_recovery: float
+var attack_cooldown: float
+var max_attack_facing_angle: float
+var attack_startup_turn_fraction: float
 
-var reposition_timeout: float = 1.5
-var reposition_cooldown: float = 0.6
-var reposition_speed_fraction: float = 0.8
-var reposition_arrive_tolerance: float = 0.35
+var reposition_timeout: float
+var reposition_cooldown: float
+var reposition_speed_fraction: float
+var reposition_arrive_tolerance: float
 
-var telegraph_color: Color = Color(1.0, 0.85, 0.2)
-var active_color: Color = Color(1.0, 0.25, 0.15)
-var startup_scale: Vector3 = Vector3(0.88, 1.22, 0.88)
-var active_scale: Vector3 = Vector3(1.18, 0.9, 1.18)
+var telegraph_color: Color
+var active_color: Color
+var startup_scale: Vector3
+var active_scale: Vector3
 
-var target_update_interval: float = 0.2
+var target_update_interval: float
 
 @onready var visual_root: Node3D = $VisualRoot
 @onready var mesh_instance: MeshInstance3D = $VisualRoot/MeshInstance3D
@@ -116,51 +118,55 @@ func get_xp_reward() -> int:
 	return stats.xp_reward if stats != null else xp_reward
 
 
+## Seeds this instance from its archetype. With no asset assigned it falls back
+## to EnemyData's own defaults — the template a new asset starts from — so even
+## the fallback keeps no copy of the numbers in this script.
 func _apply_stats() -> void:
-	if stats == null:
-		push_warning("%s has no EnemyStats assigned; falling back to script defaults." % name)
-		return
-	max_health = stats.max_health
+	var source: EnemyData = stats
+	if source == null:
+		push_warning("%s has no EnemyData assigned; falling back to EnemyData's defaults." % name)
+		source = EnemyData.new()
+	max_health = source.max_health
 
-	movement_speed = stats.movement_speed
-	acceleration = stats.acceleration
-	rotation_speed = stats.rotation_speed
-	gravity = stats.gravity
+	movement_speed = source.movement_speed
+	acceleration = source.acceleration
+	rotation_speed = source.rotation_speed
+	gravity = source.gravity
 
-	detection_range = stats.detection_range
-	lose_target_range = stats.lose_target_range
-	lose_target_delay = stats.lose_target_delay
-	eye_height = stats.eye_height
-	line_of_sight_mask = stats.line_of_sight_mask
+	detection_range = source.detection_range
+	lose_target_range = source.lose_target_range
+	lose_target_delay = source.lose_target_delay
+	eye_height = source.eye_height
+	line_of_sight_mask = source.line_of_sight_mask
 
-	attack_range = stats.attack_range
-	preferred_combat_distance = stats.preferred_combat_distance
-	minimum_combat_distance = stats.minimum_combat_distance
-	enemy_spacing_radius = stats.enemy_spacing_radius
+	attack_range = source.attack_range
+	preferred_combat_distance = source.preferred_combat_distance
+	minimum_combat_distance = source.minimum_combat_distance
+	enemy_spacing_radius = source.enemy_spacing_radius
 
-	attack_damage = stats.attack_damage
-	attack_startup = stats.attack_startup
-	attack_active = stats.attack_active
-	attack_recovery = stats.attack_recovery
-	attack_cooldown = stats.attack_cooldown
-	max_attack_facing_angle = stats.max_attack_facing_angle
-	attack_startup_turn_fraction = stats.attack_startup_turn_fraction
+	attack_damage = source.attack_damage
+	attack_startup = source.attack_startup
+	attack_active = source.attack_active
+	attack_recovery = source.attack_recovery
+	attack_cooldown = source.attack_cooldown
+	max_attack_facing_angle = source.max_attack_facing_angle
+	attack_startup_turn_fraction = source.attack_startup_turn_fraction
 
-	reposition_timeout = stats.reposition_timeout
-	reposition_cooldown = stats.reposition_cooldown
-	reposition_speed_fraction = stats.reposition_speed_fraction
-	reposition_arrive_tolerance = stats.reposition_arrive_tolerance
+	reposition_timeout = source.reposition_timeout
+	reposition_cooldown = source.reposition_cooldown
+	reposition_speed_fraction = source.reposition_speed_fraction
+	reposition_arrive_tolerance = source.reposition_arrive_tolerance
 
-	telegraph_color = stats.telegraph_color
-	active_color = stats.active_color
-	startup_scale = stats.startup_scale
-	active_scale = stats.active_scale
+	telegraph_color = source.telegraph_color
+	active_color = source.active_color
+	startup_scale = source.startup_scale
+	active_scale = source.active_scale
 
-	target_update_interval = stats.target_update_interval
+	target_update_interval = source.target_update_interval
 
 
 func _setup_navigation() -> void:
-	# The exports stay the single source of truth for values the AI also reads.
+	# From the same runtime fields the AI reads, so the agent and the AI agree.
 	nav_agent.radius = enemy_spacing_radius
 	nav_agent.max_speed = movement_speed
 	nav_agent.avoidance_enabled = combat_enabled

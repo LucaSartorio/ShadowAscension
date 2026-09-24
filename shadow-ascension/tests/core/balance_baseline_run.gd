@@ -16,7 +16,7 @@ const ROOM_ANCHORS: Array[Vector3] = [
 ]
 const STRIKE_RANGE: float = 1.6
 
-var _enemy_stats: EnemyStats = preload("res://resources/enemies/basic_melee_enemy_stats.tres")
+var _enemy_data: EnemyData = preload("res://resources/enemies/basic_melee_enemy.tres")
 var _boss_stats: Resource = preload("res://resources/enemies/bosses/dungeon_boss_stats.tres")
 var _shadow_data: ShadowData = preload("res://resources/shadows/basic_melee_shadow.tres")
 var _enemy_loot: LootTable = preload("res://resources/items/loot/basic_melee_enemy_loot.tres")
@@ -75,16 +75,16 @@ func _report_static() -> void:
 	print("")
 	print("=== BASIC ENEMY ===")
 	print("  HP / damage          %.0f / %.0f" % [
-		_enemy_stats.max_health, _enemy_stats.attack_damage])
-	print("  movement             %.2f" % _enemy_stats.movement_speed)
+		_enemy_data.max_health, _enemy_data.attack_damage])
+	print("  movement             %.2f" % _enemy_data.movement_speed)
 	print("  attack timings       startup %.2f active %.2f recovery %.2f cooldown %.2f" % [
-		_enemy_stats.attack_startup, _enemy_stats.attack_active,
-		_enemy_stats.attack_recovery, _enemy_stats.attack_cooldown])
-	var cycle: float = _enemy_stats.attack_startup + _enemy_stats.attack_active \
-		+ _enemy_stats.attack_recovery + _enemy_stats.attack_cooldown
+		_enemy_data.attack_startup, _enemy_data.attack_active,
+		_enemy_data.attack_recovery, _enemy_data.attack_cooldown])
+	var cycle: float = _enemy_data.attack_startup + _enemy_data.attack_active \
+		+ _enemy_data.attack_recovery + _enemy_data.attack_cooldown
 	print("  -> one hit every     %.2fs  (%.1f dps)" % [
-		cycle, _enemy_stats.attack_damage / cycle])
-	print("  XP reward            %d" % _enemy_stats.xp_reward)
+		cycle, _enemy_data.attack_damage / cycle])
+	print("  XP reward            %d" % _enemy_data.xp_reward)
 	print("  loot: any drop       %.1f%%  (%s)" % [
 		_any_drop_chance(_enemy_loot) * 100.0,
 		"guaranteed floor" if _enemy_loot.guarantee_at_least_one else "can drop nothing"])
