@@ -374,7 +374,7 @@ func get_effective_damage(base_damage: float) -> float:
 
 ## The player landed a hit. Watch that combatant so its death can be collected;
 ## nothing else in the world is ever subscribed to.
-func _on_hit_landed(target: Node, _damage: float) -> void:
+func _on_hit_landed(target: Node, _hit: DamageInfo) -> void:
 	var combatant: RoomCombatant = target as RoomCombatant
 	if combatant == null or _tracked.has(combatant):
 		return

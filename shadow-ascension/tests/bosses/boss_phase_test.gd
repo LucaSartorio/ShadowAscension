@@ -77,7 +77,7 @@ func _setup() -> void:
 		_player.global_position = [ROOM1_TRIGGER, ROOM2_TRIGGER][i]
 		await _wait(0.4)
 		for enemy in _dungeon.get_rooms()[i].get_enemies():
-			enemy.hurtbox.receive_hit(10000.0, null)
+			enemy.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 		await _wait(0.5)
 	_player.global_position = BOSS_TRIGGER
 	await _wait(0.5)
@@ -135,15 +135,15 @@ func _set_boss_health(fraction: float) -> void:
 	var target: float = _boss.health_component.max_health * fraction
 	var delta: float = _boss.health_component.current_health - target
 	if delta > 0.0:
-		_boss.hurtbox.receive_hit(delta, null)
+		_boss.hurtbox.receive_hit(DamageInfo.new(delta, null))
 
 
 ## Records every hit an attack's own hitbox lands, with the time it landed.
 func _watch_hitbox(index: int) -> Array:
 	var log: Array = []
 	var hitbox: Hitbox = _boss._hitboxes[index]
-	hitbox.hit_landed.connect(func(target: Node, damage: float) -> void:
-		log.append({"t": Time.get_ticks_msec(), "target": target, "damage": damage}))
+	hitbox.hit_landed.connect(func(target: Node, hit: DamageInfo) -> void:
+		log.append({"t": Time.get_ticks_msec(), "target": target, "damage": hit.amount}))
 	return log
 
 
@@ -161,7 +161,7 @@ func _arena_tests() -> void:
 
 	# 1) a full dodge fits in every direction from where the fight happens
 	var space: PhysicsDirectSpaceState3D = _player.get_world_3d().direct_space_state
-	var reach: float = _player.dodge_speed * _player.dodge_duration
+	var reach: float = _player.dodge_speed * _player.combat.data.dodge_duration
 	var clearances: Array[float] = []
 	for dir in [Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
 		var from: Vector3 = fight_spot + Vector3(0, 0.9, 0)
@@ -610,7 +610,7 @@ func _death_tests() -> void:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
 	var killed_mid_attack: bool = _boss.get_state() == DungeonBoss.State.ATTACK
-	_boss.hurtbox.receive_hit(10000.0, null)
+	_boss.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 	await get_tree().physics_frame
 
 	_record(killed_mid_attack and _boss.get_state() == DungeonBoss.State.DEAD
@@ -650,7 +650,7 @@ func _death_during_transition_tests() -> void:
 	await get_tree().physics_frame
 	var in_transition: bool = _boss.get_state() == DungeonBoss.State.TRANSITION
 
-	_boss.hurtbox.receive_hit(10000.0, null)
+	_boss.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 	await get_tree().physics_frame
 	_record(in_transition and _boss.get_state() == DungeonBoss.State.DEAD,
 		"30) the boss can be killed during the transition (state=%d)" % _boss.get_state())

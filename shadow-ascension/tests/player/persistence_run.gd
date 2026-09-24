@@ -63,7 +63,7 @@ func _initialize() -> void:
 			prog.strength, prog.agility, prog.vitality, prog.intelligence])
 
 	# wound the player, so the gate must not heal it
-	player.health_component.receive_damage(player.health_component.current_health - 50.0)
+	player.health_component.take_damage(DamageInfo.new(player.health_component.current_health - 50.0))
 	await _pause(0.2)
 	var before: Dictionary = _snapshot(player)
 	print("[BEFORE GATE] %s" % [before])
@@ -154,7 +154,7 @@ func _initialize() -> void:
 
 	# --- 25-29) death restores health only
 	var dungeon2: DungeonController = current_scene as DungeonController
-	player4.health_component.receive_damage(player4.health_component.current_health - 20.0)
+	player4.health_component.take_damage(DamageInfo.new(player4.health_component.current_health - 20.0))
 	await _pause(0.2)
 	var before_death: Dictionary = _snapshot(player4)
 	_record(is_equal_approx(before_death["hp"], 20.0),
@@ -162,7 +162,7 @@ func _initialize() -> void:
 
 	player4.global_position = ROOM_ANCHORS[0]
 	await _pause(0.4)
-	player4.health_component.receive_damage(1000.0)
+	player4.health_component.take_damage(DamageInfo.new(1000.0))
 	await _pause(0.3)
 	_record(dungeon2.get_state() == DungeonController.DungeonState.FAILED, "25b) the run failed")
 	await _pause(2.5)
@@ -185,8 +185,8 @@ func _initialize() -> void:
 	# --- 30) nothing temporary rode along. The pre-death dungeon is gone, so the
 	# reloaded one has to be read off current_scene rather than the stale handle.
 	var reloaded: DungeonController = current_scene as DungeonController
-	_record(player5._combo_index == 0 and not player5._is_dodging
-			and player5._attack_state == Player.AttackState.IDLE
+	_record(player5.combat._combo_index == 0 and not player5.combat.is_dodging()
+			and player5.combat.get_state() == PlayerCombat.State.IDLE
 			and reloaded != null
 			and reloaded.get_rooms()[0].get_state() == RoomController.RoomState.IDLE
 			and reloaded.get_state() == DungeonController.DungeonState.NOT_STARTED,
@@ -261,7 +261,7 @@ func _kill(player: Player, target: RoomCombatant, budget: float = 20.0) -> int:
 	var swings: int = 0
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

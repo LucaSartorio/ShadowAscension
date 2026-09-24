@@ -182,10 +182,12 @@ func _set_stat(stat: PlayerProgression.Stat, value: int) -> void:
 
 
 func _strength_tests() -> void:
-	var step_1: AttackStep = _player.combo_steps[0]
-	var step_2: AttackStep = _player.combo_steps[1]
-	var base_1: float = step_1.damage
-	var base_2: float = step_2.damage
+	var combat_data: PlayerCombatData = _player.combat.data
+	var step_1: AttackData = combat_data.light_combo[0]
+	var step_2: AttackData = combat_data.light_combo[1]
+	var base_damage: float = combat_data.base_damage
+	var base_1: float = base_damage * step_1.damage_multiplier
+	var base_2: float = base_damage * step_2.damage_multiplier
 
 	_set_stat(PlayerProgression.Stat.STRENGTH, 10)
 	_record(is_equal_approx(_prog.get_melee_damage_multiplier(), 1.0)
@@ -202,8 +204,10 @@ func _strength_tests() -> void:
 	_record(_prog.get_effective_damage(base_2) == 29.0,
 		"NUM-STR-3) attack 2: %.0f base -> %.0f effective" % [
 			base_2, _prog.get_effective_damage(base_2)])
-	_record(step_1.damage == base_1 and step_2.damage == base_2,
-		"19) the combo steps keep their base damage (%.0f / %.0f)" % [step_1.damage, step_2.damage])
+	_record(combat_data.base_damage == base_damage
+			and combat_data.base_damage * step_1.damage_multiplier == base_1
+			and combat_data.base_damage * step_2.damage_multiplier == base_2,
+		"19) the base and the attacks are never written (%.0f / %.0f)" % [base_1, base_2])
 
 	# 18) and it actually lands: swing at a real enemy and read its health
 	_player.global_position = ROOM1_TRIGGER
@@ -214,14 +218,13 @@ func _strength_tests() -> void:
 	var dealt_10: float = await _measure_one_swing(enemy)
 	_record(dealt_15 == 23.0 and dealt_10 == 20.0,
 		"18) a real swing deals %.0f at STR 15 and %.0f at STR 10" % [dealt_15, dealt_10])
-	_record(step_1.damage == base_1,
-		"19b) still uncorrupted after real swings (%.0f)" % step_1.damage)
+	_record(combat_data.base_damage * step_1.damage_multiplier == base_1,
+		"19b) still uncorrupted after real swings (%.0f)" % base_1)
 
 
 ## One swing of combo step 1 against `target`, returning the damage it took.
 func _measure_one_swing(target: RoomCombatant) -> float:
-	_player._attack_state = Player.AttackState.IDLE
-	_player._combo_index = 0
+	_player.combat.reset()
 	var health: HealthComponent = target.get_node("HealthComponent")
 	health.current_health = health.max_health
 	health.is_dead = false
@@ -244,13 +247,13 @@ func _measure_one_swing(target: RoomCombatant) -> float:
 func _agility_tests() -> void:
 	var base_move: float = _player.movement_speed
 	var base_dodge: float = _player.dodge_speed
-	var iframe_start: float = _player.invulnerability_start
-	var iframe_end: float = _player.invulnerability_end
-	var dodge_duration: float = _player.dodge_duration
-	var dodge_cooldown: float = _player.dodge_cooldown
-	var step_timings: Array[float] = [
-		_player.combo_steps[0].startup, _player.combo_steps[0].active,
-		_player.combo_steps[0].recovery]
+	var combat_data: PlayerCombatData = _player.combat.data
+	var iframe_start: float = combat_data.invulnerability_start
+	var iframe_end: float = combat_data.invulnerability_end
+	var dodge_duration: float = combat_data.dodge_duration
+	var dodge_cooldown: float = combat_data.dodge_cooldown
+	var step_1: AttackData = combat_data.light_combo[0]
+	var step_timings: Array[float] = [step_1.windup, step_1.active, step_1.recovery]
 
 	_set_stat(PlayerProgression.Stat.AGILITY, 10)
 	_record(is_equal_approx(_player.effective_movement_speed, base_move)
@@ -275,14 +278,14 @@ func _agility_tests() -> void:
 	_record(is_equal_approx(_player.effective_movement_speed, base_move * 1.05),
 		"20c) recomputing twice gives the same %.2f" % _player.effective_movement_speed)
 
-	_record(is_equal_approx(_player.invulnerability_start, iframe_start)
-			and is_equal_approx(_player.invulnerability_end, iframe_end)
-			and is_equal_approx(_player.dodge_duration, dodge_duration)
-			and is_equal_approx(_player.dodge_cooldown, dodge_cooldown),
+	_record(is_equal_approx(combat_data.invulnerability_start, iframe_start)
+			and is_equal_approx(combat_data.invulnerability_end, iframe_end)
+			and is_equal_approx(combat_data.dodge_duration, dodge_duration)
+			and is_equal_approx(combat_data.dodge_cooldown, dodge_cooldown),
 		"22) AGI leaves i-frames, dodge duration and cooldown alone")
-	_record(is_equal_approx(_player.combo_steps[0].startup, step_timings[0])
-			and is_equal_approx(_player.combo_steps[0].active, step_timings[1])
-			and is_equal_approx(_player.combo_steps[0].recovery, step_timings[2]),
+	_record(is_equal_approx(step_1.windup, step_timings[0])
+			and is_equal_approx(step_1.active, step_timings[1])
+			and is_equal_approx(step_1.recovery, step_timings[2]),
 		"23) and attack timings alone (%.2f/%.2f/%.2f)" % step_timings)
 
 	_set_stat(PlayerProgression.Stat.AGILITY, 10)

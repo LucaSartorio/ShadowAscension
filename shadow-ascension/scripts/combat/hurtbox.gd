@@ -21,12 +21,14 @@ func set_invulnerable(value: bool) -> void:
 	is_invulnerable = value
 
 
-func receive_hit(amount: float, source: Node = null) -> void:
+## The one way into this body's health. Whoever sent the hit — player, shadow,
+## enemy, boss — makes no difference here.
+func receive_hit(hit: DamageInfo) -> void:
 	if is_invulnerable:
 		return
 	if health_component == null:
 		return
-	health_component.receive_damage(amount, source)
+	health_component.take_damage(hit)
 
 
 func get_owner_entity() -> Node:

@@ -75,7 +75,7 @@ func _reach_boss_room() -> Dictionary:
 		player.global_position = ROOM_ANCHORS[i]
 		await _pause(0.4)
 		for enemy in dungeon.get_rooms()[i].get_enemies():
-			enemy.hurtbox.receive_hit(10000.0, null)
+			enemy.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 		await _pause(0.5)
 	player.global_position = ROOM_ANCHORS[2]
 	await _pause(0.6)
@@ -156,7 +156,7 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 		var stop_swinging: bool = die_in_phase_2 and boss.get_phase() == DungeonBoss.BossPhase.PHASE_2
 		if stop_swinging and player.hurtbox.is_invulnerable:
 			player.hurtbox.set_invulnerable(false)
-		if not stop_swinging and player.get("_attack_state") == Player.AttackState.IDLE:
+		if not stop_swinging and player.combat.get_state() == PlayerCombat.State.IDLE:
 			_swing(player, boss)
 			swings += 1
 		elif stop_swinging:

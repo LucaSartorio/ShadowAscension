@@ -168,7 +168,7 @@ func _kill_with_combo(target: RoomCombatant, budget: float = 12.0) -> int:
 	var swings: int = 0
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if _player.get("_attack_state") == Player.AttackState.IDLE:
+		if _player.combat.get_state() == PlayerCombat.State.IDLE:
 			_swing(target)
 			swings += 1
 		await get_tree().physics_frame
@@ -266,7 +266,7 @@ func _dungeon_reward_tests() -> void:
 	_swing(boss)
 	await _wait(0.4)
 	var after_first_hit: int = _total_xp()
-	boss.hurtbox.receive_hit(boss.health_component.max_health * 0.55, null)
+	boss.hurtbox.receive_hit(DamageInfo.new(boss.health_component.max_health * 0.55, null))
 	await _wait(2.2)
 	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2, "24a) the boss entered phase 2")
 	_record(_total_xp() == after_first_hit,

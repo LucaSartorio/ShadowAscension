@@ -135,7 +135,7 @@ func _full_dungeon_loop() -> void:
 		await _wait(0.4)
 		var armed: bool = room.get_state() == RoomController.RoomState.ACTIVE
 		for enemy in room.get_enemies():
-			enemy.hurtbox.receive_hit(1000.0, null)
+			enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 		await _wait(0.5)
 		_record(armed and room.is_cleared() and not room.exit_door.is_locked(),
 			"%d) %s arms, clears and opens" % [9 + i, room.name])
@@ -183,7 +183,7 @@ func _full_dungeon_loop() -> void:
 	_record(transition.fade_rect.modulate.a > 0.95, "19) exit fade-to-black completed (alpha=%.2f)" % transition.fade_rect.modulate.a)
 
 	# 32) dying after the run already ended must not start a second transition
-	player.health_component.receive_damage(1000.0)
+	player.health_component.take_damage(DamageInfo.new(1000.0))
 	await _wait(0.5)
 	_record(starts.size() == 1 and dungeon.get_state() == DungeonController.DungeonState.COMPLETED,
 		"32) death after completion does not queue a second transition (starts=%d state=%d)" % [
@@ -201,8 +201,8 @@ func _fresh_run_state() -> void:
 	var gate: DungeonGate = world.get_node("DungeonGate")
 	var controllable: bool = (
 		world_player.health_component.current_health == world_player.health_component.max_health
-		and not world_player._is_dodging
-		and world_player._attack_state == Player.AttackState.IDLE
+		and not world_player.combat.is_dodging()
+		and world_player.combat.get_state() == PlayerCombat.State.IDLE
 	)
 	_record(controllable, "20/21) test world reloads and the player is controllable at full health (%.0f/%.0f)" % [
 		world_player.health_component.current_health, world_player.health_component.max_health])
@@ -255,7 +255,7 @@ func _death_restart() -> void:
 	var room1: RoomController = dungeon.get_rooms()[0]
 	var was_active: bool = room1.get_state() == RoomController.RoomState.ACTIVE
 
-	player.health_component.receive_damage(1000.0)
+	player.health_component.take_damage(DamageInfo.new(1000.0))
 	await _wait(0.3)
 	_record(dungeon.status_label.visible and dungeon.status_label.text == dungeon.death_message,
 		"27) a player death shows the death banner ('%s')" % dungeon.status_label.text)
@@ -285,7 +285,7 @@ func _death_restart() -> void:
 	# a second death during the restart must not queue another one
 	player.health_component.is_dead = false
 	player.health_component.current_health = 10.0
-	player.health_component.receive_damage(1000.0)
+	player.health_component.take_damage(DamageInfo.new(1000.0))
 	await _wait(0.4)
 	_record(reloads.size() == 1 and failures.size() == 1,
 		"28b) a second death during the restart is ignored (reloads=%d failures=%d)" % [reloads.size(), failures.size()])

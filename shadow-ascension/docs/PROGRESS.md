@@ -6,18 +6,20 @@
 
 ## Current Milestone
 
-**M11 — Combat System 2.0** (Not started)
+**M11 — Combat System 2.0** (In progress)
 
-M10 — Core Refactor & Game Architecture is **complete**; M11 is next and nothing of it has been
-begun. The baseline it starts from — and what it needs to know about the combat code as it stands —
-is described in `ARCHITECTURE.md`, *Before M11*. See `ROADMAP.md` for M11's deliverables.
+**M11.1 — Combat Foundation 2.0** is complete: the player's combat now runs on its own controller
+(`PlayerCombat`), with an explicit state and attack timeline, an input buffer, a combo window, attacks
+as data and a damage source carried end to end. Nothing of M11's new features is built yet — heavy
+attack, stamina, hit reactions, crits and targeting are the next steps. The architecture is
+`ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 next |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -33,6 +35,68 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.1 — Combat Foundation 2.0** (Completed). The first step of M11 builds no new move: it
+  rebuilds the combat the game already had — the three-hit light combo, the dodge, its i-frames and
+  cancel windows — on a foundation the rest of M11 extends, with the same damage numbers and the same
+  timings.
+
+  What the analysis of the real code found: the whole combat lived in `player.gd` beside movement —
+  an attack state and a separate `_is_dodging` flag, a combo index, an unbounded "queued" flag, three
+  `AttackStep`s with absolute damage as sub-resources of the player scene, a single float travelling
+  hitbox → hurtbox → health, and the attack hitbox under the node the placeholder tilts rolled.
+
+  What M11.1 built:
+
+    - **`PlayerCombat`** (`scripts/player/player_combat.gd`), the player's combat controller: one
+      `State` (`IDLE`, `WINDUP`, `ACTIVE`, `RECOVERY`, `DODGING`, and `DEAD` read from health), the
+      attack timeline on `delta`, the hit window, the combo chain, the input buffer, and the dodge's
+      timing and i-frames. It takes intents (`request_attack()`, `request_dodge()`) and emits
+      `attack_started`. It owns no input, movement, UI, health, XP or enemy.
+    - **`AttackData`** (replaces `AttackStep`): `id`, `damage_multiplier`, windup / active /
+      recovery, `combo_window_start` / `combo_window_end`, the dodge-cancel fraction, a
+      `movement_multiplier`, and the placeholder tilt and debug colour kept apart as presentation.
+    - **`PlayerCombatData`** (`resources/characters/player_combat.tres`): base damage 20, the light
+      combo (×1.0 / ×1.25 / ×1.75 — the old 20 / 25 / 35), the 0.4 s input buffer, and the dodge's
+      duration, i-frames and cooldown. The dodge's speed stays with movement on the player.
+    - **`DamageInfo`** (`amount`, `source`, `attack_id`): what a hit is from hitbox to health.
+      `Hurtbox.receive_hit(hit)` and `HealthComponent.take_damage(hit)` are the only way in, for the
+      player, the shadow, enemies and the boss alike; the health records `last_damage`.
+    - **`PlayerCombat.calculate_damage()`**, the one place a player swing's damage is worked out.
+    - **The player** reads devices and sends intents, moves the body asking combat what the attack
+      allows (`get_movement_multiplier()`, `allows_turning()`), and shows attacks on
+      `attack_started`. The placeholder model moved to `VisualRoot/Model`, so the tilts no longer
+      move the hitbox.
+
+  What changed in behaviour, on purpose:
+
+    - **A press is buffered for 0.4 s, not for the rest of the attack.** Presses in rhythm chain as
+      before; one made at the very start of an attack is too early and does nothing. `attack_test`
+      #5 (ten clicks in one frame) now expects one attack instead of two — the only assertion of an
+      existing suite whose expected value changed.
+    - **A dead player can no longer swing** until the dungeon reloads: death resets the combat.
+    - **The finisher's hit volume no longer rolls** with its 15° cosmetic tilt (it moved up to
+      ~0.2 m sideways).
+
+  Tests: **`tests/combat/combat_foundation_test.tscn`** (46) — state, the three buffer scenarios,
+  the combo window and a recovery-cutting window on a copy of the data, movement and facing, hits
+  in/out/twice/two targets and a target re-entering an open hitbox, `DamageInfo` and the damage
+  numbers, a target dying inside the window, the player dying mid-swing, pause, and frame-rate
+  independence at 30 and 144 Hz. **`tests/core/m11_combat_run.gd`** (30) — New Game → hub → through
+  the gate mid-swing → the player's kills (exact damage, health bar, XP once, a kill inside the hit
+  window) → the shadow's own kill (70/30) → the boss (exact damage, bar, XP, dungeon complete) →
+  hub (XP, shadow XP, health, prompt, no orphans). All 35 existing suites moved to the new API
+  (`DamageInfo`, `combat.get_state()`, `combat.reset()`, `PlayerCombatData`); every assertion kept
+  its expected value except `attack_test` #5 above.
+
+  **1506 assertions across 37 suites, zero failures, zero runtime errors, zero exit-time leaks**
+  (`tests/run_all.gd`). The 35 existing suites pass with the same counts as at M10's close (1430);
+  the two new ones add 76. Zero parser warnings in the game's scripts and in the new tests.
+  Cold-cache reimport, headless boot and a headless run of the game are clean.
+
+  Left for the next steps, listed in `ARCHITECTURE.md`: heavy attack, stamina, Dodge 2.0, hit
+  reactions / stagger / knockback (and a `STUNNED` state), crits, target lock; the enemy, boss and
+  shadow attack timelines, which converge at M12.
 
 - **M10 — Core Refactor & Game Architecture** (Completed). Closed on M10.5. The M0–M9 code now has
   one source of truth per piece of state, configuration held once in its `.tres`, scenes that know
@@ -87,7 +151,7 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
   M10 either (`is_engaged`, `get_remaining_enemies`, `count_of_type` and the like — read API, not
   leftovers); the emitted-but-unheard events of existing systems (`dungeon_started`, `item_added`,
   `exit_activated`…); the older test scripts' harmless warnings; and, for M11 onwards, the constraints
-  listed under *Before M11*.
+  listed under *Before M11* (folded into *Combat architecture (M11)* by M11.1).
 
   **1430 assertions across 35 suites, zero failures, zero runtime errors, zero exit-time leaks**,
   run through `tests/run_all.gd`. Against M10.4's 1381: 32 suites have the same pass counts, the new

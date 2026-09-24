@@ -318,6 +318,13 @@ an i-frame window that can cancel late attack recovery, hitboxes with startup/ac
 a damage pipeline from attacker through hitbox and hurtbox to a health component. These are
 described above under *Combat Feel*; they are not future work.
 
+**M11.1 rebuilt that combat as a foundation** without changing what it does, with one deliberate
+exception: an attack pressed while another runs is remembered for **0.4 s** (an input buffer) and
+used the moment the combo may continue, rather than remembered however early it came. A press in
+rhythm chains exactly as before; one at the very start of an attack is too early and does nothing.
+Each attack now defines its own combo window — when the next may start and how long the chain waits
+after it (0.8 s, as before) — and the combo still ends with its third hit.
+
 **Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
 timing windows or interactions are committed yet:
 

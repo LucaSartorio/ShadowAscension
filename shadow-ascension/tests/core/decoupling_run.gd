@@ -272,7 +272,7 @@ func _back_to_hub() -> void:
 func _kill(player: Player, target: RoomCombatant, budget: float = 40.0) -> void:
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

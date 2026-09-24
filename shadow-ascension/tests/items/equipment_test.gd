@@ -210,8 +210,7 @@ func _health_clamp_tests() -> void:
 # --- the damage formula ---------------------------------------------------------------
 
 func _measure_swing(target: RoomCombatant) -> float:
-	_player._attack_state = Player.AttackState.IDLE
-	_player._combo_index = 0
+	_player.combat.reset()
 	var health: HealthComponent = target.get_node("HealthComponent")
 	health.current_health = health.max_health
 	health.is_dead = false
@@ -234,7 +233,8 @@ func _damage_tests() -> void:
 	_inventory.add_item(SWORD, 1)
 	_prog.strength = 15
 	_prog.stats_changed.emit()
-	var base: float = _player.combo_steps[0].damage
+	var combat_data: PlayerCombatData = _player.combat.data
+	var base: float = combat_data.base_damage * combat_data.light_combo[0].damage_multiplier
 
 	_record(_prog.get_effective_damage(base) == 23.0,
 		"D1) unarmed at STR 15: round(%.0f * 1.15) = %.0f" % [base, _prog.get_effective_damage(base)])
@@ -259,8 +259,8 @@ func _damage_tests() -> void:
 	var enemy: RoomCombatant = _dungeon.get_rooms()[0].get_enemies()[1]
 	var dealt: float = await _measure_swing(enemy)
 	_record(dealt == 29.0, "7/D5) a real swing deals %.0f" % dealt)
-	_record(_player.combo_steps[0].damage == base,
-		"D6) the combo step still holds its base %.0f" % _player.combo_steps[0].damage)
+	_record(combat_data.base_damage * combat_data.light_combo[0].damage_multiplier == base,
+		"D6) the base and the first attack still give %.0f" % base)
 
 
 # --- the UI ---------------------------------------------------------------------------

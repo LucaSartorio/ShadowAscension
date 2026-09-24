@@ -19,4 +19,4 @@ func _physics_process(delta: float) -> void:
 	for area in get_overlapping_areas():
 		var hb: Hurtbox = area as Hurtbox
 		if hb != null:
-			hb.receive_hit(damage_per_tick, self)
+			hb.receive_hit(DamageInfo.new(damage_per_tick, self))

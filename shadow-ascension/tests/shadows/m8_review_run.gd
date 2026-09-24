@@ -235,7 +235,7 @@ func _phase_manual_kill_split() -> void:
 	var expected_player: int = reward - expected_shadow
 	var player_before: int = _total_player_xp(p)
 	var shadow_before: int = shadow.current_xp
-	(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, node)
+	(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, node))
 	await _pause(0.6)
 	_record(enemy.has_died() and enemy.get_killer() == node,
 		"33) the shadow lands the final blow, and the kill is attributed to it")
@@ -282,7 +282,7 @@ func _phase_manual_kill_split() -> void:
 
 	player_before = _total_player_xp(p)
 	shadow_before = shadow.current_xp
-	(other.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, p)
+	(other.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, p))
 	await _pause(0.6)
 	_record(other.has_died() and other.get_killer() == p,
 		"40) the PLAYER lands the final blow, and the kill is attributed to it")
@@ -318,7 +318,7 @@ func _phase_aggressive_and_level() -> void:
 			await _pause(1.2)
 			if node.get_target() == enemy:
 				_record(true, "44.%d) it acquired %s by itself" % [finished + 1, enemy.name])
-			(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, node)
+			(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, node))
 			await _pause(0.5)
 			finished += 1
 	_record(finished > 0, "45) it finished %d kill(s) in AGGRESSIVE" % finished)
@@ -370,7 +370,7 @@ func _phase_recall_and_death() -> void:
 	var level: int = shadow.level
 	var xp: int = shadow.current_xp
 	node.hurtbox.set_invulnerable(false)
-	node.health_component.receive_damage(1000000.0)
+	node.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(0.4)
 	_record(node.is_dead(), "55) killing it puts the entity in DEAD")
 	_record(not p.shadow_summoner.has_active_shadow()
@@ -427,7 +427,7 @@ func _phase_boss() -> void:
 	var level_before: int = shadow.level
 	var xp_before: int = shadow.current_xp
 	await _swing(p, boss)
-	(boss.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, node)
+	(boss.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, node))
 	await _pause(1.0)
 	_record(boss.has_died() and boss.get_killer() == node,
 		"65) and can land the final blow on it")
@@ -519,7 +519,7 @@ func _phase_player_death() -> void:
 	_record(p.shadow_summoner.has_active_shadow(), "80) a shadow is out when the player dies")
 
 	p.hurtbox.set_invulnerable(false)
-	p.health_component.receive_damage(1000000.0)
+	p.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(0.4)
 	_record(dungeon.get_state() == DungeonController.DungeonState.FAILED, "81) the run failed")
 	await _pause(2.6)
@@ -662,7 +662,7 @@ func _kill(player: Player, target: RoomCombatant, budget: float = 30.0) -> int:
 	var swings: int = 0
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

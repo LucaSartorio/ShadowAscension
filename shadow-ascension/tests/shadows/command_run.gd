@@ -70,7 +70,7 @@ func _initialize() -> void:
 
 	# --- the player dies
 	p2.hurtbox.set_invulnerable(false)
-	p2.health_component.receive_damage(1000000.0)
+	p2.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(0.4)
 	_record(_state.active_shadow_instance_id == &"",
 		"13) the player's death clears the active shadow")

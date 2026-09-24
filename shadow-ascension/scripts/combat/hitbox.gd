@@ -1,12 +1,20 @@
 class_name Hitbox
 extends Area3D
 
-signal hit_landed(target: Node, damage: float)
+## A hit landed on `target`, carrying exactly what was sent to its hurtbox.
+signal hit_landed(target: Node, hit: DamageInfo)
 
 @export var damage: float = 25.0
 @export var source: Node = null
+## The attack this hitbox is dealing for, stamped on every hit it lands. Set by
+## the attacker with `damage`, before activate(); empty for attackers with no
+## named attacks.
+var attack_id: StringName = &""
 
 var _active: bool = false
+## Whom this activation has already hit. Per target, not per swing: one swing
+## reaches every target in the volume once, and no target twice. Cleared by
+## activate(), so each swing starts with nobody hit.
 var _hit_targets: Array[Node] = []
 var _debug_visual: MeshInstance3D = null
 
@@ -73,5 +81,6 @@ func _on_area_entered(area: Area3D) -> void:
 	if target_entity in _hit_targets:
 		return
 	_hit_targets.append(target_entity)
-	hurtbox.receive_hit(damage, source)
-	hit_landed.emit(target_entity, damage)
+	var hit: DamageInfo = DamageInfo.new(damage, source, attack_id)
+	hurtbox.receive_hit(hit)
+	hit_landed.emit(target_entity, hit)

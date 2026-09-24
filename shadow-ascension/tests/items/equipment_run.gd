@@ -41,7 +41,7 @@ func _initialize() -> void:
 	player.inventory.add_item(BLADE, 1)
 	_record(player.equipment.equip(SWORD), "34) Training Sword equipped")
 	_record(player.equipment.equip(JACKET), "35) Hunter Jacket equipped")
-	player.health_component.receive_damage(player.health_component.current_health - 60.0)
+	player.health_component.take_damage(DamageInfo.new(player.health_component.current_health - 60.0))
 	await _pause(0.2)
 
 	var before: Dictionary = _snapshot(player)
@@ -84,12 +84,12 @@ func _initialize() -> void:
 		p2.global_position = ROOM_ANCHORS[i]
 		await _pause(0.4)
 		for enemy in (current_scene as DungeonController).get_rooms()[i].get_enemies():
-			enemy.hurtbox.receive_hit(10000.0, null)
+			enemy.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 		await _pause(0.5)
 	p2.global_position = ROOM_ANCHORS[2]
 	await _pause(0.5)
 	var boss: DungeonBoss = (current_scene as DungeonController).get_rooms()[2].get_enemies()[0] as DungeonBoss
-	boss.hurtbox.receive_hit(10000.0, null)
+	boss.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 	await _pause(1.2)
 	p2.hurtbox.set_invulnerable(false)
 
@@ -118,7 +118,7 @@ func _initialize() -> void:
 	var dungeon2: DungeonController = current_scene as DungeonController
 	p4.global_position = ROOM_ANCHORS[0]
 	await _pause(0.4)
-	p4.health_component.receive_damage(1000.0)
+	p4.health_component.take_damage(DamageInfo.new(1000.0))
 	await _pause(0.3)
 	_record(dungeon2.get_state() == DungeonController.DungeonState.FAILED, "42a) the run failed")
 	await _pause(2.5)

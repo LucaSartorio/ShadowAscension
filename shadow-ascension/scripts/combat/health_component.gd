@@ -10,23 +10,28 @@ signal died
 
 var current_health: float = 0.0
 var is_dead: bool = false
-## Whoever dealt the last damage, or null. This component only records it — what
-## a kill is worth, and who collects, is decided elsewhere. It knows nothing
-## about XP.
-var last_damage_source: Node = null
+## The last hit taken, or null. This component only records it — what a kill is
+## worth, and who collects, is decided elsewhere. It knows nothing about XP.
+var last_damage: DamageInfo = null
+## Whoever dealt the last hit, or null: the part of it kill attribution reads.
+var last_damage_source: Node:
+	get:
+		return last_damage.source if last_damage != null else null
 
 
 func _ready() -> void:
 	current_health = max_health
 
 
-func receive_damage(amount: float, source: Node = null) -> void:
-	if is_dead:
+## The only place health goes down. Every hit arrives here the same way,
+## whoever dealt it.
+func take_damage(hit: DamageInfo) -> void:
+	if is_dead or hit == null:
 		return
-	if amount <= 0.0:
+	if hit.amount <= 0.0:
 		return
-	last_damage_source = source
-	current_health = max(0.0, current_health - amount)
+	last_damage = hit
+	current_health = max(0.0, current_health - hit.amount)
 	health_changed.emit(current_health, max_health)
 	if current_health <= 0.0:
 		is_dead = true
@@ -58,7 +63,7 @@ func reset_to(maximum: float) -> void:
 	max_health = maximum
 	current_health = maximum
 	is_dead = false
-	last_damage_source = null
+	last_damage = null
 	health_changed.emit(current_health, max_health)
 
 

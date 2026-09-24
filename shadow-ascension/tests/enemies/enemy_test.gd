@@ -64,18 +64,8 @@ func _reset_player() -> void:
 	_player.visual_root.rotation = Vector3.ZERO
 	_player.camera_rig.rotation.y = 0.0
 	_player.velocity = Vector3.ZERO
-	_player._is_dodging = false
-	_player._dodge_elapsed = 0.0
-	_player._dodge_cooldown_remaining = 0.0
+	_player.combat.reset()
 	_player._dodge_direction = Vector3.ZERO
-	_player._dodge_iframes_active = false
-	_player._attack_state = Player.AttackState.IDLE
-	_player._attack_timer = 0.0
-	_player._recovery_elapsed = 0.0
-	_player._combo_index = 0
-	_player._queued_next = false
-	_player._current_step = null
-	_player._idle_since_step_ended = 0.0
 	if _player.hurtbox != null:
 		_player.hurtbox.set_invulnerable(false)
 	if _player.health_component != null:
@@ -257,7 +247,7 @@ func _test_enemy_dies_and_disables_everything() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, -1.5))
 	# force lethal damage direct through hurtbox pipeline
-	_enemy.hurtbox.receive_hit(1000.0, self)
+	_enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, self))
 	await _wait(0.1)
 	var dead_state: bool = _enemy._state == BasicMeleeEnemy.State.DEAD
 	var hitbox_off: bool = not _enemy.hitbox.is_active()
@@ -411,7 +401,7 @@ func _test_hit_feedback() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, -1.5))
 	_enemy.mesh_instance.scale = Vector3.ONE
-	_enemy.hurtbox.receive_hit(10.0, self)
+	_enemy.hurtbox.receive_hit(DamageInfo.new(10.0, self))
 	await _wait(0.04)  # inside the 0.05s squash tween
 	var squashed: bool = _enemy.mesh_instance.scale.y < 0.98
 	var squash_y: float = _enemy.mesh_instance.scale.y
@@ -450,7 +440,7 @@ func _test_death_drop_hook() -> void:
 	var listener: Callable = func(enemy: BasicMeleeEnemy) -> void:
 		payloads.append(enemy)
 	_enemy.enemy_died.connect(listener)
-	_enemy.hurtbox.receive_hit(1000.0, self)
+	_enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, self))
 	await _wait(0.2)
 	_enemy.enemy_died.disconnect(listener)
 	var once: bool = payloads.size() == 1

@@ -89,7 +89,7 @@ func _walk_to_z(player: Player, target_z: float, budget_seconds: float = 12.0) -
 
 func _kill_room(room: RoomController) -> void:
 	for enemy in room.get_enemies():
-		enemy.hurtbox.receive_hit(10000.0, null)
+		enemy.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 
 
 # --- gate prompt ----------------------------------------------------------------
@@ -157,12 +157,12 @@ func _traversal_tests() -> void:
 		"7) objective shows the enemy count: '%s'" % objective.get_objective())
 
 	# 8) counter follows each death
-	room1.get_enemies()[0].hurtbox.receive_hit(10000.0, null)
+	room1.get_enemies()[0].hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 	await _wait(0.3)
 	_record(objective.get_objective() == "Elimina i nemici: 1 rimasto",
 		"8) counter decrements and reads singular: '%s'" % objective.get_objective())
 
-	room1.get_enemies()[1].hurtbox.receive_hit(10000.0, null)
+	room1.get_enemies()[1].hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 	await _wait(0.4)
 	_record(room1.is_cleared(), "9) room 1 clears at zero")
 	_record(objective.get_objective() == "Camera completata - Procedi",

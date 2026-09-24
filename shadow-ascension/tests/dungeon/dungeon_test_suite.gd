@@ -189,9 +189,9 @@ func _dungeon_tests() -> void:
 
 	# 32) dodge still works in the dungeon
 	_player.health_component.current_health = 100.0
-	_player._dodge_cooldown_remaining = 0.0
+	_player.combat._dodge_cooldown_remaining = 0.0
 	_player._on_dodge_pressed()
-	var dodging: bool = _player._is_dodging
+	var dodging: bool = _player.combat.is_dodging()
 	await _wait(0.1)
 	var iframes: bool = _player.hurtbox.is_invulnerable
 	await _wait(0.5)
@@ -199,7 +199,7 @@ func _dungeon_tests() -> void:
 
 	# 12) one of two dead -> still locked
 	_player.global_position = Vector3(0, 0.1, -13)
-	_room1.get_enemies()[0].hurtbox.receive_hit(1000.0, null)
+	_room1.get_enemies()[0].hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 	await _wait(0.3)
 	var still_locked: bool = _room1.exit_door.is_locked()
 	var not_cleared: bool = not _room1.is_cleared()
@@ -207,7 +207,7 @@ func _dungeon_tests() -> void:
 		still_locked, _room1.is_cleared()])
 
 	# 13/14/15) clear room 1
-	_room1.get_enemies()[1].hurtbox.receive_hit(1000.0, null)
+	_room1.get_enemies()[1].hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 	await _wait(0.6)
 	_record(_room1.is_cleared() and _cleared_events.count("CombatRoom1") == 1,
 		"13) room 1 clears when the last enemy dies (state=%d events=%d)" % [
@@ -248,11 +248,11 @@ func _dungeon_tests() -> void:
 		"19) room 2 navigation routes around its obstacle (lateral deviation %.2f)" % dev)
 
 	# 20) door holds until every enemy is dead
-	r2_enemies[0].hurtbox.receive_hit(1000.0, null)
-	r2_enemies[1].hurtbox.receive_hit(1000.0, null)
+	r2_enemies[0].hurtbox.receive_hit(DamageInfo.new(1000.0, null))
+	r2_enemies[1].hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 	await _wait(0.4)
 	var held: bool = _room2.exit_door.is_locked() and not _room2.is_cleared()
-	r2_enemies[2].hurtbox.receive_hit(1000.0, null)
+	r2_enemies[2].hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 	await _wait(0.5)
 	var opened: bool = not _room2.exit_door.is_locked() and _room2.is_cleared()
 	_record(held and opened, "20) room 2 door holds until all three die (held=%s opened=%s)" % [held, opened])
@@ -266,7 +266,7 @@ func _dungeon_tests() -> void:
 		_boss.get_state(), boss_enemy_live])
 
 	var boss_enemy: RoomCombatant = _boss.get_enemies()[0]
-	boss_enemy.hurtbox.receive_hit(1000.0, null)
+	boss_enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 	await _wait(0.5)
 	_record(boss_enemy.health_component.is_dead, "22) the boss-room occupant can be killed")
 	_record(_boss.is_cleared() and not _boss.exit_door.is_locked(), "23) boss room clears and opens")

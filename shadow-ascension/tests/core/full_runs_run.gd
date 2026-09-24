@@ -176,7 +176,7 @@ func _run_b() -> void:
 			# Ordered, softened by the shadow, finished by the shadow.
 			node.set_manual_target(enemy)
 			var engaged: bool = await _wait_for_damage(enemy, 25.0)
-			(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, node)
+			(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, node))
 			await _pause(0.5)
 			if enemy.get_killer() == node and engaged:
 				shadow_kills += 1
@@ -266,7 +266,7 @@ func _run_c() -> void:
 	var s_level: int = shadow.level
 	var s_xp: int = shadow.current_xp
 	node.hurtbox.set_invulnerable(false)
-	node.health_component.receive_damage(1000000.0)
+	node.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(1.4)
 	_record(not p.shadow_summoner.has_active_shadow()
 			and p.shadows.has_shadow(shadow.instance_id)
@@ -278,7 +278,7 @@ func _run_c() -> void:
 
 	# 3) the player dies
 	p.hurtbox.set_invulnerable(false)
-	p.health_component.receive_damage(1000000.0)
+	p.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(0.4)
 	_record(dungeon.get_state() == DungeonController.DungeonState.FAILED, "C5) the run fails")
 	await _pause(2.8)
@@ -375,7 +375,7 @@ func _fight_boss(p: Player, boss: DungeonBoss) -> void:
 			reapproach_left = reapproach
 		elif reapproach_left > 0.0:
 			reapproach_left -= 1.0 / 60.0
-		elif p.get("_attack_state") == Player.AttackState.IDLE:
+		elif p.combat.get_state() == PlayerCombat.State.IDLE:
 			p.global_position = boss.global_position + Vector3(0, 0, STRIKE_RANGE)
 			p.camera_rig.rotation.y = 0.0
 			p.camera_rig.attack_light_pressed.emit()
@@ -456,7 +456,7 @@ func _same(a: Dictionary, b: Dictionary) -> bool:
 func _kill(player: Player, target: RoomCombatant, budget: float = 90.0) -> void:
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

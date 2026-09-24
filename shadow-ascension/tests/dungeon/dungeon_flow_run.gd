@@ -86,7 +86,7 @@ func _full_run(n: int) -> Dictionary:
 				all_ok = false
 		else:
 			for enemy in room.get_enemies():
-				enemy.hurtbox.receive_hit(1000.0, null)
+				enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 		await _pause(0.5)
 		if not room.is_cleared() or room.exit_door.is_locked():
 			all_ok = false
@@ -106,8 +106,8 @@ func _full_run(n: int) -> Dictionary:
 
 	var back: Player = current_scene.get_node("Player")
 	_record(back.health_component.current_health == back.health_component.max_health
-			and not back._is_dodging
-			and back._attack_state == Player.AttackState.IDLE,
+			and not back.combat.is_dodging()
+			and back.combat.get_state() == PlayerCombat.State.IDLE,
 		"RUN %d/2) the returned player is controllable at full health" % n)
 
 	return {
@@ -142,7 +142,7 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 	var transition_at: int = -1
 	while not boss.health_component.is_dead and swings < to_fell + 10:
 		player.global_position = boss.global_position + Vector3(0, 0, 2.0)
-		boss.hurtbox.receive_hit(HIT, null)
+		boss.hurtbox.receive_hit(DamageInfo.new(HIT, null))
 		swings += 1
 		await _pause(0.12)
 		if boss.get_phase() == DungeonBoss.BossPhase.TRANSITION and not saw_transition:
@@ -184,7 +184,7 @@ func _death_and_restart() -> void:
 		"14) room 1 armed before the fatal hit")
 
 	var doomed_id: int = current_scene.get_instance_id()
-	player.health_component.receive_damage(1000.0)
+	player.health_component.take_damage(DamageInfo.new(1000.0))
 	await _pause(0.3)
 	_record(dungeon.status_label.text == dungeon.death_message
 			and dungeon.get_state() == DungeonController.DungeonState.FAILED,
@@ -238,19 +238,19 @@ func _boss_fight_death_and_restart() -> void:
 		player.global_position = ROOM_ANCHORS[i]
 		await _pause(0.4)
 		for enemy in dungeon.get_rooms()[i].get_enemies():
-			enemy.hurtbox.receive_hit(10000.0, null)
+			enemy.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 		await _pause(0.5)
 	player.global_position = ROOM_ANCHORS[2]
 	await _pause(0.6)
 
 	var boss: DungeonBoss = dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
-	boss.hurtbox.receive_hit(boss.health_component.max_health * 0.55, null)
+	boss.hurtbox.receive_hit(DamageInfo.new(boss.health_component.max_health * 0.55, null))
 	await _pause(2.0)
 	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
 		"19) the boss reached phase 2 before the player died")
 
 	var doomed_id: int = current_scene.get_instance_id()
-	player.health_component.receive_damage(1000.0)
+	player.health_component.take_damage(DamageInfo.new(1000.0))
 	await _pause(0.3)
 	_record(dungeon.get_state() == DungeonController.DungeonState.FAILED,
 		"20) dying to the boss in phase 2 fails the run")

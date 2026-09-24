@@ -310,7 +310,7 @@ func _friendly_fire_tests() -> void:
 	# And empirically, through the real damage path.
 	var health: HealthComponent = node.health_component
 	var before: float = health.current_health
-	shadow_hurtbox.receive_hit(20.0, enemy)
+	shadow_hurtbox.receive_hit(DamageInfo.new(20.0, enemy))
 	_record(is_equal_approx(health.current_health, before - 20.0),
 		"45) a hit taken from an enemy wounds it (%.0f -> %.0f)" % [
 			before, health.current_health])
@@ -383,7 +383,7 @@ func _death_tests() -> void:
 	var xp_before: int = shadow.current_xp
 	var count_before: int = _collection.get_count()
 
-	node.health_component.receive_damage(10000.0)
+	node.health_component.take_damage(DamageInfo.new(10000.0))
 	await _wait(0.3)
 	_record(node.is_dead(), "55) killing it puts it in the DEAD state")
 	_record(not _summoner.has_active_shadow()
@@ -471,8 +471,8 @@ func _total_player_xp() -> int:
 ## player to be subscribed at all — that is M6.1, not something M8.2 changed.
 func _player_kill(enemy: RoomCombatant) -> void:
 	await _swing_at(enemy)
-	(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(
-		10000.0, _player)
+	(enemy.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(
+		10000.0, _player))
 	await _wait(0.5)
 
 
@@ -482,14 +482,13 @@ func _player_kill(enemy: RoomCombatant) -> void:
 func _shadow_kill(node: BasicMeleeShadow, enemy: RoomCombatant) -> void:
 	await _swing_at(enemy)
 	var hurtbox: Hurtbox = enemy.get_node("Hurtbox")
-	hurtbox.receive_hit(10000.0, node)
+	hurtbox.receive_hit(DamageInfo.new(10000.0, node))
 	await _wait(0.5)
 
 
 func _swing_at(enemy: RoomCombatant) -> void:
 	_player.global_position = enemy.global_position + Vector3(0, 0, 1.6)
 	_player.camera_rig.rotation.y = 0.0
-	_player._attack_state = Player.AttackState.IDLE
-	_player._combo_index = 0
+	_player.combat.reset()
 	_player.camera_rig.attack_light_pressed.emit()
 	await _wait(0.45)

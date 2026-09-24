@@ -47,14 +47,16 @@ func _report_static() -> void:
 	# _initialize() runs before the first frame, so _ready is still pending and
 	# every @onready reference is null until one has gone by.
 	await process_frame
-	var steps: Array = p.combo_steps
+	var combat_data: PlayerCombatData = p.combat.data
+	var steps: Array[AttackData] = combat_data.light_combo
 	var combo: Array[String] = []
 	var combo_damage: float = 0.0
 	var combo_time: float = 0.0
 	for step in steps:
-		combo.append("%.0f" % step.damage)
-		combo_damage += step.damage
-		combo_time += step.startup + step.active + step.recovery
+		var step_damage: float = combat_data.base_damage * step.damage_multiplier
+		combo.append("%.0f" % step_damage)
+		combo_damage += step_damage
+		combo_time += step.windup + step.active + step.recovery
 
 	print("")
 	print("=== PLAYER (fresh, nothing equipped) ===")
@@ -64,13 +66,14 @@ func _report_static() -> void:
 	print("  combo active time    %.2fs  -> %.1f dps at full uptime" % [
 		combo_time, combo_damage / combo_time])
 	print("  dodge i-frames       %.2f-%.2fs of a %.2fs dodge" % [
-		p.invulnerability_start, p.invulnerability_end, p.dodge_duration])
+		combat_data.invulnerability_start, combat_data.invulnerability_end,
+		combat_data.dodge_duration])
 	print("  STR / multiplier     %d / x%.2f" % [
 		p.progression.get_effective_strength(), p.progression.get_melee_damage_multiplier()])
 	print("  equipment attack     %.1f (starting equipment: %s)" % [
 		p.progression.get_melee_attack_power(),
 		"none" if p.equipment.get_occupied_slots().is_empty() else "some"])
-	print("  first-hit damage     %.0f" % p.progression.get_effective_damage(steps[0].damage))
+	print("  first-hit damage     %.0f" % p.combat.calculate_damage(steps[0]))
 
 	print("")
 	print("=== BASIC ENEMY ===")
@@ -192,7 +195,7 @@ func _measure_player_vs_enemy() -> void:
 	var elapsed: float = 0.0
 	var started: int = Time.get_ticks_msec()
 	while elapsed < 30.0 and not enemy.has_died():
-		if p.get("_attack_state") == Player.AttackState.IDLE:
+		if p.combat.get_state() == PlayerCombat.State.IDLE:
 			p.global_position = enemy.global_position + Vector3(0, 0, STRIKE_RANGE)
 			p.camera_rig.rotation.y = 0.0
 			p.camera_rig.attack_light_pressed.emit()
@@ -217,7 +220,7 @@ func _measure_player_vs_enemy() -> void:
 	# Stopped one blow short and counted, rather than actually killed: a death
 	# here restarts the dungeon and would poison every measurement after it.
 	while p.health_component.current_health > hitbox.damage and taken < 40:
-		p.hurtbox.receive_hit(hitbox.damage, second)
+		p.hurtbox.receive_hit(DamageInfo.new(hitbox.damage, second))
 		taken += 1
 	taken += 1
 	p.health_component.heal(p.health_component.max_health)
@@ -315,7 +318,7 @@ func _measure_boss() -> void:
 	print("  player STR %d, melee x%.2f, attack power %.0f -> first hit %.0f" % [
 		p.progression.get_effective_strength(), p.progression.get_melee_damage_multiplier(),
 		p.progression.get_melee_attack_power(),
-		p.progression.get_effective_damage(p.combo_steps[0].damage)])
+		p.combat.calculate_damage(p.combat.data.light_combo[0])])
 
 	# Two numbers, because they answer different questions. The floor is the
 	# fight with no defending at all — the fastest the boss can physically die.
@@ -376,7 +379,7 @@ func _fight_boss(p: Player, boss: DungeonBoss, defend: bool) -> float:
 			reapproach_left = reapproach
 		elif reapproach_left > 0.0:
 			reapproach_left -= 1.0 / 60.0
-		elif p.get("_attack_state") == Player.AttackState.IDLE:
+		elif p.combat.get_state() == PlayerCombat.State.IDLE:
 			p.global_position = boss.global_position + Vector3(0, 0, STRIKE_RANGE)
 			p.camera_rig.rotation.y = 0.0
 			p.camera_rig.attack_light_pressed.emit()
@@ -465,7 +468,7 @@ func _count_world_items(from: Node) -> int:
 func _kill(player: Player, target: RoomCombatant, budget: float = 60.0) -> void:
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

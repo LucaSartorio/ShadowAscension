@@ -129,7 +129,7 @@ func _activation_tests() -> void:
 		_player.global_position = [ROOM1_TRIGGER, ROOM2_TRIGGER][i]
 		await _wait(0.4)
 		for enemy in _dungeon.get_rooms()[i].get_enemies():
-			enemy.hurtbox.receive_hit(1000.0, null)
+			enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, null))
 		await _wait(0.5)
 
 	_player.global_position = BOSS_TRIGGER
@@ -303,7 +303,7 @@ func _commitment_tests() -> void:
 		elapsed += get_physics_process_delta_time()
 		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and not dodged:
 			if _boss._phase_timer <= 0.1:
-				_player._dodge_cooldown_remaining = 0.0
+				_player.combat._dodge_cooldown_remaining = 0.0
 				_player._on_dodge_pressed()
 				dodged = true
 		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.NONE and dodged:
@@ -407,7 +407,7 @@ func _receiving_damage_tests() -> void:
 
 	# 26) hit feedback fires, without stagger
 	var boss_pos: Vector3 = _boss.global_position
-	_boss.hurtbox.receive_hit(25.0, null)
+	_boss.hurtbox.receive_hit(DamageInfo.new(25.0, null))
 	await get_tree().physics_frame
 	var feedback: bool = _boss._feedback_tween != null and _boss._feedback_tween.is_running()
 	await _wait(0.3)
@@ -416,7 +416,7 @@ func _receiving_damage_tests() -> void:
 
 	# 27) the bar follows the health component
 	var ratio_before: float = _bar.get_ratio()
-	_boss.hurtbox.receive_hit(100.0, null)
+	_boss.hurtbox.receive_hit(DamageInfo.new(100.0, null))
 	await _wait(0.2)
 	var expected: float = _boss.health_component.current_health / _boss.health_component.max_health
 	_record(_bar.get_ratio() < ratio_before and is_equal_approx(_bar.get_ratio(), expected),
@@ -428,7 +428,7 @@ func _receiving_damage_tests() -> void:
 func _death_tests() -> void:
 	_player.hurtbox.set_invulnerable(false)
 	_player.health_component.current_health = _player.health_component.max_health
-	_boss.hurtbox.receive_hit(10000.0, null)
+	_boss.hurtbox.receive_hit(DamageInfo.new(10000.0, null))
 	await _wait(0.4)
 
 	_record(_boss.get_state() == DungeonBoss.State.DEAD and _boss.health_component.is_dead,

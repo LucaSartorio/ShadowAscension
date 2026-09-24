@@ -107,11 +107,11 @@ func _health_bar_tests() -> void:
 	_record(bar.is_bar_visible(), "2) it appears once the enemy engages")
 
 	var health: HealthComponent = enemies[0].get_node("HealthComponent")
-	health.receive_damage(20.0)
+	health.take_damage(DamageInfo.new(20.0))
 	await _wait(0.1)
 	_record(is_equal_approx(bar.get_ratio(), 0.8),
 		"3/4) 100 -> 80 reads as %.2f" % bar.get_ratio())
-	health.receive_damage(25.0)
+	health.take_damage(DamageInfo.new(25.0))
 	await _wait(0.1)
 	_record(is_equal_approx(bar.get_ratio(), 0.55),
 		"5) each further hit updates it (%.2f)" % bar.get_ratio())
@@ -128,8 +128,8 @@ func _health_bar_tests() -> void:
 	_player.global_position = Vector3(0, 0.1, -33)
 	await _wait(0.8)
 	var three: Array[RoomCombatant] = room2.get_enemies()
-	(three[0].get_node("HealthComponent") as HealthComponent).receive_damage(10.0)
-	(three[1].get_node("HealthComponent") as HealthComponent).receive_damage(70.0)
+	(three[0].get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(10.0))
+	(three[1].get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(70.0))
 	await _wait(0.2)
 	var ratios: Array[float] = []
 	for enemy in three:
@@ -139,7 +139,7 @@ func _health_bar_tests() -> void:
 		"8) three enemies show three independent values: %s" % [ratios])
 
 	# 7) dead enemies take their bar with them
-	(three[1].get_node("HealthComponent") as HealthComponent).receive_damage(1000.0)
+	(three[1].get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(1000.0))
 	await _wait(0.5)
 	_record(not _bar_of(three[1]).is_bar_visible(), "7) a dead enemy's bar is gone")
 
@@ -168,7 +168,7 @@ func _loot_tests() -> void:
 
 	# 11/21) one roll per death, however many times death is announced
 	var before: int = _world_items().size()
-	(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(1000.0)
+	(enemy.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(1000.0))
 	await _wait(0.5)
 	var rolled_once: bool = dropper.has_rolled()
 	var after_first: int = _world_items().size()
@@ -185,7 +185,7 @@ func _loot_tests() -> void:
 	if drops.is_empty():
 		# This enemy's roll missed. Force one so the rest still runs honestly.
 		var forced: LootDropper = _dungeon.get_rooms()[0].get_enemies()[1].get_node("LootDropper")
-		(_dungeon.get_rooms()[0].get_enemies()[1].get_node("HealthComponent") as HealthComponent).receive_damage(1000.0)
+		(_dungeon.get_rooms()[0].get_enemies()[1].get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(1000.0))
 		await _wait(0.5)
 		drops = _world_items()
 	_record(not drops.is_empty(), "12) a drop exists in the world (%d)" % drops.size())

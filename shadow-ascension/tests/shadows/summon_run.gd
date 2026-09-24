@@ -62,7 +62,7 @@ func _initialize() -> void:
 	var second: RoomCombatant = room1.get_enemies()[1]
 	var reward: int = second.get_xp_reward()
 	await _kill(p, second, 20.0, false)
-	(second.get_node("Hurtbox") as Hurtbox).receive_hit(10000.0, node)
+	(second.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(10000.0, node))
 	await _pause(0.5)
 	var expected: int = int(round(reward * PlayerProgression.SHADOW_KILL_SHARE))
 	_record(shadow.current_xp == expected,
@@ -133,7 +133,7 @@ func _initialize() -> void:
 	_record(p3.shadow_summoner.has_active_shadow(), "18) summoned again before dying")
 	var dungeon2: DungeonController = current_scene as DungeonController
 	p3.hurtbox.set_invulnerable(false)
-	p3.health_component.receive_damage(10000.0)
+	p3.health_component.take_damage(DamageInfo.new(10000.0))
 	await _pause(0.3)
 	_record(dungeon2.get_state() == DungeonController.DungeonState.FAILED, "19) the run failed")
 	_record(_state.active_shadow_instance_id == &"",
@@ -226,7 +226,7 @@ func _kill(player: Player, target: RoomCombatant, budget: float = 20.0,
 	while elapsed < budget and not target.has_died():
 		if not finish and health.current_health < health.max_health:
 			break
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

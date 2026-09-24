@@ -65,7 +65,7 @@ func _print_summary() -> void:
 
 
 func _cooldown() -> void:
-	# ensures combo state resets between tests (combo_reset_time = 0.8)
+	# ensures combo state resets between tests (combo_window_end = 0.8)
 	await _wait(1.0)
 
 
@@ -138,8 +138,11 @@ func _test_spam_bounded() -> void:
 	for i in 10:
 		_fire()
 	await _wait(2.0)
+	# M11.1: the nine extra presses are buffered for input_buffer_time only.
+	# Attack 1 is longer than that, so they expire before the chain may go on:
+	# a press that early is too early, and does nothing.
 	var dmg: float = 100.0 - _dummy_hp(d)
-	_record(abs(dmg - 45.0) < 0.01, "5) spam 10 clicks in one frame → only 2 attacks land dmg=%.0f (expect 45)" % dmg)
+	_record(abs(dmg - 20.0) < 0.01, "5) spam 10 clicks in one frame → one attack, the rest expire in the buffer dmg=%.0f (expect 20)" % dmg)
 	d.queue_free()
 
 
@@ -154,7 +157,7 @@ func _test_combo_reset_time() -> void:
 	_fire()
 	await _wait(0.7)
 	var dmg: float = 100.0 - _dummy_hp(d)
-	_record(abs(dmg - 40.0) < 0.01, "6) two Attack 1s separated by >combo_reset_time dmg=%.0f (expect 40)" % dmg)
+	_record(abs(dmg - 40.0) < 0.01, "6) two Attack 1s separated by >combo_window_end dmg=%.0f (expect 40)" % dmg)
 	d.queue_free()
 
 

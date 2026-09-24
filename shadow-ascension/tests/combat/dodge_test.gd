@@ -57,18 +57,8 @@ func _reset_player() -> void:
 	_player.visual_root.rotation = Vector3.ZERO
 	_player.camera_rig.rotation.y = 0.0
 	_player.velocity = Vector3.ZERO
-	_player._is_dodging = false
-	_player._dodge_elapsed = 0.0
-	_player._dodge_cooldown_remaining = 0.0
+	_player.combat.reset()
 	_player._dodge_direction = Vector3.ZERO
-	_player._dodge_iframes_active = false
-	_player._attack_state = Player.AttackState.IDLE
-	_player._attack_timer = 0.0
-	_player._recovery_elapsed = 0.0
-	_player._combo_index = 0
-	_player._queued_next = false
-	_player._current_step = null
-	_player._idle_since_step_ended = 0.0
 	if _player.hurtbox != null:
 		_player.hurtbox.set_invulnerable(false)
 	if _player.health_component != null:
@@ -135,7 +125,7 @@ func _test_direction_locked_mid_dodge() -> void:
 	await _wait(0.15)
 	var mid_dir: Vector3 = _player._dodge_direction
 	Input.action_release("move_backward")
-	var ok: bool = initial_dir.distance_to(mid_dir) < 0.01 and _player._is_dodging
+	var ok: bool = initial_dir.distance_to(mid_dir) < 0.01 and _player.combat.is_dodging()
 	_record(ok, "4) direction locked mid-dodge (initial=%s mid=%s)" % [initial_dir, mid_dir])
 	await _wait(0.6)
 
@@ -149,7 +139,7 @@ func _test_dodge_hits_wall() -> void:
 	await get_tree().physics_frame
 	_player._on_dodge_pressed()
 	Input.action_release("move_forward")
-	await _wait(_player.dodge_duration + 0.1)
+	await _wait(_player.combat.data.dodge_duration + 0.1)
 	var final_z: float = _player.global_position.z
 	_record(final_z > -1.5, "5) dodge blocked by wall (final z=%.2f expect > -1.5)" % final_z)
 	_wall.global_position = Vector3(0, 1.5, -50)
@@ -167,7 +157,7 @@ func _test_no_second_dodge_during_current() -> void:
 	_player._on_dodge_pressed()
 	var second_dir: Vector3 = _player._dodge_direction
 	Input.action_release("move_forward")
-	var ok: bool = first_dir.distance_to(second_dir) < 0.01 and _player._is_dodging
+	var ok: bool = first_dir.distance_to(second_dir) < 0.01 and _player.combat.is_dodging()
 	_record(ok, "6) second dodge during current fails (dir unchanged first=%s second=%s)" % [first_dir, second_dir])
 	await _wait(0.6)
 
@@ -175,15 +165,15 @@ func _test_no_second_dodge_during_current() -> void:
 func _test_cooldown_respected() -> void:
 	_reset_player()
 	_player._on_dodge_pressed()
-	await _wait(_player.dodge_duration + 0.02)
+	await _wait(_player.combat.data.dodge_duration + 0.02)
 	# dodge ended, cooldown started (0.15)
 	await _wait(0.03)
-	var blocked_pre: bool = not _player._is_dodging
+	var blocked_pre: bool = not _player.combat.is_dodging()
 	_player._on_dodge_pressed()  # within cooldown
-	var still_blocked: bool = not _player._is_dodging
+	var still_blocked: bool = not _player.combat.is_dodging()
 	await _wait(0.2)  # past cooldown
 	_player._on_dodge_pressed()
-	var allowed_after: bool = _player._is_dodging
+	var allowed_after: bool = _player.combat.is_dodging()
 	_record(blocked_pre and still_blocked and allowed_after, "7) cooldown: mid-cooldown blocked=%s past-cooldown allowed=%s" % [still_blocked, allowed_after])
 	await _wait(0.6)
 
@@ -206,7 +196,7 @@ func _test_damage_ignored_during_iframes() -> void:
 	_player._on_dodge_pressed()
 	await _wait(0.10)
 	var hp_before: float = _player.health_component.current_health
-	_player.hurtbox.receive_hit(25.0, self)
+	_player.hurtbox.receive_hit(DamageInfo.new(25.0, self))
 	var hp_after: float = _player.health_component.current_health
 	_record(hp_before == hp_after, "9) damage ignored in iframe (hp %.0f -> %.0f)" % [hp_before, hp_after])
 	await _wait(0.6)
@@ -215,7 +205,7 @@ func _test_damage_ignored_during_iframes() -> void:
 func _test_damage_received_outside_iframes() -> void:
 	_reset_player()
 	var hp_before: float = _player.health_component.current_health
-	_player.hurtbox.receive_hit(25.0, self)
+	_player.hurtbox.receive_hit(DamageInfo.new(25.0, self))
 	var hp_after: float = _player.health_component.current_health
 	_record(hp_before - hp_after == 25.0, "10) damage applied outside iframe (delta=%.0f expect 25)" % (hp_before - hp_after))
 
@@ -225,10 +215,10 @@ func _test_attack_1_not_cancelable_pre_recovery() -> void:
 	_player._on_attack_light_pressed()
 	await _wait(0.03)  # in STARTUP
 	_player._on_dodge_pressed()
-	var t1: bool = not _player._is_dodging and _player._attack_state == Player.AttackState.STARTUP
+	var t1: bool = not _player.combat.is_dodging() and _player.combat.get_state() == PlayerCombat.State.WINDUP
 	await _wait(0.14)  # in ACTIVE
 	_player._on_dodge_pressed()
-	var t2: bool = not _player._is_dodging and _player._attack_state == Player.AttackState.ACTIVE
+	var t2: bool = not _player.combat.is_dodging() and _player.combat.get_state() == PlayerCombat.State.ACTIVE
 	_record(t1 and t2, "11) Attack 1 not cancelable pre-recovery (startup_blocked=%s active_blocked=%s)" % [t1, t2])
 	await _wait(0.6)
 
@@ -239,37 +229,37 @@ func _test_attack_1_cancelable_during_recovery() -> void:
 	# startup 0.12 + active 0.12 = 0.24 → recovery. Fraction 0.0 → cancel immediate
 	await _wait(0.28)
 	_player._on_dodge_pressed()
-	var ok: bool = _player._is_dodging and _player._attack_state == Player.AttackState.IDLE
-	_record(ok, "12) Attack 1 cancelable during recovery (is_dodging=%s)" % _player._is_dodging)
+	var ok: bool = _player.combat.is_dodging() and _player.combat.get_current_attack() == null
+	_record(ok, "12) Attack 1 cancelable during recovery (is_dodging=%s)" % _player.combat.is_dodging())
 	await _wait(0.6)
 
 
 func _test_attack_2_cancel_window() -> void:
 	_reset_player()
-	_player._combo_index = 1  # target Attack 2 next
+	_player.combat._combo_index = 1  # target Attack 2 next
 	_player._on_attack_light_pressed()
 	# Attack 2: startup 0.14 + active 0.14 = 0.28 → recovery. Fraction 0.35 * 0.24 = 0.084s
 	await _wait(0.32)  # 0.04s into recovery (< 0.084)
 	_player._on_dodge_pressed()
-	var early: bool = not _player._is_dodging
+	var early: bool = not _player.combat.is_dodging()
 	await _wait(0.07)  # 0.11s into recovery (> 0.084)
 	_player._on_dodge_pressed()
-	var late: bool = _player._is_dodging
+	var late: bool = _player.combat.is_dodging()
 	_record(early and late, "13) Attack 2 cancel window (early_blocked=%s late_allowed=%s)" % [early, late])
 	await _wait(0.6)
 
 
 func _test_attack_3_cancel_window() -> void:
 	_reset_player()
-	_player._combo_index = 2
+	_player.combat._combo_index = 2
 	_player._on_attack_light_pressed()
 	# Attack 3: startup 0.18 + active 0.16 = 0.34 → recovery. Fraction 0.6 * 0.32 = 0.192s
 	await _wait(0.42)  # 0.08s into recovery (< 0.192)
 	_player._on_dodge_pressed()
-	var early: bool = not _player._is_dodging
+	var early: bool = not _player.combat.is_dodging()
 	await _wait(0.15)  # 0.23s into recovery (> 0.192)
 	_player._on_dodge_pressed()
-	var late: bool = _player._is_dodging
+	var late: bool = _player.combat.is_dodging()
 	_record(early and late, "14) Attack 3 cancel window (early_blocked=%s late_allowed=%s)" % [early, late])
 	await _wait(0.6)
 
@@ -289,23 +279,23 @@ func _test_queued_input_cleared_by_dodge() -> void:
 	_player._on_attack_light_pressed()
 	await _wait(0.15)
 	_player._on_attack_light_pressed()  # queue Attack 2
-	var was_queued: bool = _player._queued_next
+	var was_queued: bool = _player.combat.has_buffered_attack()
 	await _wait(0.15)  # move into RECOVERY
 	_player._on_dodge_pressed()
-	var cleared: bool = not _player._queued_next and _player._combo_index == 0
+	var cleared: bool = not _player.combat.has_buffered_attack() and _player.combat._combo_index == 0
 	_record(was_queued and cleared, "16) queued input cleared by dodge (was_queued=%s cleared=%s)" % [was_queued, cleared])
 	await _wait(0.6)
 
 
 func _test_next_attack_after_dodge_is_attack_1() -> void:
 	_reset_player()
-	_player._combo_index = 2  # target Attack 3
+	_player.combat._combo_index = 2  # target Attack 3
 	_player._on_attack_light_pressed()
 	await _wait(0.55)  # into recovery past 60% cancel
 	_player._on_dodge_pressed()
-	await _wait(_player.dodge_duration + _player.dodge_cooldown + 0.1)
-	var idx_ok: bool = _player._combo_index == 0
-	_record(idx_ok, "17) next attack after dodge starts fresh (combo_index=%d expect 0)" % _player._combo_index)
+	await _wait(_player.combat.data.dodge_duration + _player.combat.data.dodge_cooldown + 0.1)
+	var idx_ok: bool = _player.combat._combo_index == 0
+	_record(idx_ok, "17) next attack after dodge starts fresh (combo_index=%d expect 0)" % _player.combat._combo_index)
 	await _wait(0.6)
 
 
@@ -313,11 +303,11 @@ func _test_spam_space_no_break() -> void:
 	_reset_player()
 	for i in 20:
 		_player._on_dodge_pressed()
-	await _wait(_player.dodge_duration + _player.dodge_cooldown + 0.2)
+	await _wait(_player.combat.data.dodge_duration + _player.combat.data.dodge_cooldown + 0.2)
 	# should not be stuck in dodge; single subsequent dodge should work
 	_player._on_dodge_pressed()
-	var recovered: bool = _player._is_dodging
-	_record(recovered, "18) after spamming Space, state remains usable (is_dodging=%s)" % _player._is_dodging)
+	var recovered: bool = _player.combat.is_dodging()
+	_record(recovered, "18) after spamming Space, state remains usable (is_dodging=%s)" % _player.combat.is_dodging())
 	await _wait(0.6)
 
 

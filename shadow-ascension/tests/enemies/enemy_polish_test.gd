@@ -67,13 +67,7 @@ func _reset_player(pos: Vector3 = Vector3(0, 0.1, 0)) -> void:
 	_player.visual_root.rotation = Vector3.ZERO
 	_player.camera_rig.rotation.y = 0.0
 	_player.velocity = Vector3.ZERO
-	_player._is_dodging = false
-	_player._dodge_cooldown_remaining = 0.0
-	_player._attack_state = Player.AttackState.IDLE
-	_player._attack_timer = 0.0
-	_player._combo_index = 0
-	_player._queued_next = false
-	_player._current_step = null
+	_player.combat.reset()
 	if _player.hurtbox != null:
 		_player.hurtbox.set_invulnerable(false)
 	if _player.health_component != null:
@@ -375,7 +369,7 @@ func _test_dead_enemy_leaves_avoidance() -> void:
 	_reset_player()
 	_reset_enemy(_a, Vector3(0, 0.1, 3.0))
 	await _wait(0.3)
-	_a.hurtbox.receive_hit(1000.0, self)
+	_a.hurtbox.receive_hit(DamageInfo.new(1000.0, self))
 	await _wait(0.1)
 	var pos_at_death: Vector3 = _a.global_position
 	await _wait(1.0)
@@ -394,7 +388,7 @@ func _test_enemies_die_independently() -> void:
 	_reset_enemy(_b, Vector3(0.0, 0.1, 4.5), 0.0)
 	_reset_enemy(_c, Vector3(1.8, 0.1, 4.0), 25.0)
 	await _wait(0.4)
-	_b.hurtbox.receive_hit(1000.0, self)
+	_b.hurtbox.receive_hit(DamageInfo.new(1000.0, self))
 	await _wait(0.5)
 	var b_dead: bool = _b._state == BasicMeleeEnemy.State.DEAD
 	var a_alive: bool = _a._state != BasicMeleeEnemy.State.DEAD and not _a.health_component.is_dead

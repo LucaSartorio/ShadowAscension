@@ -64,7 +64,7 @@ func _initialize() -> void:
 	menu.open()
 	_record(menu.get_points_text() == "Punti disponibili: 5" and not menu.is_button_disabled("STR"),
 		"EC2a) the sheet offers the points: '%s'" % menu.get_points_text())
-	var damage_before: float = prog.get_effective_damage(player.combo_steps[0].damage)
+	var damage_before: float = player.combat.calculate_damage(player.combat.data.light_combo[0])
 	var move_before: float = player.effective_movement_speed
 	var hp_before: float = player.health_component.max_health
 	for i in 3:
@@ -75,11 +75,11 @@ func _initialize() -> void:
 			and prog.available_stat_points == 0,
 		"EC2b) five points spent: STR %d AGI %d VIT %d, %d left" % [
 			prog.strength, prog.agility, prog.vitality, prog.available_stat_points])
-	_record(prog.get_effective_damage(player.combo_steps[0].damage) > damage_before
+	_record(player.combat.calculate_damage(player.combat.data.light_combo[0]) > damage_before
 			and player.effective_movement_speed > move_before
 			and player.health_component.max_health > hp_before,
 		"EC2c) and combat changed with them: damage %.0f -> %.0f, move %.2f -> %.2f, HP %.0f -> %.0f" % [
-			damage_before, prog.get_effective_damage(player.combo_steps[0].damage),
+			damage_before, player.combat.calculate_damage(player.combat.data.light_combo[0]),
 			move_before, player.effective_movement_speed,
 			hp_before, player.health_component.max_health])
 	_record(menu.get_stat_value_text("STR") == "13" and menu.is_button_disabled("STR"),
@@ -88,7 +88,7 @@ func _initialize() -> void:
 	_record(not paused, "EC3d) and closing it resumed the game")
 
 	# wound the player, so nothing along the way is allowed to heal it
-	player.health_component.receive_damage(player.health_component.current_health - 60.0)
+	player.health_component.take_damage(DamageInfo.new(player.health_component.current_health - 60.0))
 	await _pause(0.2)
 	var at_gate: Dictionary = _snapshot(player)
 	print("[TEST WORLD ] %s" % [at_gate])
@@ -134,7 +134,7 @@ func _initialize() -> void:
 		"flow) the dungeon completed")
 	p2.hurtbox.set_invulnerable(false)
 
-	p2.health_component.receive_damage(p2.health_component.current_health - 45.0)
+	p2.health_component.take_damage(DamageInfo.new(p2.health_component.current_health - 45.0))
 	await _pause(0.2)
 	var before_exit: Dictionary = _snapshot(p2)
 	print("[BEFORE EXIT] %s" % [before_exit])
@@ -165,7 +165,7 @@ func _initialize() -> void:
 	var dungeon2: DungeonController = current_scene as DungeonController
 	p4.global_position = ROOM_ANCHORS[0]
 	await _pause(0.4)
-	p4.health_component.receive_damage(1000.0)
+	p4.health_component.take_damage(DamageInfo.new(1000.0))
 	await _pause(0.3)
 	_record(dungeon2.get_state() == DungeonController.DungeonState.FAILED, "flow) the run failed")
 	await _pause(2.5)
@@ -243,7 +243,7 @@ func _kill(player: Player, target: RoomCombatant, budget: float = 20.0) -> int:
 	var swings: int = 0
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

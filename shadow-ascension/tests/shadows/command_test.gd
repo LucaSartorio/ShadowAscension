@@ -552,7 +552,7 @@ func _hud_tests() -> void:
 
 	var before: String = _hud.get_health_text()
 	node.hurtbox.set_invulnerable(false)
-	node.hurtbox.receive_hit(15.0, _player)
+	node.hurtbox.receive_hit(DamageInfo.new(15.0, _player))
 	await get_tree().process_frame
 	_record(_hud.get_health_text() != before,
 		"63) damage updates the bar at once, with no polling: '%s'" % _hud.get_health_text())
@@ -582,7 +582,7 @@ func _hud_tests() -> void:
 		"69) and the health it bought reaches the shadow in the world (%.0f -> %.0f)" % [
 			max_before, node.health_component.max_health])
 
-	node.health_component.receive_damage(100000.0)
+	node.health_component.take_damage(DamageInfo.new(100000.0))
 	await _wait(0.3)
 	_record(not _hud.is_showing(), "70) the HUD goes when the shadow dies")
 
@@ -677,7 +677,7 @@ func _boss_tests() -> void:
 	_record(reachable, "83) every boss hitbox can reach the shadow's hurtbox")
 	var shadow_before: float = node.health_component.current_health
 	node.hurtbox.set_invulnerable(false)
-	node.hurtbox.receive_hit(20.0, boss)
+	node.hurtbox.receive_hit(DamageInfo.new(20.0, boss))
 	await get_tree().process_frame
 	_record(node.health_component.current_health < shadow_before
 			and node.health_component.last_damage_source == boss,
@@ -696,7 +696,7 @@ func _boss_tests() -> void:
 	var player_before: int = _total_player_xp()
 	# The player has to have touched it for M6.1 to subscribe at all.
 	await _swing_at(boss)
-	(boss.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, node)
+	(boss.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, node))
 	await _wait(1.0)
 	_record(boss.has_died() and boss.get_killer() == node,
 		"85) the shadow can land the final blow on the boss")
@@ -752,15 +752,14 @@ func _press(action: StringName) -> void:
 
 
 func _kill_directly(enemy: RoomCombatant) -> void:
-	(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(1000000.0, _player)
+	(enemy.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(1000000.0, _player))
 	await _wait(0.4)
 
 
 func _swing_at(enemy: RoomCombatant) -> void:
 	_player.global_position = enemy.global_position + Vector3(0, 0, 1.6)
 	_player.camera_rig.rotation.y = 0.0
-	_player._attack_state = Player.AttackState.IDLE
-	_player._combo_index = 0
+	_player.combat.reset()
 	_player.camera_rig.attack_light_pressed.emit()
 	await _wait(0.45)
 

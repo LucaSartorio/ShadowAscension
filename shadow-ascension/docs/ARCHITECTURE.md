@@ -129,10 +129,13 @@ Systems are built from small, composable components attached to a scene root (e.
 
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
-- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; emits `health_changed(current, maximum)` and `died`, and records `last_damage_source` for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
-- **`Hitbox`** (`Area3D`) — active only during attack frames via `activate()` / `deactivate()`; emits `hit_landed(target, damage)`, and will not hit the same target twice within one activation.
-- **`Hurtbox`** (`Area3D`) — receives hits, honours `is_invulnerable` (dodge i-frames), and forwards damage to the `HealthComponent` it is wired to.
-- **`AttackStep`** (`Resource`) — one step of a combo as data: timings, damage and the window in which the next step can be buffered.
+- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down. Emits `health_changed(current, maximum)` and `died`, and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
+- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source` and `attack_id`, sends each target one `DamageInfo`, emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
+- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: honours `is_invulnerable` (dodge i-frames) and forwards the hit to the `HealthComponent` it is wired to.
+- **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1).
+- **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, placeholder presentation (M11.1; replaced `AttackStep`).
+
+The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); see *Combat architecture (M11)*.
 
 Progression stats live in `scripts/player/` (`PlayerProgression`, `ProgressionStats`) rather than in a generic stats component, because so far only the player has allocatable stats.
 
@@ -204,7 +207,8 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
-| `AttackStep` (`scripts/combat/`) | one step of the player's combo | damage, startup / active / recovery, dodge-cancel window, tilt | `Player` | combo position or timers |
+| `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, the light combo (its `AttackData`s), input-buffer time, dodge duration / i-frames / cooldown | `PlayerCombat` | the combat state, timers, combo position or buffered input — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
+| `AttackData` (`scripts/combat/`) | one attack | `id`, damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, placeholder tilt and debug colour | `PlayerCombat`; the presentation reads the placeholder fields | a damage number of its own — it scales the owner's base; any per-swing state |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -302,7 +306,8 @@ godot --headless --path . --script res://tests/run_all.gd
 
 The last two columns are there because a PASS/FAIL count cannot see them: M10.4's first version
 leaked GDScript instances on every run through the dungeon while every assertion passed. At the
-close of M10 the run is **35 suites and 1430 assertions**, all clean.
+close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, **37 suites and
+1506 assertions**, all clean.
 
 **Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
 To see them all at once, put an `override.cfg` in the project root that raises each warning to an
@@ -388,7 +393,7 @@ it owns and calls it; what is owned reports back with signals; the UI observes a
 **Main flows.**
 
 ```
-Enemy death    Hurtbox.receive_hit(amount, source) -> HealthComponent (records the source)
+Enemy death    Hurtbox.receive_hit(DamageInfo) -> HealthComponent (records the hit and its source)
                -> RoomCombatant.report_death(killer) -> enemy_died
                   -> RoomController (counts it)       -> room_cleared -> DungeonController
                   -> PlayerProgression._collect()     (claim_xp() pays once)
@@ -635,8 +640,9 @@ because nothing was ever added. Max health follows the same route, so equipping 
 ceiling without healing and unequipping it lowers the ceiling and clamps current health down.
 
 **Melee damage** is `round((base + main-hand attack power) * STR multiplier)`, computed when a swing
-is prepared. The `AttackStep` keeps its base damage and the weapon is never written into it, so
-neither the weapon nor the multiplier can stack across attacks. An empty main hand contributes 0 and
+is prepared, in `PlayerCombat.calculate_damage()`; since M11.1 the base is
+`PlayerCombatData.base_damage` times the attack's multiplier. Nothing is ever written back into the
+attack or the base, so neither the weapon nor the multiplier can stack across attacks. An empty main hand contributes 0 and
 combat works unarmed.
 
 **Pause menus** — the character sheet and the inventory both join the `pause_menu` group, and
@@ -772,7 +778,8 @@ unreachable point returns no path at all — which reads as a shadow that simply
 
 ### Kill attribution
 
-`HealthComponent` records `last_damage_source` and emits the unchanged `died` (a separate
+`HealthComponent` records the last hit (`last_damage`, a `DamageInfo`, whose `source` is
+`last_damage_source`) and emits the unchanged `died` (a separate
 `died_from(source)` signal, never connected, was removed in M10.5); `Hurtbox` passes the source
 through instead of discarding it; `RoomCombatant.report_death()`
 records the killer and exposes `get_killer()`. The `enemy_died(combatant)` signature did not change
@@ -818,13 +825,13 @@ should be read as a description of the current code.
 ## Data-driven architecture (M10)
 
 The vertical slice is already partly data-driven: `EnemyData`, `BossStats`, `BossAttack`,
-`ProgressionStats`, `ItemData`, `LootTable`, `AttackStep` and `ShadowData` are all `Resource` assets
+`ProgressionStats`, `ItemData`, `LootTable`, `AttackStep` (now `AttackData`) and `ShadowData` are all `Resource` assets
 today, described in §5. M10 finishes the job and gives every domain one named definition resource —
 each introduced when a system actually reads it, never as an empty file ahead of one:
 
 | Resource | Owns | State |
 | --- | --- | --- |
-| `PlayerData` / `PlayerStats` | the player's definition and its stat rules | progression rules exist as `ProgressionStats`; movement, dodge and combo are still `@export`s on the player scene (see below) |
+| `PlayerData` / `PlayerStats` | the player's definition and its stat rules | progression rules exist as `ProgressionStats`; combat as `PlayerCombatData` since M11.1; movement and dodge speed are still `@export`s on the player scene (see below) |
 | `EnemyData` | an enemy archetype's definition | **exists since M10.3** — renamed from `EnemyStats`, no longer copied into literals |
 | `SkillData` | one skill: cost, cooldown, range, area, effects | not built — no skill exists (M17) |
 | `ItemData` | one item | exists; extended for the M16 slot set |
@@ -834,10 +841,11 @@ each introduced when a system actually reads it, never as an empty file ahead of
 
 **What M10.3 deliberately left in code**, and why:
 
-- **The player's movement, dodge and combo values** are `@export`s on `player.gd`, set on the one
-  player scene, and the combo's three `AttackStep`s are sub-resources of that scene. They are
-  already editable in the inspector and exist once. A `PlayerData` would have one consumer and no
-  variant, and M11 reshapes exactly this block (heavy attack, stamina, sprint), so it is built there.
+- **The player's movement, dodge and combo values** were `@export`s on `player.gd`, and the combo's
+  three `AttackStep`s sub-resources of that scene. A `PlayerData` would have had one consumer and no
+  variant, and M11 reshapes exactly this block, so it was left for M11 — where M11.1 moved the combo,
+  the base damage, the buffer and the dodge's timing into `PlayerCombatData`. Movement (and the
+  dodge's speed) are still `@export`s on the player.
 - **The summoned shadow's AI tuning** — follow distance, leash, attack timings, stuck recovery — is
   `@export`s on `basic_melee_shadow.gd`, which is already per-type because `ShadowData.summon_scene`
   names the scene. It moves with the shadow AI rebuild at M17.
@@ -915,35 +923,192 @@ Two consequences worth stating, because they are easy to lose:
   timings, not from an animation's frame events, so retiming an animation cannot silently retune
   combat.
 
-## Before M11
+## Combat architecture (M11)
 
-M11 (Combat System 2.0) can start without another refactor: persistence, UI ownership, `EnemyData`
-and the scene paths it would otherwise trip over are settled. What it should know about the combat
-code as it stands:
+M11.1 (Combat Foundation 2.0) rebuilt the player's combat as the foundation the rest of M11 extends.
+The gameplay it carries is the one M2–M9 shipped — the three-hit light combo, the dodge with its
+i-frames and its cancel windows, the same damage numbers — reorganised so that each step of an attack
+has one owner and the animation is never the source of truth.
 
-- **The player's combat lives in `player.gd`**, beside movement and dodge — one script for the combo
-  state machine, the dodge and the movement. It is the obvious thing M11 splits into a component, and
-  `Player._wire_components()` is where that component is handed its siblings.
-- **Damage is a single float.** `Hitbox.damage` → `Hurtbox.receive_hit(amount, source)` →
-  `HealthComponent.receive_damage(amount, source)`. M11's damage model (physical, magic, critical,
-  armour penetration, status) needs a payload in place of the float; `source` is already a reference
-  to the attacker, which is what knockback direction and kill attribution need.
-- **Invulnerability exists**: `Hurtbox.set_invulnerable()` is what the dodge's i-frames drive today.
-- **The combo is data**: three `AttackStep`s, currently sub-resources of `player.tscn`. A heavy
-  attack or new steps extend `AttackStep`; the player's configuration resource (`PlayerData`) was
-  deferred to M11 precisely because this block changes there.
-- **The player's attack hitbox hangs under `VisualRoot`**, so it inherits the cosmetic attack and
-  dodge tilts. M11 decides the real hit volumes; M13 needs the hitbox off the visual node. The enemy
-  already has the right shape (`VisualRoot/AttackOrigin`, apart from the mesh).
-- **Finding enemies is physics, not a registry.** The shadow uses a detection `Area3D` on the enemy
-  body layer and the commander a ray; target lock can do the same. No enemy group is needed.
-- **Enemies acquire the player through `Player.GROUP`.** Choosing between the player and the shadow
-  is M12's; an M11 target lock is the player's side only.
-- **New runtime state goes where M10 says.** Stamina, stagger and combo position are the player's
-  runtime state, on the component; their maxima and rates are configuration, in a resource; nothing of
-  it belongs in `PlayerRuntimeState` unless the design says it must survive a scene change.
-- **The session is reached through `Player.session()`**, never the `PlayerRuntimeState` autoload
-  identifier — flow tests compile the game's scripts before autoloads exist.
+```
+Input          CameraRig (attack_light, only while the mouse is captured) and Player (dodge):
+   |             the only code that reads a device. It sends intents and nothing else.
+   v
+Combat         PlayerCombat.request_attack() / request_dodge()
+   |             combat state, attack timeline, input buffer, combo chain, hit window,
+   |             dodge timing and i-frames. Emits attack_started(attack).
+   v
+Attack         AttackData, from PlayerCombatData.light_combo: windup / active / recovery,
+   |             combo and dodge-cancel windows, damage multiplier, movement multiplier
+   v
+Hit detection  the player's Hitbox (Area3D), open for the active phase only;
+   |             one hit per target per swing, any number of targets
+   v
+Damage         PlayerCombat.calculate_damage() when the window opens -> Hitbox.damage;
+   |             the Hitbox sends each target a DamageInfo(amount, source, attack_id)
+   |             -> Hurtbox.receive_hit(hit) -> HealthComponent.take_damage(hit)
+   v
+Health         health_changed -> health bars;  died -> the combatant's owner
+                 -> RoomCombatant.report_death(last_damage_source) -> enemy_died
+                 -> PlayerProgression (XP, split by the killer), room, loot, remnant, run tally
+
+Presentation   attack_started(attack) -> Player faces the aim and plays the placeholder
+```
+
+| Part | Lives in | Does not know about |
+| --- | --- | --- |
+| Input | `CameraRig`, `Player` (`_unhandled_input`, `_on_attack_light_pressed`, `_on_dodge_pressed`) | combat state — it asks, combat decides |
+| Combat state and timeline | `PlayerCombat` (`scripts/player/player_combat.gd`) | devices, movement, the UI, health bars, enemies, XP, the dungeon |
+| Attack definition | `AttackData` in `PlayerCombatData` (`resources/characters/player_combat.tres`) | anything at runtime: never written in play |
+| Hit detection | `Hitbox` | who is attacking beyond `source`, what the target does with the hit |
+| Damage resolution | `PlayerCombat.calculate_damage()` (outgoing); `HealthComponent.take_damage()` (incoming) | each other: the hit crosses as a `DamageInfo` |
+| Presentation | `Player` (`_on_attack_started`, `_play_attack_animation`, `_play_dodge_visual`) | timing: it is told an attack started and shows it |
+
+`PlayerCombat` is wired by the player like every other component —
+`Player._wire_components()` hands it the attack hitbox, the hurtbox (for i-frames), the health
+component (to hear its own death) and the progression (to scale damage). It reads progression; it
+owns none of it.
+
+### Combat state
+
+One enum, `PlayerCombat.State`, instead of an attack state beside an `_is_dodging` flag:
+
+| State | Meaning | Attack press | Dodge press |
+| --- | --- | --- | --- |
+| `IDLE` | free | starts the next attack of the chain now | starts a dodge (off cooldown) |
+| `WINDUP` | an attack is winding up; the hitbox is shut | buffered | refused |
+| `ACTIVE` | the hit window: the hitbox is open | buffered | refused |
+| `RECOVERY` | the hitbox is shut again; the player is still committed | buffered | cancels the attack, once past the attack's `dodge_cancel_recovery_fraction` |
+| `DODGING` | a dodge; the i-frames fall inside it | ignored | refused |
+| `DEAD` | read from the health component, never stored | refused | refused |
+
+Only what the current combat needs is built. There is no `STUNNED` — hit reactions and stagger are a
+later M11 step, and add it when they do — and no separate `ATTACKING`: the three phases are the
+attack. `is_attacking()`, `is_dodging()`, `get_current_attack()` and `has_buffered_attack()` are the
+queries; `allows_turning()` and `get_movement_multiplier()` are what the player's movement asks.
+
+### Attack lifecycle
+
+```
+request_attack()      windup            active              recovery
+      |-------------------|-------------------|-------------------|--> IDLE, or the next attack
+   attack_started      hitbox opens       hitbox closes      combo window opens
+   (facing, anim)      (damage stamped)                      (combo_window_start)
+```
+
+- **Windup** — the attack is committed and aimed; nothing can be hit yet.
+- **Active** — `_open_hit_window()` works the damage out, stamps it and the attack's id on the
+  hitbox and opens it. `activate()` also forgets whom the last swing hit.
+- **Recovery** — the hitbox is shut; the player is still committed. A dodge can cancel it past the
+  attack's cancel fraction; a buffered attack press starts the next attack once the combo window
+  opens.
+
+**One timing source**: `PlayerCombat._physics_process`, on `delta`. Each phase restarts its own
+clock, so a phase ends on the first physics step at or past its length — at most one step late,
+whatever the frame rate (`combat_foundation_test` steps a bare controller at 30 Hz and 144 Hz).
+There is no `Timer` node, no `AnimationPlayer` track and no tween deciding anything; the tweens are
+presentation. The node pauses with the tree — the buffer does not age during a pause — and is
+freed with the player, so no timer, connection or open hit window outlives a scene change.
+
+### Input buffer
+
+One slot, not a queue. An attack pressed while another is running is remembered for
+`PlayerCombatData.input_buffer_time` (0.4 s); pressing again only renews it. It is spent the moment
+the chain may continue, and dropped when it expires, when a dodge starts, when the combat resets, or
+when the chain ends with its last attack. A press while dodging or dead is not buffered.
+
+**This is the one change of feel in M11.1.** The old combo remembered a press made at any point in
+an attack, however early. Now a press made more than 0.4 s before the chain can continue is too
+early and does nothing: ten clicks in one frame buy one attack (they bought two). Presses in rhythm —
+two clicks 0.15 s apart, a click during the swing's impact — chain exactly as before.
+
+### Combo window
+
+Each `AttackData` defines its own:
+
+- `combo_window_start` — how far into recovery the next attack may begin, as a fraction of it.
+  `1.0` on every shipped attack: the next starts when this one is over, as always. A lower value
+  lets a buffered press cut recovery short (tested, not shipped).
+- `combo_window_end` — how long after this attack is over the chain still waits (0.8 s, the old
+  `combo_reset_time`). Pressed within it, the next attack of the chain; after it, the first.
+
+The last attack of a chain ends it, and a dodge restarts it.
+
+### Damage flow
+
+- **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's damage is
+  worked out — `PlayerCombatData.base_damage` (20) × the attack's `damage_multiplier`
+  (1.0 / 1.25 / 1.75), then `PlayerProgression.get_effective_damage()` adds the weapon and applies
+  STR. It runs once per swing, when the window opens, so every target of that swing takes the same
+  number. The weapon's power is added after the multiplier, exactly as before, so every M10 value is
+  unchanged; whether a finisher should scale the weapon too is tuning for later in M11.
+- **In transit**: the hitbox builds one `DamageInfo` per target — `amount`, `source`,
+  `attack_id` — and emits it on `hit_landed`.
+- **Incoming**: `Hurtbox.receive_hit(hit)` (i-frames) → `HealthComponent.take_damage(hit)`, the only
+  way health goes down. It records the hit as `last_damage`. Enemies, the boss and the shadow go
+  through the same two calls: the receiving side never asks who hit it.
+- **Death and reward** are unchanged: the combatant passes `last_damage_source` to
+  `report_death()`, `PlayerProgression` reads `get_killer()`, the player keeps its own kills and the
+  shadow takes 70% of the ones it finishes.
+
+The enemy, the boss and the shadow still run their own attack timelines in their own scripts (where
+the windup is called `startup`); they send the same `DamageInfo`, with no attack id. Their attacks
+converge with M12's enemy framework.
+
+### Multi-hit prevention
+
+The hitbox keeps the targets it has hit since it was last activated and refuses any of them again:
+**per target, not per swing**, so one swing reaches everything in the volume once. The player opens
+one window per attack, so the registry is the attack instance's; `activate()` clears it for the next
+swing. A target that leaves the open hitbox and comes back is still not hit twice; a target that
+dies inside the window takes its one hit, and the next swing finds its hurtbox gone.
+
+### Movement, facing and presentation
+
+- **Movement during an attack is unchanged** — full speed. The player's movement multiplies its speed
+  by `PlayerCombat.get_movement_multiplier()`, which is the current attack's `movement_multiplier`:
+  1.0 on every shipped attack. A slowed, rooted or lunging attack is data from here.
+- **Facing**: the player turns toward where it walks only while `allows_turning()` (IDLE). An attack
+  faces the camera's aim when it starts (`Player._face_aim_direction()`), and target lock replaces
+  that aim source rather than the combat.
+- **The hitbox no longer rolls with the placeholder.** It hangs under `VisualRoot`, which only turns
+  with the facing; the model moved to `VisualRoot/Model`, and the attack and dodge tilts rotate that
+  node alone. Before, the finisher's 15° roll moved its hit volume up to ~0.2 m sideways — the only
+  change to a hit volume in M11.1.
+- **Animation**: combat emits `attack_started(attack)`; `Player._play_attack_animation(attack)` is the
+  one place an attack is shown. M14 swaps the tween for real animation there. Animation method
+  tracks may later serve as hooks, but the timeline stays `PlayerCombat`'s.
+
+### Death and scene change
+
+- **The player dying mid-attack**: `PlayerCombat` hears its own `died` and resets — attack dropped,
+  hit window shut, dodge and i-frames ended, nothing buffered — and while dead refuses every intent.
+  Before M11.1 a dead player could keep swinging until the dungeon reloaded.
+- **A scene change mid-swing** frees the whole combat with its player; `m11_combat_run` leaves the
+  hub with the hit window open and checks that nothing survives it.
+
+### Debug and input actions
+
+- `PlayerCombat.debug_log_enabled` (off by default, inspector only) prints every state change with its
+  attack. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
+- The input actions stay `attack_light` and `dodge`. New ones follow the same pattern —
+  `attack_heavy`, `target_lock` — and are added with their features, not before.
+
+### Left for the next M11 steps
+
+- **Heavy attack**: a second chain of `AttackData` and an `attack_heavy` intent.
+- **Stamina**: maximum and rates in `PlayerCombatData`, the current value on `PlayerCombat`.
+- **Dodge 2.0**: stamina cost, buffering an attack out of a dodge, cancelling into a dodge earlier.
+- **Hit reactions, stagger, knockback**: a `STUNNED` state; `DamageInfo` gains the direction and force
+  a reaction needs, on the receiving side.
+- **Critical hits**: in `calculate_damage()`, or per hit where the hitbox builds its `DamageInfo`.
+- **Target lock**: the aim source of `_face_aim_direction()`.
+- `Hurtbox.is_invulnerable` is one flag, shared by the dodge and anything else that sets it.
+
+Still true from before M11: enemies are found by physics, not a registry; enemies acquire their
+target through `Player.GROUP` (choosing between player and shadow is M12's); new runtime state goes on
+its component and its tuning in a resource, never in `PlayerRuntimeState` unless it must outlive a
+scene; and the session is reached through `Player.session()`.
 
 ## Content pipeline (M13+)
 

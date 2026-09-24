@@ -383,7 +383,7 @@ func _phase_death() -> void:
 	var p: Player = current_scene.get_node("Player")
 	var before: Dictionary = _snapshot(p)
 	p.hurtbox.set_invulnerable(false)
-	p.health_component.receive_damage(1000000.0)
+	p.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(0.4)
 	_record(dungeon.get_state() == DungeonController.DungeonState.FAILED, "66) the run fails")
 	_record(dungeon.status_label.visible
@@ -539,7 +539,7 @@ func _shadow_finishes(player: Player, node: BasicMeleeShadow, enemy: RoomCombata
 			(enemy.get_node("HealthComponent") as HealthComponent).current_health, full):
 		await physics_frame
 		waited += 1.0 / 60.0
-	(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(1000000.0, node)
+	(enemy.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(1000000.0, node))
 	await _pause(0.6)
 
 
@@ -547,7 +547,7 @@ func _kill(player: Player, target: RoomCombatant, budget: float = 40.0) -> int:
 	var swings: int = 0
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

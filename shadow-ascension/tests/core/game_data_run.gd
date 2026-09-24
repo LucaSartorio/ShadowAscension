@@ -89,7 +89,7 @@ func _phase_enemies_share_configuration_only() -> void:
 	_record(_seeded_from(a, _enemy_data) and _seeded_from(b, _enemy_data),
 		"8) and each is seeded from it: health, damage, XP, speed, ranges, navigation")
 
-	a.health_component.receive_damage(30.0)
+	a.health_component.take_damage(DamageInfo.new(30.0))
 	await _pause(0.1)
 	_record(is_equal_approx(a.health_component.current_health, 70.0),
 		"9) damaging enemy A takes it to 70 (%.0f)" % a.health_component.current_health)
@@ -125,7 +125,7 @@ func _phase_boss() -> void:
 		"15) the boss starts at 900 / 900 — its scene no longer carries a stale 600")
 	_record(boss.get_xp_reward() == _boss_stats.xp_reward,
 		"16) and is worth the asset's %d XP" % _boss_stats.xp_reward)
-	boss.health_component.receive_damage(50.0)
+	boss.health_component.take_damage(DamageInfo.new(50.0))
 	await _pause(0.1)
 	_record(is_equal_approx(boss.health_component.current_health, 850.0)
 			and is_equal_approx(_boss_stats.max_health, 900.0),
@@ -207,7 +207,7 @@ func _phase_shadow_template() -> void:
 	_record(node != null and is_equal_approx(node.health_component.max_health, 80.0)
 			and is_equal_approx(node.health_component.current_health, 80.0),
 		"28) a summoned shadow takes its 80 HP from its instance — its scene carries no number")
-	node.health_component.receive_damage(20.0)
+	node.health_component.take_damage(DamageInfo.new(20.0))
 	await _pause(0.1)
 	_record(is_equal_approx(node.health_component.current_health, 60.0)
 			and is_equal_approx(shadow.get_max_health(), 80.0)
@@ -254,7 +254,7 @@ func _seeded_from(enemy: BasicMeleeEnemy, data: EnemyData) -> bool:
 func _kill(player: Player, target: RoomCombatant, budget: float = 40.0) -> void:
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()

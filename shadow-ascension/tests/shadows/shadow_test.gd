@@ -112,11 +112,10 @@ func _collect(node: Node, into: Array[ShadowRemnant]) -> void:
 func _kill(enemy: RoomCombatant) -> void:
 	_player.global_position = enemy.global_position + Vector3(0, 0, 1.6)
 	_player.camera_rig.rotation.y = 0.0
-	_player._attack_state = Player.AttackState.IDLE
-	_player._combo_index = 0
+	_player.combat.reset()
 	_player.camera_rig.attack_light_pressed.emit()
 	await _wait(0.45)
-	(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(10000.0)
+	(enemy.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(10000.0))
 	await _wait(0.5)
 
 

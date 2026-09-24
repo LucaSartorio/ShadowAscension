@@ -95,7 +95,7 @@ func _qa_duplicate_rewards() -> void:
 	var items_before: int = _count(dungeon, "WorldItem")
 	enemy.enemy_died.emit(enemy)
 	enemy.report_death()
-	(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(500.0, p)
+	(enemy.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(500.0, p))
 	var source: ShadowSource = enemy.get_node("ShadowSource")
 	source.spawn_remnant()
 	# Called directly, never behind has_method(): a renamed method must fail the
@@ -378,7 +378,7 @@ func _qa_shadow_commands() -> void:
 	_record(node.get_manual_target() == target, "39) an order takes")
 
 	# Kill the target out from under it: no corpse chasing, no freed reference.
-	(target.get_node("HealthComponent") as HealthComponent).receive_damage(100000.0, p)
+	(target.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(100000.0, p))
 	await _pause(0.8)
 	_record(node.get_manual_target() == null and node.get_target() == null
 			or (node.get_target() != null and not node.get_target().has_died()),
@@ -404,7 +404,7 @@ func _qa_health_ui() -> void:
 	var p: Player = current_scene.get_node("Player")
 	var hp: PlayerHealthHUD = current_scene.get_node("PlayerHealthHUD")
 	p.hurtbox.set_invulnerable(false)
-	p.health_component.receive_damage(30.0, null)
+	p.health_component.take_damage(DamageInfo.new(30.0, null))
 	await process_frame
 	_record(hp.get_health_text() == "%d / %d" % [
 			roundi(p.health_component.current_health),
@@ -470,14 +470,14 @@ func _qa_deaths() -> void:
 		if index == 2:
 			# Take the boss into phase 2 so the death happens there.
 			var boss: DungeonBoss = dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
-			(boss.get_node("Hurtbox") as Hurtbox).receive_hit(
-				boss.get_node("HealthComponent").max_health * 0.6, p)
+			(boss.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(
+				boss.get_node("HealthComponent").max_health * 0.6, p))
 			await _pause(2.2)
 			where = "boss phase %d" % (2 if boss.is_phase_2() else 1)
 
 		var before: Dictionary = _snapshot(p)
 		p.hurtbox.set_invulnerable(false)
-		p.health_component.receive_damage(1000000.0)
+		p.health_component.take_damage(DamageInfo.new(1000000.0))
 		await _pause(0.4)
 		_record(dungeon.get_state() == DungeonController.DungeonState.FAILED
 				and dungeon.status_label.visible
@@ -512,7 +512,7 @@ func _qa_deaths() -> void:
 	var level: int = shadow3.level
 	var xp: int = shadow3.current_xp
 	node.hurtbox.set_invulnerable(false)
-	node.health_component.receive_damage(1000000.0)
+	node.health_component.take_damage(DamageInfo.new(1000000.0))
 	await _pause(1.5)
 	_record(not hud.is_showing(), "57) a shadow's death takes its panel with it")
 	_record(p3.shadows.has_shadow(shadow3.instance_id)
@@ -579,8 +579,8 @@ func _qa_repeated_cycles() -> void:
 			await _pause(0.8)
 			for enemy in dungeon.get_rooms()[room_index].get_enemies():
 				if not enemy.has_died():
-					(enemy.get_node("HealthComponent") as HealthComponent).receive_damage(
-						1000000.0, p)
+					(enemy.get_node("HealthComponent") as HealthComponent).take_damage(DamageInfo.new(
+						1000000.0, p))
 			await _pause(0.5)
 		await _pause(1.5)
 		RunSummary.dismiss_open(self)
@@ -705,7 +705,7 @@ func _same(a: Dictionary, b: Dictionary) -> bool:
 func _kill(player: Player, target: RoomCombatant, budget: float = 60.0) -> void:
 	var elapsed: float = 0.0
 	while elapsed < budget and not target.has_died():
-		if player.get("_attack_state") == Player.AttackState.IDLE:
+		if player.combat.get_state() == PlayerCombat.State.IDLE:
 			player.global_position = target.global_position + Vector3(0, 0, STRIKE_RANGE)
 			player.camera_rig.rotation.y = 0.0
 			player.camera_rig.attack_light_pressed.emit()
