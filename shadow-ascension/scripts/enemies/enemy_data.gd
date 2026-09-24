@@ -63,6 +63,20 @@ extends Resource
 ## sidestepped instead of tracking the player perfectly.
 @export_range(0.0, 1.0) var attack_startup_turn_fraction: float = 0.3
 
+@export_group("Hit Reactions")
+## A hit whose stagger power is at least this staggers the enemy: its attack is
+## cut off and it stands helpless for stagger_duration. Anything weaker is only
+## a flinch. Per hit, not accumulated.
+@export_range(0.0, 1000.0, 1.0, "or_greater") var stagger_resistance: float = 25.0
+@export_range(0.0, 5.0, 0.01, "or_greater") var stagger_duration: float = 0.5
+## After a stagger ends, no new one for this long — damage and knockback still
+## land — so no chain of hits can hold the enemy helpless for ever.
+@export_range(0.0, 10.0, 0.05, "or_greater") var stagger_immunity_time: float = 1.0
+## Scales every push this enemy takes: 1.0 as the attack meant it, 0.0 immovable.
+@export_range(0.0, 5.0, 0.05, "or_greater") var knockback_multiplier: float = 1.0
+## How fast a push dies out, in m/s per second.
+@export_range(0.1, 200.0, 0.5, "or_greater") var knockback_deceleration: float = 30.0
+
 @export_group("Reposition")
 @export_range(0.0, 10.0, 0.05, "or_greater") var reposition_timeout: float = 1.5
 ## Blocks re-entry to REPOSITION after a timeout, preventing CHASE/REPOSITION ping-pong.

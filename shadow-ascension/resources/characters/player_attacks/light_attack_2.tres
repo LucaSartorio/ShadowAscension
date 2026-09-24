@@ -14,4 +14,6 @@ combo_window_start = 0.0
 combo_window_end = 1.0
 dodge_cancel_recovery_fraction = 0.35
 movement_multiplier = 1.0
+stagger_power = 15.0
+knockback_force = 2.5
 debug_color = Color(1, 0.35, 0.35, 0.4)

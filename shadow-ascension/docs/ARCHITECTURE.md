@@ -129,10 +129,10 @@ Systems are built from small, composable components attached to a scene root (e.
 
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
-- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down. Emits `health_changed(current, maximum)` and `died`, and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
-- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source` and `attack_id`, sends each target one `DamageInfo`, emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
+- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down. Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
+- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power` and `knockback_force`, sends each target one `DamageInfo` with the hit's direction worked out at impact, emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
 - **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to.
-- **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1).
+- **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6).
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, and the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2).
 
 The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); see *Combat architecture (M11)*.
@@ -203,12 +203,12 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 
 | Resource | Responsible for | Main fields | Read by | Must NOT contain |
 | --- | --- | --- | --- | --- |
-| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype | `xp_reward`, `max_health`, movement, perception, spacing, attack damage and timings, telegraph | `BasicMeleeEnemy._apply_stats()` | current health or any fight state; placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
-| `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype | `xp_reward`, `max_health`, movement, perception, spacing, attack damage and timings, hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), telegraph | `BasicMeleeEnemy._apply_stats()` | current health or any fight state — a stagger or a push in progress included; placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -309,7 +309,7 @@ leaked GDScript instances on every run through the dungeon while every assertion
 close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, **37 suites and
 1506 assertions**; at M11.2, **39 suites and 1565 assertions**;
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
-**45 suites and 1749 assertions**, all clean.
+**45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**, all clean.
 
 **Parser warnings** are what the editor shows in the script panel; headless, nothing prints them.
 To see them all at once, put an `override.cfg` in the project root that raises each warning to an
@@ -938,9 +938,10 @@ i-frames and its cancel windows, the same damage numbers — reorganised so that
 has one owner and the animation is never the source of truth. M11.2 (Light Attack Combo Chain) made
 the combo a real chain on that foundation, M11.3 (Heavy Attack & Attack Variants) added a second
 attack type on the same controller, M11.4 (Dodge & I-Frames) made the dodge's phases and its
-invulnerability explicit, and M11.5 (Stamina & Combat Resource Management) made the dodge cost
-stamina: see *Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)* and
-*Stamina (M11.5)* below.
+invulnerability explicit, M11.5 (Stamina & Combat Resource Management) made the dodge cost
+stamina, and M11.6 (Hit Reactions, Stagger & Knockback) made enemies answer the hits they take: see
+*Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina (M11.5)*
+and *Hit reactions, stagger and knockback (M11.6)* below.
 
 ```
 Input          CameraRig (attack_light, attack_heavy — only while the mouse is captured) and
@@ -959,10 +960,13 @@ Hit detection  the player's Hitbox (Area3D), open for the active phase only;
    |             one hit per target per swing, any number of targets
    v
 Damage         PlayerCombat.calculate_damage() when the window opens -> Hitbox.damage;
-   |             the Hitbox sends each target a DamageInfo(amount, source, attack_id)
+   |             the Hitbox sends each target a DamageInfo(amount, source, attack_id,
+   |             stagger_power, knockback_force, direction)
    |             -> Hurtbox.receive_hit(hit) -> HealthComponent.take_damage(hit)
    v
-Health         health_changed -> health bars;  died -> the combatant's owner
+Health         health_changed -> health bars;  damaged(hit) -> the target's hit reaction
+   |             (flinch, stagger, knockback) — only for a hit it survives;
+   |           died -> the combatant's owner
                  -> RoomCombatant.report_death(last_damage_source) -> enemy_died
                  -> PlayerProgression (XP, split by the killer), room, loot, remnant, run tally
 
@@ -996,8 +1000,8 @@ One enum, `PlayerCombat.State`, instead of an attack state beside an `_is_dodgin
 | `DODGING` | a dodge: STARTUP, INVULNERABLE (the i-frames), RECOVERY | ignored | refused |
 | `DEAD` | read from the health component, never stored | refused | refused |
 
-Only what the current combat needs is built. There is no `STUNNED` — hit reactions and stagger are a
-later M11 step, and add it when they do — and no separate `ATTACKING`: the three phases are the
+Only what the current combat needs is built. There is no `STUNNED` — the player is not staggered by
+anything yet (M11.6 staggers enemies; see below) — and no separate `ATTACKING`: the three phases are the
 attack, whichever chain it belongs to. `is_attacking()`, `is_dodging()`, `get_current_attack()`,
 `get_combo_index()`, `is_running_chain()`, `get_queued_attack()` and `has_buffered_attack()` are the
 queries; `allows_turning()` and `get_movement_multiplier()` are what the player's movement asks. The
@@ -1297,6 +1301,102 @@ Because the signal carries the maximum, a future change of ceiling reaches it wi
 already a per-player runtime value, and changing it would be one setter beside
 `HealthComponent.set_max_health()`, emitting `stamina_changed`. Nothing of that is built.
 
+### Hit reactions, stagger and knockback (M11.6)
+
+A hit an enemy survives now does something to it besides the number on its bar. Three separate
+things, each with its own data, none implying another:
+
+| | What it is | Decided by | Lasts |
+| --- | --- | --- | --- |
+| **Hit reaction** | the visible flinch every surviving hit gets | nothing — every hit | a squash of the body, 0.17 s |
+| **Stagger** | the enemy's action interrupted: its attack cut off, its AI suspended | the hit's `stagger_power` against the enemy's `stagger_resistance` | the enemy's `stagger_duration` |
+| **Knockback** | the body pushed away from the attacker | the hit's `knockback_force` × the enemy's `knockback_multiplier` | until `knockback_deceleration` stops it |
+
+**The hit carries its impact.** `DamageInfo` gained exactly three fields: `stagger_power`,
+`knockback_force`, and `direction` — flat, unit length, from the attacker's position to the target's,
+worked out by the `Hitbox` at the moment of impact (the way the hitbox faces if the two overlap; zero
+only if even that is flat). Nothing downstream reaches back to the attacker, which may be gone by
+then. The two values come from the attack: `AttackData.stagger_power` and `knockback_force`, stamped
+on the player's hitbox by `PlayerCombat._open_hit_window()` beside the damage. A hitbox whose owner
+sets neither — enemies, the boss, the shadow — sends 0 for both.
+
+| Attack | Damage | `stagger_power` | `knockback_force` | On a basic enemy (resistance 25) |
+| --- | --- | --- | --- | --- |
+| Light 1 | 20 | 10 | 2.0 m/s | flinch, pushed ~0.07 m |
+| Light 2 | 25 | 15 | 2.5 m/s | flinch, pushed ~0.1 m |
+| Light 3 | 35 | 30 | 4.5 m/s | **stagger**, pushed ~0.34 m |
+| Heavy | 40 | 60 | 8.0 m/s | **stagger**, pushed ~1.07 m |
+
+So the combo's first two hits keep the enemy in reach and only flinch it; the finisher interrupts it;
+the heavy interrupts it and throws it back three times as far. First values, not a balance pass.
+
+**The target decides**, in one place, in this order — the order of operations:
+
+```
+Hitbox -> Hurtbox.receive_hit(hit)        refused here in i-frames (M11.4), otherwise:
+       -> HealthComponent.take_damage(hit) damage applied
+            -> health 0: died             death, and nothing else: no flinch, no stagger, no push
+            -> otherwise: damaged(hit)    -> BasicMeleeEnemy._on_damaged(hit):
+                                               1. flinch
+                                               2. stagger, if stagger_power >= stagger_resistance
+                                                  and not already staggered or immune
+                                               3. knockback, if knockback_force x multiplier > 0
+```
+
+No second entry point: nobody calls `stagger()` or `knockback()` on an enemy. The rule is per hit,
+not accumulated — no posture bar.
+
+**The basic enemy** (`EnemyData`, `resources/enemies/basic_melee_enemy.tres`): `stagger_resistance`
+25, `stagger_duration` 0.5 s, `stagger_immunity_time` 1.0 s, `knockback_multiplier` 1.0,
+`knockback_deceleration` 30 m/s². Copied into the enemy in `_apply_stats()` like every other field;
+what changes in play — the stagger left, the immunity left, the push velocity — is runtime state on
+the enemy (`_stagger_timer`, `_stagger_immunity_timer`, `_knockback_velocity`), never the asset.
+
+**Stagger** is a state, `STAGGERED`, in the enemy's own machine, ranked below `DEAD` and above
+everything else. Entering it cuts the attack off at once — the hit window shut (`hitbox.deactivate()`,
+which also stops the hitbox accepting a hit in the same frame), the attack phase and its timer
+dropped, the telegraph undone — so a cancelled swing cannot land. While it lasts the AI decides
+nothing: no turning, no pathing, no new attack. It runs out whether or not the room has the AI awake,
+then hands back to `CHASE` (or `IDLE` if the room has parked the enemy), from where the AI decides
+again. A new stagger cannot start during one, nor for `stagger_immunity_time` after it; damage and
+knockback still land meanwhile. The immunity is there because without it heavy after heavy would keep
+an enemy helpless for good (tested: back-to-back heavies stagger it at most every 1.5 s, and it is
+staggered well under half the time).
+
+**Knockback** is a velocity, `_knockback_velocity`, set by the hit — replacing any push still dying
+out rather than adding to it, so a flurry never builds into a launch — and spent in `_apply_motion()`,
+the one place the body moves: while it lasts it replaces whatever the AI wanted that frame, and goes
+through `move_and_slide()` with gravity as ever, so walls, doors and other bodies stop it and it stays
+on the ground. It dies out at `knockback_deceleration` (a heavy's lasts 0.27 s). `_drive()` skips the
+navigation agent's avoidance pass while it lasts, so no RVO correction rewrites it; the AI's own speed
+is zeroed when a push starts and builds up again afterwards. A push is horizontal only: no launch.
+Stagger and knockback cooperate — entering a stagger zeroes the AI's speed, never the push — and are
+independent: a hit can push without staggering or stagger without pushing.
+
+**Death first.** A killing blow emits `died` and not `damaged`: the enemy dies at once, with no
+flinch, no stagger and no push, and `_on_died()` clears anything still running from an earlier hit.
+A room parking the enemy (`set_combat_enabled(false)`) clears them too, so a scene change or a player
+death leaves nothing sliding or staggered; a new scene's enemies start clean.
+
+**The placeholder look**: the flinch is the squash the enemy already had (now started from
+`damaged`, so it no longer plays on the killing blow); a stagger also leans the body away from the
+blow for as long as it lasts. Both are on the mesh, not the facing node, and M14 replaces them.
+
+**The boss** takes damage exactly as before and keeps its tint flash on every hit, but it does not
+stagger and is not pushed: it reads neither value, has no stagger state, and a hit with any power at
+all neither interrupts its attack nor moves it. That is deliberate — a boss thrown about by every
+heavy is no boss — and whether it gets a poise it can break is M12's boss framework.
+
+**The shadow's** hits go through the same flow with no stagger power and no push, so they flinch what
+they hit and nothing more; its AI is untouched, and its kills still pay 70/30.
+
+**The player** is not staggered or pushed by anything yet: enemy and boss hitboxes send zero, and the
+player does not listen to `damaged`. The `DamageInfo` fields are general, so when player reactions
+come they are a listener, not a new pipeline.
+
+**Debug**: `BasicMeleeEnemy.debug_log_reactions` (off by default) prints each hit's stagger power
+against the resistance, whether it staggered, and the push it left.
+
 ### Damage flow
 
 - **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's damage is
@@ -1306,10 +1406,12 @@ already a per-player runtime value, and changing it would be one setter beside
   number. The weapon's power is added after the multiplier, exactly as before, so every M10 value is
   unchanged; whether a finisher should scale the weapon too is tuning for later in M11.
 - **In transit**: the hitbox builds one `DamageInfo` per target — `amount`, `source`,
-  `attack_id` — and emits it on `hit_landed`.
+  `attack_id`, and since M11.6 `stagger_power`, `knockback_force` and `direction` — and emits it on
+  `hit_landed`.
 - **Incoming**: `Hurtbox.receive_hit(hit)` (i-frames) → `HealthComponent.take_damage(hit)`, the only
-  way health goes down. It records the hit as `last_damage`. Enemies, the boss and the shadow go
-  through the same two calls: the receiving side never asks who hit it.
+  way health goes down. It records the hit as `last_damage`, then emits `died` for a killing blow or
+  `damaged(hit)` for one survived — where an enemy's reaction starts. Enemies, the boss and the
+  shadow go through the same two calls: the receiving side never asks who hit it.
 - **Death and reward** are unchanged: the combatant passes `last_damage_source` to
   `report_death()`, `PlayerProgression` reads `get_killer()`, the player keeps its own kills and the
   shadow takes 70% of the ones it finishes.
@@ -1376,8 +1478,10 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 - **Combo 2.0**: a follow-up cutting recovery short, windows reaching into the active phase, branches
   between chains (a heavy finisher, a light follow-up after a heavy), charged attacks, launchers and
   air combos — each a change to data and to `_request()` / `_end_attack()`, not a second system.
-- **Hit reactions, stagger, knockback**: a `STUNNED` state; `DamageInfo` gains the direction and force
-  a reaction needs, on the receiving side.
+- **Player reactions**: the player staggered or pushed by enemy hits — a listener on its own
+  `damaged`, with enemy attacks given stagger power and force.
+- **Beyond single-hit stagger**: a posture / poise that builds up, a boss that can be broken (M12),
+  launchers and wall slams — none of which exist.
 - **Critical hits**: in `calculate_damage()`, or per hit where the hitbox builds its `DamageInfo`.
 - **Target lock**: the aim source of `_face_aim_direction()`.
 - **An enemy can stall out of reach** (found at M11.4, not fixed): a `BasicMeleeEnemy` chasing a

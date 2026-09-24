@@ -9,11 +9,12 @@
 **M11 — Combat System 2.0** (In progress)
 
 **M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain**, **M11.3 — Heavy Attack &
-Attack Variants**, **M11.4 — Dodge & I-Frames** and **M11.5 — Stamina & Combat Resource Management**
-are complete: the player's combat runs on its own controller (`PlayerCombat`); the light attack is a
-real three-hit chain on it, the heavy attack a second, slower chain of one on its own button, the
-dodge has explicit phases whose i-frames the hurtbox enforces, and it costs stamina. M11.6 is next;
-sprint, hit reactions, crits and targeting are not built yet. The architecture
+Attack Variants**, **M11.4 — Dodge & I-Frames**, **M11.5 — Stamina & Combat Resource Management**
+and **M11.6 — Hit Reactions, Stagger & Knockback** are complete: the player's combat runs on its own
+controller (`PlayerCombat`); the light attack is a real three-hit chain on it, the heavy attack a
+second, slower chain of one on its own button, the dodge has explicit phases whose i-frames the
+hurtbox enforces and costs stamina, and enemies flinch, stagger and get knocked back by what hits
+them. M11.7 is next; sprint, crits, combat feedback and targeting are not built yet. The architecture
 is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
@@ -21,7 +22,7 @@ is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROAD
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.5 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.6 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -37,6 +38,62 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.6 — Hit Reactions, Stagger & Knockback** (Completed). A hit an enemy survives now does
+  something to it, by extending the one damage flow rather than adding a second:
+
+    - **The hit carries its impact**: `DamageInfo` gained `stagger_power`, `knockback_force` and a
+      flat `direction` (attacker → target, worked out by the `Hitbox` at impact; the hitbox's facing
+      if the two overlap). `AttackData` gained `stagger_power` and `knockback_force`, stamped on the
+      player's hitbox with the damage. Light 1 / 2 / 3 / heavy: stagger **10 / 15 / 30 / 60**, push
+      **2 / 2.5 / 4.5 / 8 m/s**.
+    - **The target decides, in order**: `HealthComponent.take_damage()` applies the damage, then emits
+      `died` for a killing blow or the new `damaged(hit)` for one survived — never both. The basic
+      enemy answers `damaged` with a flinch, then a stagger if the power reaches its resistance, then
+      a push.
+    - **Stagger**: a `STAGGERED` state on `BasicMeleeEnemy`, below `DEAD` and above everything else.
+      It cuts the attack off at once (hitbox shut, phase and timer dropped, telegraph undone), suspends
+      the AI for `stagger_duration` **0.5 s**, then hands back to `CHASE`; `stagger_immunity_time`
+      **1.0 s** after it blocks a new stagger (not damage, not the push), so nothing stun-locks.
+      `stagger_resistance` **25**: Light 1 and 2 only flinch, Light 3 and the heavy stagger.
+    - **Knockback**: a velocity replacing the AI's for as long as it lasts, spent in the enemy's one
+      `move_and_slide()` — walls and bodies stop it, gravity holds — dying out at
+      `knockback_deceleration` **30 m/s²** (heavy ≈ 1.07 m, Light 3 ≈ 0.34 m), `knockback_multiplier`
+      **1.0**. The navigation avoidance pass is skipped while it lasts. Independent of stagger either
+      way.
+    - **Death first**: no flinch, stagger or push on a killing blow; death, a room parking the enemy
+      and a new scene leave nothing running.
+    - **Boss**: damage and its tint flash as before; never staggered, never pushed, its attack never
+      interrupted — by design until M12's boss framework. **Shadow**: its hits carry no stagger or
+      push, so they only flinch; AI and 70/30 unchanged. **Player**: not staggered or pushed yet.
+    - Placeholder look: the existing squash as the flinch, plus a lean away from the blow held through
+      a stagger.
+
+  Tests: **`tests/combat/hit_reaction_test.tscn`** (33) — the configuration; Light 1/2/3 and the heavy
+  one by one (damage, flinch, stagger or not, push speed and distance, straight away from the player);
+  the combo reacting hit by hit; the heavy hitting once with a push that only dies out; stagger
+  duration, immunity (damage and push but no stagger), staggering again after it, and heavies back to
+  back never locking the enemy; push without stagger and stagger without push; an enemy's windup cut
+  off by Light 3 before it lands, its open hitbox shut by a stagger, a weak hit letting the swing go
+  on; a chasing enemy pushed back despite its chase, then chasing again; four directions and the
+  overlapping case; a wall and another enemy stopping the push; one heavy through two enemies; the
+  boss unmoved and uninterrupted; a killing heavy (death only, paid once); and an every-frame
+  watcher. **`tests/core/m11_reaction_run.gd`** (22) — New Game → dungeon with every enemy clean → a
+  windup cut off by Light 3 and the AI resuming → a swing dodged in the i-frames (25 stamina, then
+  back) → the combo reacting hit by hit, a killing heavy with no reaction, a heavy throwing the other
+  back 1.13 m → a heavy killing blow → the shadow's kill (flinch only, 70/30) → the boss's swing
+  dodged, the combo and the heavy on it without moving it, its death → hub (XP 282, level 3, shadow
+  18, no orphans) → a second dungeon, every enemy clean, stagger and push again → hub. The existing
+  suites pass unchanged except `enemy_test` and `enemy_polish_test`, whose revive helpers clear the
+  new reaction state instead of the removed `_last_health`.
+
+  **1804 assertions across 47 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 45 existing suites keep M11.5's 1749; the two new ones add 55.
+  Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M11.7 and later: crits, target lock, combat feedback (hit stop, camera shake, damage
+  numbers), sprint, player stagger / knockback, poise and boss stagger (M12), launchers and wall slams.
 
 - **M11.5 — Stamina & Combat Resource Management** (Completed). The player's first limited combat
   resource, where the M11.1 plan put it — no new component, no new resource:

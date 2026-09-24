@@ -339,7 +339,8 @@ having to be rewritten again and again.
 | **M11.3** Heavy Attack & Attack Variants | **Complete** | a heavy attack on its own input (`attack_heavy`): a one-attack chain on the same controller, ×2.0 damage, slower and more committed; light and heavy never interrupt each other's chains |
 | **M11.4** Dodge & I-Frames | **Complete** | the dodge's phases made explicit (startup, invulnerable, recovery) and the i-frames driven by them; invulnerability decided by the hurtbox, per reason, so the dodge only ends its own; one `can_dodge()` gate for the stamina to come; checked against real enemy and boss attacks |
 | **M11.5** Stamina & Combat Resource Management | **Complete** | stamina, the player's first limited resource: 100, owned by `PlayerCombat`, configured in `PlayerCombatData`; a dodge costs 25, paid atomically when it starts, and does not start without it; regeneration at 40/s after a 0.8 s delay restarted by every spend; a HUD bar driven by `stamina_changed`. Attacks stay free; sprint does not exist yet, so nothing drains |
-| M11.6 onwards | Not started | the rest of the deliverables below |
+| **M11.6** Hit Reactions, Stagger & Knockback | **Complete** | enemies answer the hits they survive: a flinch on every one; a stagger — attack cut off, AI suspended for 0.5 s, then 1 s immune — when the hit's `stagger_power` reaches the enemy's resistance; a knockback away from the attacker through the physics body. Values per attack in `AttackData` (Light 1/2/3/heavy: stagger 10/15/30/60, push 2/2.5/4.5/8 m/s), per enemy in `EnemyData`. Death first; the boss is neither staggered nor pushed; the shadow's hits only flinch |
+| M11.7 onwards | Not started | the rest of the deliverables below |
 
 **Goal**
 Turn prototype combat into a real action-RPG combat system.

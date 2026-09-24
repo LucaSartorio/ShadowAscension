@@ -350,12 +350,22 @@ combo nor the heavy, which already pays with its commitment — and do not delay
 stamina the player still walks and attacks normally, only the dodge waits. Every new scene's player
 starts full. There is no sprint in the game yet; when there is, it will drain stamina by the second.
 
+**M11.6 made enemies react to being hit.** Every hit an enemy survives makes it flinch. A strong enough
+hit **staggers** it: whatever attack it was winding up or swinging is cut off before it can land, and
+for **0.5 s** it does nothing at all; then it goes back to fighting, and for **1 s** after that it
+cannot be staggered again (it still takes damage and gets pushed), so no string of hits keeps it
+helpless. Hits also **push** it straight away from whoever struck, and walls and other bodies stop the
+push. The light combo builds up to its finisher: Light 1 and Light 2 only flinch a basic enemy and
+barely nudge it, keeping it in reach; Light 3 staggers it and knocks it back a step; the heavy
+staggers it and throws it back about a metre. A killing blow simply kills — no stagger, no push. The
+boss takes damage and flashes, but it is never staggered and never pushed. The shadow's hits make
+their target flinch, nothing more. The player is not staggered or pushed by enemies yet.
+
 **Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
-timing windows or interactions are committed yet (the heavy attack, the dodge's timing and stamina
-shipped in M11.3, M11.4 and M11.5):
+timing windows or interactions are committed yet (the heavy attack, the dodge's timing, stamina and
+hit reactions shipped in M11.3 to M11.6):
 
 - sprint, draining stamina
-- hit reactions, stagger, knockback
 - critical hits
 - combat feedback: hit stop, camera shake, floating damage
 - target lock, soft targeting, target switching, target indicators

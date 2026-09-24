@@ -478,6 +478,8 @@ func _open_hit_window() -> void:
 		return
 	_hitbox.damage = calculate_damage(_attack)
 	_hitbox.attack_id = _attack.id
+	_hitbox.stagger_power = _attack.stagger_power
+	_hitbox.knockback_force = _attack.knockback_force
 	_hitbox.set_debug_color(_attack.debug_color)
 	_hitbox.activate()
 

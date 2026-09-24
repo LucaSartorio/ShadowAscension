@@ -12,4 +12,6 @@ active = 0.15
 recovery = 0.45
 dodge_cancel_recovery_fraction = 0.6
 movement_multiplier = 0.5
+stagger_power = 60.0
+knockback_force = 8.0
 debug_color = Color(1, 0.8, 0.2, 0.45)

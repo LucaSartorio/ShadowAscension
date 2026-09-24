@@ -108,7 +108,7 @@ func _reset_enemy(
 	if e.health_component != null:
 		e.health_component.current_health = e.health_component.max_health
 		e.health_component.is_dead = false
-		e._last_health = e.health_component.max_health
+		e._clear_reactions()
 	if e.hurtbox != null:
 		e.hurtbox.monitorable = true
 	if e.hurtbox_collision != null:

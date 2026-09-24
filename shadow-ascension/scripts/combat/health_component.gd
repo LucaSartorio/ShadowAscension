@@ -2,6 +2,10 @@ class_name HealthComponent
 extends Node
 
 signal health_changed(current: float, maximum: float)
+## A hit took health and left this alive: what a hit reaction listens to. Emitted
+## after health_changed, and never with died — a killing blow is a death, not a
+## hit to react to.
+signal damaged(hit: DamageInfo)
 ## Who dealt the final blow is `last_damage_source`, read at this moment by the
 ## owner — a combatant passes it to RoomCombatant.report_death().
 signal died
@@ -36,6 +40,8 @@ func take_damage(hit: DamageInfo) -> void:
 	if current_health <= 0.0:
 		is_dead = true
 		died.emit()
+		return
+	damaged.emit(hit)
 
 
 ## Changes the ceiling without healing: current health is only ever clamped down

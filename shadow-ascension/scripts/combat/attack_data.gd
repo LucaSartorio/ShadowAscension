@@ -47,6 +47,15 @@ extends Resource
 ## as out of combat.
 @export var movement_multiplier: float = 1.0
 
+@export_group("Impact")
+## How hard a hit of this attack tries to interrupt its target: it staggers a
+## target whose resistance is no higher. Independent of the push below — either
+## can be 0 without the other.
+@export var stagger_power: float = 0.0
+## How fast a hit of this attack pushes its target away, in m/s along the hit's
+## direction, before the target's own multiplier.
+@export var knockback_force: float = 0.0
+
 @export_group("Debug")
 ## Colour of the hitbox's debug mesh while it is open.
 @export var debug_color: Color = Color(1, 0.3, 0.3, 0.35)

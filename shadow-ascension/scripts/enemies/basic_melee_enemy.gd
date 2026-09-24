@@ -5,7 +5,9 @@ extends RoomCombatant
 ## so it can stay out of the way while the enemy is idle and undamaged.
 signal engagement_changed(engaged: bool)
 
-enum State { IDLE, CHASE, REPOSITION, ATTACK, DEAD }
+## STAGGERED (M11.6) outranks every state but DEAD: it cuts an attack off, and
+## nothing the AI decides runs until it is over.
+enum State { IDLE, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD }
 enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 
 ## The archetype's configuration: the one place its numbers exist. Copied into
@@ -20,6 +22,11 @@ enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 ## Deterministic per-instance desync so a group does not swing in unison.
 @export var initial_attack_delay: float = 0.0
 @export var attack_cooldown_variation: float = 0.0
+
+@export_group("DEBUG")
+## DEBUG ONLY. Off by default. Prints every hit this enemy survives: its stagger
+## power against the resistance, whether it staggered, and the push it took.
+@export var debug_log_reactions: bool = false
 
 # RUNTIME tuning: this instance's own values, seeded from `stats` in
 # _apply_stats() and read by the AI from then on. Instance state — change them
@@ -50,6 +57,12 @@ var attack_recovery: float
 var attack_cooldown: float
 var max_attack_facing_angle: float
 var attack_startup_turn_fraction: float
+
+var stagger_resistance: float
+var stagger_duration: float
+var stagger_immunity_time: float
+var knockback_multiplier: float
+var knockback_deceleration: float
 
 var reposition_timeout: float
 var reposition_cooldown: float
@@ -85,7 +98,14 @@ var _reposition_block_timer: float = 0.0
 var _target_update_accum: float = 0.0
 var _player: Player = null
 var _telegraph_tween: Tween = null
-var _last_health: float = 0.0
+## Hit reactions (M11.6), all runtime: what is left of a stagger, of the
+## immunity after one, and of a push.
+var _stagger_timer: float = 0.0
+var _stagger_immunity_timer: float = 0.0
+var _knockback_velocity: Vector3 = Vector3.ZERO
+var _flinch_tween: Tween = null
+var _pose_tween: Tween = null
+var _mesh_rest_quaternion: Quaternion = Quaternion.IDENTITY
 
 var _desired_horizontal: Vector3 = Vector3.ZERO
 var _pending_delta: float = 0.0
@@ -96,6 +116,13 @@ var _body_material: StandardMaterial3D = null
 var _base_albedo: Color = Color.WHITE
 
 const AVOIDANCE_FALLBACK_FRAMES: int = 10
+## PLACEHOLDER hit reactions, until M14's clips: every hit that leaves the enemy
+## standing squashes the body; a stagger also leans it away from the blow for as
+## long as it lasts.
+const FLINCH_SQUASH: Vector3 = Vector3(1.2, 0.85, 1.2)
+const STAGGER_LEAN_DEGREES: float = 20.0
+const STAGGER_LEAN_IN_TIME: float = 0.08
+const STAGGER_LEAN_OUT_TIME: float = 0.15
 
 
 func _ready() -> void:
@@ -103,11 +130,11 @@ func _ready() -> void:
 	# reset_to rather than a bare write: this component filled itself from the
 	# scene's placeholder in its own _ready(), before this one ran.
 	health_component.reset_to(max_health)
-	_last_health = max_health
 	hitbox.damage = attack_damage
 	hitbox.source = self
-	health_component.health_changed.connect(_on_health_changed)
+	health_component.damaged.connect(_on_damaged)
 	health_component.died.connect(_on_died)
+	_mesh_rest_quaternion = mesh_instance.quaternion
 	_setup_navigation()
 	_setup_material()
 
@@ -152,6 +179,12 @@ func _apply_stats() -> void:
 	max_attack_facing_angle = source.max_attack_facing_angle
 	attack_startup_turn_fraction = source.attack_startup_turn_fraction
 
+	stagger_resistance = source.stagger_resistance
+	stagger_duration = source.stagger_duration
+	stagger_immunity_time = source.stagger_immunity_time
+	knockback_multiplier = source.knockback_multiplier
+	knockback_deceleration = source.knockback_deceleration
+
 	reposition_timeout = source.reposition_timeout
 	reposition_cooldown = source.reposition_cooldown
 	reposition_speed_fraction = source.reposition_speed_fraction
@@ -192,14 +225,11 @@ func set_combat_enabled(enabled: bool) -> void:
 	nav_agent.avoidance_enabled = enabled
 	if enabled:
 		return
+	_interrupt_attack()
+	_clear_reactions()
 	_enter_idle()
-	_attack_phase = AttackPhase.NONE
-	_phase_timer = 0.0
 	_cooldown_timer = 0.0
 	_attack_delay_timer = 0.0
-	if hitbox.is_active():
-		hitbox.deactivate()
-	_reset_telegraph_instantly()
 	velocity = Vector3.ZERO
 
 
@@ -212,6 +242,8 @@ func _physics_process(delta: float) -> void:
 	_set_engaged(combat_enabled and _state != State.IDLE)
 
 	_moved_this_frame = false
+	# A stagger runs its course whether or not the AI is awake to follow it.
+	_tick_reactions(delta)
 
 	if not combat_enabled:
 		# Dormant: no perception, no navigation, no timers. Gravity only, so the
@@ -241,6 +273,8 @@ func _physics_process(delta: float) -> void:
 			_reposition_step(delta, dist, player)
 		State.ATTACK:
 			_attack_step(delta, to_player)
+		State.STAGGERED:
+			_stagger_step(delta)
 
 
 func _tick_timers(delta: float) -> void:
@@ -265,7 +299,8 @@ func _get_player() -> Player:
 ## The actual move happens in _on_velocity_computed.
 func _drive(desired_horizontal: Vector3, delta: float) -> void:
 	_pending_delta = delta
-	if not nav_agent.avoidance_enabled:
+	# A push is not the AI's to steer: no avoidance pass may rewrite it.
+	if not nav_agent.avoidance_enabled or is_knocked_back():
 		_apply_motion(desired_horizontal, delta)
 		return
 	nav_agent.set_velocity(desired_horizontal)
@@ -282,10 +317,16 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	_apply_motion(safe_velocity, _pending_delta)
 
 
+## The one place the body moves. A push in progress replaces whatever the AI
+## wanted this frame, through move_and_slide() like any other motion — walls and
+## other bodies stop it — and dies out at knockback_deceleration.
 func _apply_motion(horizontal: Vector3, delta: float) -> void:
 	if _moved_this_frame:
 		return
 	_moved_this_frame = true
+	if is_knocked_back():
+		horizontal = _knockback_velocity
+		_knockback_velocity = _knockback_velocity.move_toward(Vector3.ZERO, knockback_deceleration * delta)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
 	if is_on_floor():
@@ -523,6 +564,88 @@ func _attack_step(delta: float, to_player: Vector3) -> void:
 			_enter_chase()
 
 
+## Cuts off whatever attack is under way: the hit window shut at once — no hit can
+## land through it any more — the phase dropped, the telegraph undone.
+func _interrupt_attack() -> void:
+	if hitbox.is_active():
+		hitbox.deactivate()
+	_attack_phase = AttackPhase.NONE
+	_phase_timer = 0.0
+	_reset_telegraph_instantly()
+
+
+func _enter_stagger(hit: DamageInfo) -> void:
+	_interrupt_attack()
+	_state = State.STAGGERED
+	_stagger_timer = stagger_duration
+	# The AI's own speed goes; a push already under way stays — that is the
+	# knockback's, and it plays out through the stagger.
+	_desired_horizontal = Vector3.ZERO
+	_play_stagger_pose(hit.direction)
+
+
+## Nothing the AI decides runs while staggered: no turning, no pathing, no
+## attack. The body only moves if something pushed it.
+func _stagger_step(delta: float) -> void:
+	_desired_horizontal = Vector3.ZERO
+	_apply_motion(Vector3.ZERO, delta)
+
+
+func _tick_reactions(delta: float) -> void:
+	if _stagger_immunity_timer > 0.0:
+		_stagger_immunity_timer = maxf(0.0, _stagger_immunity_timer - delta)
+	if _state != State.STAGGERED:
+		return
+	_stagger_timer -= delta
+	if _stagger_timer <= 0.0:
+		_end_stagger()
+
+
+## Back under the AI's control, in the state it would pick up from: chasing the
+## player it was fighting — CHASE decides again from there — or idle if the
+## room has parked it.
+func _end_stagger() -> void:
+	_stagger_timer = 0.0
+	_stagger_immunity_timer = stagger_immunity_time
+	_release_stagger_pose()
+	if combat_enabled:
+		_enter_chase()
+	else:
+		_enter_idle()
+
+
+## Drops every reaction in progress: stagger, immunity, push and pose. For a
+## death, a room parking the enemy, or a test reviving one.
+func _clear_reactions() -> void:
+	_stagger_timer = 0.0
+	_stagger_immunity_timer = 0.0
+	_knockback_velocity = Vector3.ZERO
+	if _flinch_tween != null and _flinch_tween.is_running():
+		_flinch_tween.kill()
+	if _pose_tween != null and _pose_tween.is_running():
+		_pose_tween.kill()
+	mesh_instance.scale = Vector3.ONE
+	mesh_instance.quaternion = _mesh_rest_quaternion
+	if _state == State.STAGGERED:
+		_state = State.IDLE
+
+
+func is_staggered() -> bool:
+	return _state == State.STAGGERED
+
+
+func is_stagger_immune() -> bool:
+	return _stagger_immunity_timer > 0.0
+
+
+func is_knocked_back() -> bool:
+	return _knockback_velocity != Vector3.ZERO
+
+
+func get_knockback_velocity() -> Vector3:
+	return _knockback_velocity
+
+
 # --- telegraph ----------------------------------------------------------------
 
 func _kill_telegraph_tween() -> void:
@@ -568,19 +691,73 @@ func _reset_telegraph_instantly() -> void:
 
 
 # --- damage / death -----------------------------------------------------------
+#
+# A hit arrives the one way every hit does — Hitbox -> Hurtbox -> HealthComponent
+# — and the health component has already taken the damage and decided whether
+# it killed. A killing blow is a death (_on_died) and nothing else; a hit that
+# leaves the enemy standing arrives here, and gets, in this order: a flinch, a
+# stagger if it is strong enough, a push if it pushes.
 
-func _on_health_changed(current: float, _maximum: float) -> void:
-	if current < _last_health:
-		_hit_flash()
-	_last_health = current
-
-
-func _hit_flash() -> void:
-	if mesh_instance == null:
+func _on_damaged(hit: DamageInfo) -> void:
+	if _state == State.DEAD:
 		return
-	var t: Tween = create_tween()
-	t.tween_property(mesh_instance, "scale", Vector3(1.2, 0.85, 1.2), 0.05)
-	t.tween_property(mesh_instance, "scale", Vector3.ONE, 0.12)
+	_play_flinch()
+	var staggers: bool = _staggers(hit)
+	if staggers:
+		_enter_stagger(hit)
+	_apply_knockback(hit)
+	if debug_log_reactions:
+		print("[%s] hit %s: stagger %.0f vs %.0f%s -> %s, push %.2f m/s" % [
+			name, hit.attack_id, hit.stagger_power, stagger_resistance,
+			" (immune)" if is_stagger_immune() else "", "STAGGERED" if staggers else "flinch",
+			_knockback_velocity.length()])
+
+
+## One hit, judged alone: strong enough, and not inside a stagger or the
+## immunity after one.
+func _staggers(hit: DamageInfo) -> bool:
+	if hit.stagger_power <= 0.0 or hit.stagger_power < stagger_resistance:
+		return false
+	return _state != State.STAGGERED and _stagger_immunity_timer <= 0.0
+
+
+## A push replaces any push still dying out rather than adding to it, so a
+## flurry of hits never builds into a launch.
+func _apply_knockback(hit: DamageInfo) -> void:
+	var speed: float = hit.knockback_force * knockback_multiplier
+	if speed <= 0.0 or hit.direction == Vector3.ZERO:
+		return
+	_knockback_velocity = Vector3(hit.direction.x, 0.0, hit.direction.z).normalized() * speed
+	_desired_horizontal = Vector3.ZERO
+
+
+func _play_flinch() -> void:
+	if _flinch_tween != null and _flinch_tween.is_running():
+		_flinch_tween.kill()
+	_flinch_tween = create_tween()
+	_flinch_tween.tween_property(mesh_instance, "scale", FLINCH_SQUASH, 0.05)
+	_flinch_tween.tween_property(mesh_instance, "scale", Vector3.ONE, 0.12)
+
+
+## Leans the body away from the blow, and holds it until the stagger ends.
+func _play_stagger_pose(direction: Vector3) -> void:
+	var local: Vector3 = visual_root.global_basis.orthonormalized().inverse() * direction
+	local.y = 0.0
+	if local.length_squared() < 0.0001:
+		local = Vector3.BACK
+	var axis: Vector3 = Vector3.UP.cross(local.normalized()).normalized()
+	var lean: Quaternion = _mesh_rest_quaternion * Quaternion(axis, deg_to_rad(STAGGER_LEAN_DEGREES))
+	if _pose_tween != null and _pose_tween.is_running():
+		_pose_tween.kill()
+	_pose_tween = create_tween()
+	_pose_tween.tween_property(mesh_instance, "quaternion", lean, STAGGER_LEAN_IN_TIME)
+
+
+func _release_stagger_pose() -> void:
+	if _pose_tween != null and _pose_tween.is_running():
+		_pose_tween.kill()
+	_pose_tween = create_tween()
+	_pose_tween.tween_property(mesh_instance, "quaternion", _mesh_rest_quaternion, STAGGER_LEAN_OUT_TIME)
 
 
 ## Emits only on a change, so nothing downstream sees a per-frame stream.
@@ -595,14 +772,15 @@ func is_engaged() -> bool:
 	return _engaged
 
 
+## Death outranks everything: whatever the enemy was doing — attacking, staggered,
+## sliding from a push — stops here, and no reaction plays on the killing blow.
 func _on_died() -> void:
 	_set_engaged(false)
+	_interrupt_attack()
+	_clear_reactions()
 	_state = State.DEAD
-	_attack_phase = AttackPhase.NONE
 	velocity = Vector3.ZERO
 	_desired_horizontal = Vector3.ZERO
-	if hitbox.is_active():
-		hitbox.deactivate()
 
 	# Leave the avoidance simulation so the living stop steering around a corpse.
 	nav_agent.avoidance_enabled = false
@@ -611,7 +789,6 @@ func _on_died() -> void:
 	hurtbox_collision.call_deferred("set_disabled", true)
 	body_collision.call_deferred("set_disabled", true)
 
-	_reset_telegraph_instantly()
 	var t: Tween = create_tween()
 	t.tween_property(visual_root, "rotation:x", deg_to_rad(90.0), 0.4)
 
