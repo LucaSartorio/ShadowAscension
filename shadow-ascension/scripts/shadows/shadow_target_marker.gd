@@ -58,12 +58,14 @@ func clear() -> void:
 
 
 ## Above the health bar when there is one, otherwise at the default height. The
-## bar declares its own offset, so a bar that moves takes the marker with it.
+## bar declares its own offset, so a bar that moves takes the marker with it. It is
+## recognised by type, not by the name it happens to have in the enemy's scene.
 func _height_for(target: Node3D) -> float:
-	var bar: EnemyHealthBar3D = target.get_node_or_null("EnemyHealthBar3D") as EnemyHealthBar3D
-	if bar == null:
-		return default_height
-	return bar.health_bar_height_offset + clearance_above_bar
+	for child in target.get_children():
+		var bar: EnemyHealthBar3D = child as EnemyHealthBar3D
+		if bar != null:
+			return bar.health_bar_height_offset + clearance_above_bar
+	return default_height
 
 
 func _process(delta: float) -> void:

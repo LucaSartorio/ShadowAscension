@@ -20,7 +20,10 @@ const GROUP: StringName = &"dungeon_objective_ui"
 
 func _ready() -> void:
 	add_to_group(GROUP)
-	var controller: DungeonController = _find_controller()
+	# The dungeon this UI was placed in is its owner — the root of the scene it
+	# was saved into. No walk and no lookup; in the hub the owner is not a
+	# dungeon, and this is null.
+	var controller: DungeonController = owner as DungeonController
 	if controller == null:
 		set_objective(default_text)
 		return
@@ -36,14 +39,3 @@ func set_objective(text: String) -> void:
 	label.text = text
 	label.visible = not text.is_empty()
 
-
-## The controller is this UI's scene root in practice; walk up rather than
-## hard-coding a path, so the UI can sit anywhere under it.
-func _find_controller() -> DungeonController:
-	var node: Node = get_parent()
-	while node != null:
-		var controller: DungeonController = node as DungeonController
-		if controller != null:
-			return controller
-		node = node.get_parent()
-	return null

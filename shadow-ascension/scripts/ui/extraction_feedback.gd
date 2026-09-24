@@ -38,14 +38,36 @@ var _tween: Tween = null
 func _ready() -> void:
 	add_to_group(GROUP)
 	root.visible = false
+	# Remnants appear whenever something dies, so the banner watches them arrive
+	# and listens to each, rather than every remnant reaching for the banner.
+	get_tree().node_added.connect(_on_node_added)
 	# One frame: this HUD and the player come up in the same scene, and its
 	# components are not resolved until its own _ready() has run.
 	call_deferred("_subscribe")
 
 
-## The extraction result is pushed in by the remnant, but a summon, a recall, a
-## death and a level-up all happen away from any one caller — so the banner
-## listens for those rather than having four systems reach for it.
+## The tree outlives this node, so the connection is dropped explicitly.
+func _exit_tree() -> void:
+	if get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.disconnect(_on_node_added)
+
+
+func _on_node_added(node: Node) -> void:
+	var remnant: ShadowRemnant = node as ShadowRemnant
+	if remnant == null:
+		return
+	remnant.extraction_started.connect(show_processing)
+	remnant.extraction_finished.connect(_on_extraction_finished.bind(remnant))
+
+
+func _on_extraction_finished(success: bool, shadow: ShadowInstance,
+		remnant: ShadowRemnant) -> void:
+	show_result(success, shadow, remnant.result_duration)
+
+
+## A summon, a recall, a death and a level-up all happen away from any one
+## caller — so the banner listens for those rather than having four systems
+## reach for it.
 func _subscribe() -> void:
 	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
 	if player == null:

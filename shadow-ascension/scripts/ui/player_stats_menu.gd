@@ -26,6 +26,8 @@ const PAUSE_MENU_GROUP: StringName = &"pause_menu"
 @export var level_format: String = "Livello %d"
 
 var _progression: PlayerProgression = null
+## Found once, in _ready(), rather than on every refresh.
+var _player: Player = null
 var _open: bool = false
 ## The mouse mode last asked for. A headless run silently refuses to capture the
 ## mouse, so this is what makes the open/close contract checkable there.
@@ -48,6 +50,7 @@ func _ready() -> void:
 	add_to_group(PAUSE_MENU_GROUP)
 	panel_root.visible = false
 	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
+	_player = player
 	if player == null or player.progression == null:
 		hint.visible = false
 		return
@@ -237,7 +240,7 @@ func _refresh() -> void:
 ## Read live off the player, so the panel shows what the game is actually using
 ## rather than a second copy of the formulas.
 func _derived_text() -> String:
-	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
+	var player: Player = _player if _player != null and is_instance_valid(_player) else null
 	var move: float = player.effective_movement_speed if player != null else 0.0
 	var dodge: float = player.effective_dodge_speed if player != null else 0.0
 	var hp: float = player.health_component.max_health if player != null else 0.0

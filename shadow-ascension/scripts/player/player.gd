@@ -69,10 +69,10 @@ var _dodge_iframes_active: bool = false
 func _ready() -> void:
 	add_to_group(GROUP)
 	attack_hitbox.source = self
+	_wire_components()
 	camera_rig.attack_light_pressed.connect(_on_attack_light_pressed)
 	base_max_health = health_component.max_health
 	if progression != null:
-		progression.equipment = equipment
 		progression.stats_changed.connect(_apply_stat_effects)
 	if equipment != null:
 		# Taking a piece off changes max health, movement and damage, so the same
@@ -82,6 +82,25 @@ func _ready() -> void:
 	_restore_health()
 	health_component.health_changed.connect(_on_health_changed)
 	health_component.died.connect(_on_player_died)
+
+
+## The player is the one place that knows its own layout. Each component is
+## handed the siblings it needs here, rather than finding them by name from its
+## own _ready() — which runs before this one, so it could only do that by walking
+## the scene. Moving a node (the attack hitbox out from under VisualRoot at M13,
+## say) is then a change to one @onready line and nothing else.
+##
+## Runs before this node connects its own handlers, so the components are wired
+## in the same order they were when they wired themselves.
+func _wire_components() -> void:
+	if progression != null:
+		progression.setup(attack_hitbox, equipment, shadows, shadow_summoner)
+	if equipment != null:
+		equipment.setup(inventory)
+	if shadow_summoner != null:
+		shadow_summoner.setup(self, shadows, health_component)
+	if shadow_commander != null:
+		shadow_commander.setup(self, shadow_summoner)
 
 
 ## The session's persistent player state, or null where there is none.

@@ -9,6 +9,12 @@ extends Area3D
 ##
 ## It shares the scene's InteractionPrompt with dropped loot and outranks it, so
 ## a single press on a corpse that left both acts on exactly one of them.
+##
+## Gameplay only. It announces the attempt and its outcome through
+## extraction_started / extraction_finished and knows nothing about who shows
+## them: the banner watches remnants appear and listens. The shadow goes to the
+## player that actually made the attempt, not to whichever player a tree search
+## finds first.
 
 signal extraction_started
 signal extraction_finished(success: bool, shadow: ShadowInstance)
@@ -32,6 +38,8 @@ enum State { READY, EXTRACTING, SPENT }
 
 var _state: State = State.READY
 var _player_in_range: bool = false
+## The player standing in range, taken from the body that walked in.
+var _player: Player = null
 var _material: StandardMaterial3D = null
 ## Fixed so a run is reproducible; mixed with the remnant's own path so two
 ## remnants in one room do not share an outcome.
@@ -99,6 +107,7 @@ func _on_body_entered(body: Node3D) -> void:
 	if _state != State.READY or not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = true
+	_player = body as Player
 	InteractionPrompt.raise(self, interact_key_label, prompt_text, null,
 		InteractionPrompt.PRIORITY_SHADOW)
 
@@ -107,6 +116,7 @@ func _on_body_exited(body: Node3D) -> void:
 	if not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = false
+	_player = null
 	InteractionPrompt.clear(self, null)
 
 
@@ -131,30 +141,30 @@ func attempt_extraction() -> bool:
 	if not InteractionPrompt.should_act(self):
 		return false
 
+	# Taken now, not at the end: switching the collision off below reports the
+	# player as having left, and the shadow still belongs to whoever tried.
+	var extractor: Player = _player
 	_state = State.EXTRACTING
 	_player_in_range = false
 	InteractionPrompt.clear(self, null)
 	collision.set_deferred("disabled", true)
 	extraction_started.emit()
-	_show_feedback_processing()
 
 	# The roll happens once, here, and nothing re-enters this function.
 	var success: bool = _rng.randf() < shadow_data.extraction_chance
 	# A node-bound timer, so leaving the scene mid-attempt strands nothing.
 	var t: Tween = create_tween()
 	t.tween_interval(extraction_duration)
-	t.tween_callback(func() -> void: _resolve(success))
+	t.tween_callback(_resolve.bind(success, extractor))
 	return true
 
 
-func _resolve(success: bool) -> void:
+func _resolve(success: bool, extractor: Player) -> void:
 	_state = State.SPENT
 	var shadow: ShadowInstance = null
-	if success:
-		var collection: PlayerShadowCollection = _find_collection()
-		if collection != null:
-			shadow = collection.add_shadow(shadow_data)
-	_show_feedback_result(success, shadow)
+	if success and extractor != null and is_instance_valid(extractor) \
+			and extractor.shadows != null:
+		shadow = extractor.shadows.add_shadow(shadow_data)
 	extraction_finished.emit(success, shadow)
 
 	if _material != null:
@@ -164,22 +174,4 @@ func _resolve(success: bool) -> void:
 	t.tween_callback(queue_free)
 
 
-func _find_collection() -> PlayerShadowCollection:
-	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
-	return player.shadows if player != null else null
 
-
-func _feedback() -> ExtractionFeedback:
-	return get_tree().get_first_node_in_group(ExtractionFeedback.GROUP) as ExtractionFeedback
-
-
-func _show_feedback_processing() -> void:
-	var ui: ExtractionFeedback = _feedback()
-	if ui != null:
-		ui.show_processing()
-
-
-func _show_feedback_result(success: bool, shadow: ShadowInstance) -> void:
-	var ui: ExtractionFeedback = _feedback()
-	if ui != null:
-		ui.show_result(success, shadow, result_duration)

@@ -43,11 +43,11 @@ var _marker: ShadowTargetMarker = null
 var _shadow: BasicMeleeShadow = null
 
 
-func _ready() -> void:
-	_player = get_parent() as Player
-	if _player == null:
-		return
-	_summoner = _player.get_node_or_null("PlayerShadowSummoner") as PlayerShadowSummoner
+## Called once by the player with its own summoner. Orders go to whatever that
+## summoner has out.
+func setup(player: Player, summoner: PlayerShadowSummoner) -> void:
+	_player = player
+	_summoner = summoner
 	if _summoner == null:
 		return
 	_summoner.shadow_summoned.connect(_on_shadow_summoned)

@@ -43,9 +43,9 @@ enum Stat { STRENGTH, AGILITY, VITALITY, INTELLIGENCE }
 const SHADOW_KILL_SHARE: float = 0.70
 
 @export var stats: ProgressionStats
-## The hitbox whose landed hits introduce combatants to this component. Left
-## unset it is resolved from the player on _ready().
-@export var attack_hitbox: Hitbox
+## The hitbox whose landed hits introduce combatants to this component. Handed
+## over by the player in setup().
+var attack_hitbox: Hitbox = null
 ## Set by the player. This node stays the stats layer: it owns every formula and
 ## combines the allocated stats with whatever equipment contributes, rather than
 ## letting each consumer add the two up itself.
@@ -116,19 +116,21 @@ var _shadows: PlayerShadowCollection = null
 func _ready() -> void:
 	_apply_tuning()
 	_attach_to_session()
-	if attack_hitbox == null:
-		# Resolved here rather than read off the player's own @onready var: this
-		# node is a child, so its _ready() runs first and that var is still null.
-		attack_hitbox = get_parent().get_node_or_null("VisualRoot/AttackHitbox") as Hitbox
-	_shadows = get_parent().get_node_or_null("PlayerShadowCollection") as PlayerShadowCollection
-	var summoner: PlayerShadowSummoner = get_parent().get_node_or_null(
-		"PlayerShadowSummoner") as PlayerShadowSummoner
+
+
+## Called once by the player with the siblings this needs. Nothing here looks
+## anything up: the player knows its own layout, this only knows what it is given.
+func setup(hitbox: Hitbox, player_equipment: PlayerEquipment,
+		collection: PlayerShadowCollection, summoner: PlayerShadowSummoner) -> void:
+	attack_hitbox = hitbox
+	equipment = player_equipment
+	_shadows = collection
 	if summoner != null:
 		# The shadow's kills count too, so its hits introduce combatants the same
 		# way the player's do. Nothing else about it is watched.
 		summoner.shadow_summoned.connect(_on_shadow_summoned)
 	if attack_hitbox == null:
-		push_warning("%s found no attack hitbox; it will never receive XP." % name)
+		push_warning("%s was given no attack hitbox; it will never receive XP." % name)
 		return
 	attack_hitbox.hit_landed.connect(_on_hit_landed)
 

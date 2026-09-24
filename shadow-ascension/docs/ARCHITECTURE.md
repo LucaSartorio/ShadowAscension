@@ -109,6 +109,7 @@ Rules:
 - Groups (`add_to_group`) are used for tagging, never as a replacement for typed references.
 - **A group name is a typed constant on the class that owns the group**, never a bare literal at the call site: `Player.GROUP`, `DungeonBoss.GROUP`, `SceneTransition.GROUP`, `InteractionPrompt.GROUP`, `RunSummary.GROUP`. A mistyped constant is a parse error; a mistyped string is a lookup that silently finds nothing. (M10.1 closed the last exception, `"player"`, which had been repeated across 23 call sites.)
 - **Finding a node outside your own subtree goes through a static helper on the owner**: `SceneTransition.find_in(tree)`, `InteractionPrompt.raise()` / `.clear()`, `RunSummary.dismiss_open(tree)`. The group name and the cast then live in one place instead of in a private helper copied into every caller.
+- **A node placed in a scene reaches that scene's root as its `owner`**, not by walking up: `RunSummary` and `DungeonObjectiveUI` find their `DungeonController` as `owner as DungeonController`, which is null in the hub. (M10.4 first tried a static `DungeonController.find_for(node)`; with it in the script, Godot 4.5 reported GDScript instances and RIDs leaked at exit on every flow run through the dungeon, and removing it — nothing else — made them go. The cause inside the engine was not pinned down, so the observation is recorded rather than a rule about statics.)
 
 Scene lifecycle expectations:
 - `_ready()` performs setup and signal wiring.
@@ -326,6 +327,74 @@ can then watch the choice without the process going away underneath it.
 **The hub** (`scenes/core/hub.tscn`) is the former test world, renamed rather than duplicated. It is
 where a run starts and ends, and it owns the same UI stack the dungeon does, minus the
 dungeon-specific pieces.
+
+## Scene communication (M10.4)
+
+Who knows about whom. The rule is one direction per relationship: an owner holds references to what
+it owns and calls it; what is owned reports back with signals; the UI observes and never drives.
+
+| Mechanism | Used for | Examples |
+| --- | --- | --- |
+| **Owner wiring** | an entity handing its own parts the siblings they need | `Player._wire_components()` → `setup()` on progression, equipment, summoner, commander |
+| **Injection at creation** | a node made at runtime for someone | the summoner binds each shadow to its player; a `ShadowSource` configures its remnant; a `LootDropper` configures its items |
+| **The body that arrived** | an interactable acting for the player in front of it | `WorldItem` and `ShadowRemnant` keep the `Player` from `body_entered` |
+| **`owner`** | a node reaching the root of the scene it was placed in | `RunSummary`, `DungeonObjectiveUI` → their `DungeonController` |
+| **Own subtree** | a controller finding what belongs to its scene | `DungeonController` resolves its player once, inside itself; `DungeonRunStats` asks it |
+| **Signals** | everything that flows back up, and everything the UI shows | `enemy_died`, `room_cleared`, `dungeon_completed`, `xp_changed`, `shadow_summoned`, `extraction_finished` |
+| **Typed groups** | genuinely "whoever that is" lookups, done once | enemies acquire `Player.GROUP`; HUDs find the player once on ready; `BossHealthBar` finds `DungeonBoss.GROUP` |
+
+**Dependency rules.**
+
+- **Gameplay never calls the UI.** The last exception, `ShadowRemnant` driving the extraction banner,
+  went in M10.4. The UI subscribes; an extraction lands with no banner in the scene at all.
+- **A component never looks up its siblings by name.** The player is the one place that knows its
+  layout (`$VisualRoot/AttackHitbox` lives in exactly one `@onready` line), so moving a node is a
+  one-line change. Generic combat components that find their own `HealthComponent` sibling
+  (`Hurtbox`, `EnemyHealthBar3D`) keep doing so: that is local to one entity and the same everywhere.
+- **Something acting for a player acts for a specific player**: the shadow its summoner bound, the
+  loot and remnant the one standing on them, the dungeon the one inside it.
+- **Generic scenes do not know the level they are in.** A player, an enemy, a shadow, a gate, an item
+  and a remnant each come up on their own and either work or stand still — nothing assumes a
+  `Player`, a `HUD` or a `DungeonController` at a known path.
+- **No lookups per frame.** Enemies and the boss cache the player they acquire; the character sheet
+  caches its player instead of searching on every refresh.
+- **A connection to something that outlives the connector is dropped explicitly** in `_exit_tree()`
+  — the two `SceneTree.node_added` listeners (`DungeonRunStats`, `ExtractionFeedback`) do.
+
+**Main flows.**
+
+```
+Enemy death    Hurtbox.receive_hit(amount, source) -> HealthComponent (records the source)
+               -> RoomCombatant.report_death(killer) -> enemy_died
+                  -> RoomController (counts it)       -> room_cleared -> DungeonController
+                  -> PlayerProgression._collect()     (claim_xp() pays once)
+                  -> LootDropper, ShadowSource        (drop, leave a remnant)
+                  -> DungeonRunStats                  (tallies it once)
+
+XP             PlayerProgression.add_xp() -> PlayerProgressionData (the session's)
+               -> xp_changed / level_changed / level_up -> ProgressionHUD, character sheet
+
+Shadow kill    the killer is the node the HealthComponent recorded, as a reference: a
+               BasicMeleeShadow whose instance is in this player's collection
+               -> 70% ShadowInstance via PlayerShadowCollection.award_xp(), 30% add_xp()
+               -> shadow_xp_gained / shadow_leveled_up -> the summoned entity, the banner, HUDs
+
+Extraction     ShadowRemnant.attempt_extraction() -> extraction_started -> banner
+               -> the extracting player's collection.add_shadow() -> extraction_finished -> banner
+
+Gate           DungeonGate (player in range, [E]) -> gate_activated
+               -> SceneTransition.transition_to_scene() -> the dungeon scene is built
+
+Completion     the boss dies like any combatant -> its room clears -> dungeon_completed
+               -> exit portal enabled, RunSummary opens; the boss never knows the dungeon
+```
+
+**Deliberately unchanged**, with the reason. Enemies acquire the player through the typed group:
+the room could hand them the player that walked in, but choosing a target is M12's to redesign (the
+shadow is not a target yet). And the rule for which interactable answers [E] when two overlap lives in
+`InteractionPrompt.should_act()` — a UI node arbitrating gameplay. It works, it is the contract
+CLAUDE.md §9 prescribes, and moving it means moving the whole interaction system to the player, which
+is its own change.
 
 ## HUD layout
 
@@ -575,7 +644,11 @@ The boss deliberately has no `ShadowSource` yet.
 
 **`ShadowRemnant`** (`scripts/shadows/shadow_remnant.gd`, `scenes/shadows/shadow_remnant.tscn`) —
 what a corpse leaves behind, and one chance to tear the shadow loose. The roll happens once, the
-result shows briefly, and the remnant goes whether it worked or not. A remnant is **not** an enemy:
+result shows briefly, and the remnant goes whether it worked or not. It is gameplay only: it
+announces the attempt and its outcome through `extraction_started` / `extraction_finished`, and the
+banner (`ExtractionFeedback`) watches remnants appear and listens — before M10.4 the remnant found the
+banner and drove it. The shadow goes to the player that made the attempt, taken from the body that
+walked in, not to whichever player a group search finds first. A remnant is **not** an enemy:
 a room clears and its doors open the moment the last enemy dies, regardless of what is still
 standing on the floor.
 
@@ -599,7 +672,9 @@ and leaves the instance untouched.
 **`PlayerShadowSummoner`** (`scripts/player/player_shadow_summoner.gd`) — a component on the player,
 beside the collection: the collection owns what is *held*, this owns what is *out*. One at a time,
 enforced here rather than by every caller — summoning a second recalls the first. The entity is
-parented to the scene, not to the player, so it moves under its own power. The active instance id
+parented to the scene, not to the player, so it moves under its own power, and it is **bound to this
+player** (`bind(instance, player)`) before it enters the tree: that is the owner it follows, defends
+and returns to. A shadow nobody bound has no owner and stands still. The active instance id
 lives in `PlayerRuntimeState`, which is what makes a shadow re-summon itself after a scene change;
 a recall, a shadow's death and the player's own death all clear it, so none of those come back by
 themselves.

@@ -41,11 +41,10 @@ func _ready() -> void:
 
 func _subscribe() -> void:
 	var controller: DungeonController = get_parent() as DungeonController
-	# The player is looked up inside THIS dungeon rather than through the global
-	# group: during a scene change the outgoing scene is still in the tree, and a
-	# group lookup can hand back the player that is about to be freed — whose XP
-	# total then reads as the baseline for a run it is not in.
-	var player: Player = _find_player(controller if controller != null else self)
+	# The dungeon's own player, as its controller resolved it, never a global
+	# lookup: during a scene change a group search can hand back the player that
+	# is about to be freed, whose XP total would then read as this run's baseline.
+	var player: Player = controller.get_player() if controller != null else null
 	if player != null:
 		_progression = player.progression
 		if _progression != null:
@@ -64,23 +63,16 @@ func _subscribe() -> void:
 	get_tree().node_added.connect(_on_node_added)
 
 
+## The tree outlives this node, so the connection is dropped explicitly.
+func _exit_tree() -> void:
+	if get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.disconnect(_on_node_added)
+
+
 func get_player_xp_earned() -> int:
 	if _progression == null or not is_instance_valid(_progression):
 		return 0
 	return maxi(0, _progression.get_total_xp() - _player_xp_at_start)
-
-
-## The player belonging to this dungeon, found by walking it rather than by
-## asking the tree at large.
-func _find_player(from: Node) -> Player:
-	var player: Player = from as Player
-	if player != null:
-		return player
-	for child in from.get_children():
-		var found: Player = _find_player(child)
-		if found != null:
-			return found
-	return null
 
 
 func get_total_kills() -> int:

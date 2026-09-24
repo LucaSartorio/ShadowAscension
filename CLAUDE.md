@@ -102,6 +102,8 @@ Every new feature MUST live in the correct directory. Do not create parallel/ad-
 - **Separate data from behavior.** Data lives in `Resource` assets (`resources/`). Behavior lives in scripts (`scripts/`). Nodes glue them together in scenes (`scenes/`).
 - **Custom Resources for gameplay data.** Enemies, skills, items, shadows, and similar tuning MUST be `Resource` subclasses stored under `resources/<domain>/`. No hardcoded stats in scripts once a value becomes configurable.
 - **Signals for decoupling.** Cross-system communication uses signals. Do not reach across the tree with `get_node("../../..")` when a signal or bus works.
+- **Gameplay never calls the UI.** The UI subscribes to gameplay signals; gameplay must work with no UI in the scene at all.
+- **An owner wires its parts.** A component does not look its siblings up by name: the entity's root hands them over (`Player._wire_components()` → `setup()`), and a node created at runtime is given what it needs when it is made. Anything acting for a player acts for a specific one — the one that summoned it, or the body that walked in — never "the first player in the group". See `docs/ARCHITECTURE.md`, *Scene communication*.
 - **No unnecessary globals.** Autoload (`AutoLoad`/singleton) ONLY for genuine global services (save system, event bus, audio bus, scene router). Gameplay state does not belong in autoload.
 - **Single responsibility.** Each system owns one clear concern. If a script mixes input + combat + audio, split it.
 - **No logic duplication.** If the same rule appears twice, extract it (helper, base component, resource, or signal).

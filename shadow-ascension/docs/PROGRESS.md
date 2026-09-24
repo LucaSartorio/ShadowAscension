@@ -6,12 +6,12 @@
 
 ## Current Milestone
 
-**M10 — Core Refactor & Game Architecture** (In progress — M10.1, M10.2 and M10.3 complete)
+**M10 — Core Refactor & Game Architecture** (In progress — M10.1 to M10.4 complete)
 
 First milestone of the **Core Production Foundation** phase. M10.1 consolidated the M0–M9
 architecture without changing behaviour; M10.2 gave the character's persistent state a single
-source of truth; M10.3 did the same for configuration. The rest of the data-resource set and of the
-formal state split are the later steps.
+source of truth; M10.3 did the same for configuration; M10.4 decoupled the scenes. The rest of the
+data-resource set and of the formal state split are the later steps.
 See `ROADMAP.md` for the deliverables and exit criteria.
 
 ## Where the project is
@@ -19,7 +19,7 @@ See `ROADMAP.md` for the deliverables and exit criteria.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10.1, M10.2 and M10.3 complete |
+| Core Production Foundation | M10–M12 | **In progress** — M10.1 to M10.4 complete |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -35,6 +35,56 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M10.4 — Scene & Dependency Decoupling** (Completed). Every lookup in the code was classified
+  against one question — does this system know only what it needs? — and the answer was mostly yes
+  already: no `get_node("../..")`, no absolute paths, no `current_scene.get_node()`, no identity by
+  node name, no `find_child`, and nothing added to the root by hand. Boss death, dungeon completion,
+  the gate and kill attribution were already signal- or reference-based. What was not:
+
+    - **Gameplay drove the UI.** `ShadowRemnant` found the extraction banner through its group and
+      called it, although it already emitted `extraction_started` / `extraction_finished`. The banner
+      now watches remnants appear (the `node_added` pattern `DungeonRunStats` already used for loot)
+      and listens; the remnant knows nothing about it, and an extraction lands with no banner at all.
+    - **"The first player in the group" stood in for "my player"** in three places: the summoned
+      shadow followed whichever player a search found, and the remnant and the loot paid it. The
+      summoner now binds each shadow to its own player before it enters the tree, and the remnant and
+      the item act for the body that walked in — the remnant keeps the one that made the attempt,
+      because switching its collision off reports that player as having left.
+    - **The player's components found each other by name**, from their own `_ready()` — which runs
+      before the player's, so they had to walk the scene, and `PlayerProgression` knew the path
+      `VisualRoot/AttackHitbox`. The player now wires them (`_wire_components()` → `setup()`), in the
+      same order they used to wire themselves; the hitbox's path exists once, for M13 to move.
+    - **The dungeon found its player through the global group**, the lookup M9.2 had already caught
+      returning the player about to be freed. `DungeonController` now resolves its own player inside
+      its own scene, and `DungeonRunStats` asks it instead of keeping a second copy of that walk.
+    - **Two UI scripts carried identical parent walks** to find their controller; both now take it as
+      their `owner`. The run summary asks the controller for its tally rather than fetching a child by
+      name. The shadow-order marker finds an enemy's health bar by type, not by its node name, and the
+      character sheet stops searching for the player on every refresh.
+    - Two `SceneTree.node_added` listeners now disconnect in `_exit_tree()` (CLAUDE.md §8).
+
+  One finding about the verification rather than the game. The first version gave
+  `DungeonController` a static `find_for()` helper, and every flow run through the dungeon then
+  reported GDScript instances and RIDs leaked at exit — while still passing every assertion, because
+  the runner only counted `[PASS]` / `[FAIL]`. Bisecting to that one function and removing it cleared
+  it. The runner now records runtime errors and exit-time leaks per suite, so that class of regression
+  is visible.
+
+  Deliberately unchanged: enemies still acquire the player through the typed group, since target
+  selection is M12's; and the arbitration of which interactable answers [E] still lives in
+  `InteractionPrompt`, as CLAUDE.md §9 prescribes — moving it is a change to the interaction system
+  as a whole. Both are recorded in `ARCHITECTURE.md`, *Scene communication*, with the main event flows.
+
+  New suite: `tests/core/decoupling_run.gd` (31 assertions). The player, an enemy, a shadow, a gate, a
+  remnant and an item each come up alone, outside any level, and either work or stand still. On the
+  real hub, a shadow follows its summoner and loot and remnants pay the player standing on them. Then
+  Hub → Gate → Dungeon → Hub → Gate → Dungeon, comparing the two entries: listeners on the tree, on
+  XP, on summoning and on death; players and shadows in the tree; and a kill paying and tallying once.
+
+  **1381 assertions across 34 suites, zero failures, and — newly checked — zero runtime errors and
+  zero exit-time leaks in any suite.** The 33 suites that existed before have the same pass counts as
+  M10.3's run; the other 31 are the new suite. Cold-cache reimport and headless boot are clean.
 
 - **M10.3 — Data-Driven Foundation** (Completed). Every archetype number now lives in exactly one
   place: its `.tres`. The project was already data-driven in shape — `EnemyStats`, `BossStats`,

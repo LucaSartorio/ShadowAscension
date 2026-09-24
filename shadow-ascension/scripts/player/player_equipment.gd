@@ -18,16 +18,19 @@ signal equipment_changed
 ## Nothing is worn in this slot.
 const EMPTY: ItemData = null
 
-@export var inventory: PlayerInventory
+## Where an item goes when it comes off. Handed over by the player in setup().
+var inventory: PlayerInventory = null
 
 ## EquipmentSlot -> ItemData. A slot with nothing in it is simply absent.
 var _slots: Dictionary = {}
 
 
 func _ready() -> void:
-	if inventory == null:
-		inventory = get_parent().get_node_or_null("PlayerInventory") as PlayerInventory
 	_restore()
+
+
+func setup(player_inventory: PlayerInventory) -> void:
+	inventory = player_inventory
 
 
 # --- queries ---------------------------------------------------------------------

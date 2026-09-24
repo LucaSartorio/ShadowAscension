@@ -25,6 +25,8 @@ signal picked_up(item: ItemData, quantity: int)
 @onready var collision: CollisionShape3D = $CollisionShape3D
 
 var _player_in_range: bool = false
+## The player standing on it, taken from the body that walked in.
+var _player: Player = null
 var _claimed: bool = false
 var _material: StandardMaterial3D = null
 
@@ -87,6 +89,7 @@ func _on_body_entered(body: Node3D) -> void:
 	if _claimed or not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = true
+	_player = body as Player
 	InteractionPrompt.raise(self, interact_key_label, get_prompt_text(), null)
 
 
@@ -94,6 +97,7 @@ func _on_body_exited(body: Node3D) -> void:
 	if not body.is_in_group(Player.GROUP):
 		return
 	_player_in_range = false
+	_player = null
 	InteractionPrompt.clear(self, null)
 
 
@@ -116,7 +120,8 @@ func pick_up() -> bool:
 	# the same corpse, typically. Only whoever holds the prompt acts.
 	if not InteractionPrompt.should_act(self):
 		return false
-	var inventory: PlayerInventory = _find_inventory()
+	# The player standing on it, not whichever one a tree search finds first.
+	var inventory: PlayerInventory = _player.inventory if _player != null else null
 	if inventory == null:
 		return false
 	var accepted: int = inventory.add_item(item, quantity)
@@ -135,7 +140,3 @@ func pick_up() -> bool:
 	queue_free()
 	return true
 
-
-func _find_inventory() -> PlayerInventory:
-	var player: Player = get_tree().get_first_node_in_group(Player.GROUP) as Player
-	return player.inventory if player != null else null

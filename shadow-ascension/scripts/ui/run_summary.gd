@@ -33,10 +33,13 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	root.visible = false
 	continue_button.pressed.connect(close)
-	var controller: DungeonController = _find_controller()
+	# The dungeon this UI was placed in is its owner — the root of the scene it
+	# was saved into. No walk and no lookup; in the hub the owner is not a
+	# dungeon, and this is null.
+	var controller: DungeonController = owner as DungeonController
 	if controller == null:
 		return
-	_stats = controller.get_node_or_null("DungeonRunStats") as DungeonRunStats
+	_stats = controller.get_run_stats()
 	if _stats != null:
 		# The kill that ends the run and the tally of it are two handlers on the
 		# same signal, and nothing decides their order — so the panel follows the
@@ -142,12 +145,3 @@ func _exit_tree() -> void:
 		get_tree().paused = false
 		_request_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
-
-func _find_controller() -> DungeonController:
-	var node: Node = get_parent()
-	while node != null:
-		var controller: DungeonController = node as DungeonController
-		if controller != null:
-			return controller
-		node = node.get_parent()
-	return null

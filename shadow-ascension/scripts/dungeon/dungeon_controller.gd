@@ -74,13 +74,37 @@ func _collect_rooms() -> void:
 			_rooms.append(room)
 
 
-## One lookup at startup. The player adds itself to the group in its own _ready,
-## which runs before this node's.
+## One lookup at startup, inside this dungeon's own subtree. Not through the
+## global group: during a scene change the outgoing scene is still around, and a
+## group lookup can hand back the player about to be freed — the M9.2 bug in the
+## run tally. Everything in the dungeon that needs its player asks for this one.
 func _connect_player() -> void:
-	_player = get_tree().get_first_node_in_group(Player.GROUP) as Player
+	_player = _find_player(self)
 	if _player == null or _player.health_component == null:
 		return
 	_player.health_component.died.connect(_on_player_died)
+
+
+func _find_player(from: Node) -> Player:
+	for child in from.get_children():
+		var player: Player = child as Player
+		if player == null:
+			player = _find_player(child)
+		if player != null:
+			return player
+	return null
+
+
+## The player that belongs to this dungeon, or null if it has none.
+func get_player() -> Player:
+	return _player
+
+
+## This run's tally, or null in a dungeon without one. Resolved on each call
+## rather than held in an @onready var: the UI that asks is this node's child and
+## asks from its own _ready(), which runs before this node's.
+func get_run_stats() -> DungeonRunStats:
+	return get_node_or_null("DungeonRunStats") as DungeonRunStats
 
 
 func get_state() -> DungeonState:

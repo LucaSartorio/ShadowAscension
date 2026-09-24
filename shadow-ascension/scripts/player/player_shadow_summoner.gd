@@ -28,22 +28,26 @@ var _active_id: StringName = &""
 
 
 func _ready() -> void:
-	_player = get_parent() as Player
-	_collection = _player.get_node_or_null("PlayerShadowCollection") as PlayerShadowCollection if _player != null else null
+	# One frame, so the scene (and its navigation map) is up before anything is
+	# placed in it — and so the player has handed over its pieces by then.
+	call_deferred("_restore_active")
+
+
+## Called once by the player with what this needs: the player itself (the owner
+## every summoned shadow is bound to), the collection it summons from, and the
+## health whose death sends the shadow back.
+func setup(player: Player, collection: PlayerShadowCollection,
+		health: HealthComponent) -> void:
+	_player = player
+	_collection = collection
 	if _collection != null:
 		# A shadow that is dismissed from the collection cannot stay in the world.
 		_collection.shadow_removed.connect(_on_shadow_removed)
 		# A level earned mid-fight has to reach the entity that is fighting, or
 		# the health it just bought would only appear on the next summon.
 		_collection.shadow_leveled_up.connect(_on_shadow_leveled_up)
-	# The player's own _ready() has not run yet — it is our parent — so the
-	# health component is resolved directly rather than through `player.health`.
-	var health: HealthComponent = _player.get_node_or_null("HealthComponent") as HealthComponent if _player != null else null
 	if health != null:
 		health.died.connect(_on_player_died)
-	# One frame, so the scene (and its navigation map) is up before anything is
-	# placed in it.
-	call_deferred("_restore_active")
 
 
 # --- queries ---------------------------------------------------------------------
@@ -88,8 +92,8 @@ func summon(instance_id: StringName) -> BasicMeleeShadow:
 	if node == null:
 		return null
 	# Bound before entering the tree, so its first frame already has the health
-	# and damage its level says it should.
-	node.bind(shadow)
+	# and damage its level says it should, and already knows whose shadow it is.
+	node.bind(shadow, _player)
 	host.add_child(node)
 	node.global_position = _player.global_position + _spawn_offset()
 	node.shadow_died.connect(_on_shadow_node_died)

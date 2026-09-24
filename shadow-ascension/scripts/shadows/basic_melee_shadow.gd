@@ -107,6 +107,9 @@ var _phase_timer: float = 0.0
 var _cooldown_timer: float = 0.0
 var _target_update_accum: float = 0.0
 
+## The player this shadow belongs to, handed over by the summoner in bind().
+## Never looked up: a shadow follows, defends and returns to its own summoner,
+## not to whichever player a tree search happens to find first.
 var _player: Player = null
 ## What the player pointed at. Outranks anything the shadow finds itself.
 var _manual_target: RoomCombatant = null
@@ -144,9 +147,12 @@ func _ready() -> void:
 
 
 ## Called by the summoner before the shadow enters the tree, so its very first
-## frame already has the right health and damage for its level.
-func bind(shadow_instance: ShadowInstance) -> void:
+## frame already has the right health and damage for its level, and already
+## knows whose shadow it is. A shadow that was never bound has no owner and
+## stands still.
+func bind(shadow_instance: ShadowInstance, owner_player: Player = null) -> void:
 	instance = shadow_instance
+	_player = owner_player
 	if instance != null and instance.shadow_data != null:
 		shadow_data = instance.shadow_data
 	apply_level()
@@ -377,10 +383,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _get_player() -> Player:
-	if _player != null and is_instance_valid(_player):
-		return _player
-	_player = get_tree().get_first_node_in_group(Player.GROUP) as Player
-	return _player
+	return _player if _player != null and is_instance_valid(_player) else null
 
 
 # --- states ------------------------------------------------------------------------
