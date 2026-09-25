@@ -90,15 +90,11 @@ func _reset_enemy(pos: Vector3) -> void:
 		_enemy.mesh_instance.scale = Vector3.ONE
 	_enemy.velocity = Vector3.ZERO
 	_enemy._state = BasicMeleeEnemy.State.IDLE
-	_enemy._attack_phase = BasicMeleeEnemy.AttackPhase.NONE
-	_enemy._phase_timer = 0.0
-	_enemy._cooldown_timer = 0.0
-	_enemy._attack_delay_timer = 0.0
+	_enemy.melee_attack.reset()
 	_enemy.targeting.release()
 	_enemy._reposition_timer = 0.0
 	_enemy._reposition_block_timer = 0.0
 	_enemy._desired_horizontal = Vector3.ZERO
-	_enemy._reset_telegraph_instantly()
 	if _enemy.hitbox != null and _enemy.hitbox.is_active():
 		_enemy.hitbox.deactivate()
 	if _enemy.health_component != null:
@@ -152,14 +148,14 @@ func _test_attack_phases_and_hitbox_gating() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	await _wait(0.18)  # deep in STARTUP (0.35s)
-	var startup_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and not _enemy.hitbox.is_active()
+	var startup_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and not _enemy.hitbox.is_active()
 	var telegraph_ok: bool = _enemy.visual_root.scale.distance_to(Vector3.ONE) > 0.05
 	# wait into ACTIVE window
 	await _wait(0.25)
-	var active_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE and _enemy.hitbox.is_active()
+	var active_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE and _enemy.hitbox.is_active()
 	# wait into RECOVERY
 	await _wait(0.17)
-	var recovery_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.RECOVERY and not _enemy.hitbox.is_active()
+	var recovery_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.RECOVERY and not _enemy.hitbox.is_active()
 	_record(startup_ok and telegraph_ok and active_ok and recovery_ok, "4) attack phases: startup_off=%s telegraph=%s active_on=%s recovery_off=%s" % [startup_ok, telegraph_ok, active_ok, recovery_ok])
 	await _wait(0.8)
 
@@ -195,7 +191,7 @@ func _test_attack_cooldown() -> void:
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	# Attack cycle: 0.35 + 0.15 + 0.65 = 1.15s + ~2 frames.
 	await _wait(1.3)  # attack done, cooldown active
-	var in_cooldown: bool = _enemy._cooldown_timer > 0.0
+	var in_cooldown: bool = _enemy.melee_attack.get_cooldown_remaining() > 0.0
 	var chase_state: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
 	await _wait(0.55)  # past cooldown (0.4s)
 	var attacking_after_cd: bool = _enemy._state == BasicMeleeEnemy.State.ATTACK
@@ -351,7 +347,7 @@ func _test_player_avoids_by_moving_during_startup() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	await _wait(0.15)  # inside STARTUP (0.35s)
-	var startup_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP
+	var startup_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH
 	_player.global_position = Vector3(0, 0.1, -8.0)  # step out of the telegraphed swing
 	var hp_before: float = _player.health_component.current_health
 	await _wait(0.6)  # through the whole ACTIVE window
@@ -366,11 +362,11 @@ func _test_recovery_commitment() -> void:
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	# startup 0.35 + active 0.15 -> RECOVERY spans ~[0.50, 1.15]
 	await _wait(0.60)
-	var early_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
+	var early_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
 	await _wait(0.45)  # still inside recovery (~1.05)
-	var late_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
+	var late_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
 	await _wait(0.25)  # recovery finished (~1.30)
-	var ended_ok: bool = _enemy._attack_phase == BasicMeleeEnemy.AttackPhase.NONE
+	var ended_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.NONE
 	_record(early_ok and late_ok and ended_ok, "17) enemy stays committed for full recovery (early=%s late=%s ended=%s)" % [early_ok, late_ok, ended_ok])
 	await _wait(1.3)
 
@@ -426,7 +422,7 @@ func _test_enemy_is_resource_driven() -> void:
 	var st: EnemyData = _enemy.stats
 	var has_resource: bool = st != null
 	var from_asset: bool = has_resource and st.resource_path.begins_with("res://resources/enemies/")
-	var seeded: bool = has_resource and is_equal_approx(_enemy.attack_damage, st.attack_damage) \
+	var seeded: bool = has_resource and is_equal_approx(_enemy.melee_attack.attack_damage, st.attack_damage) \
 		and is_equal_approx(_enemy.detection_range, st.detection_range) \
 		and is_equal_approx(_enemy.attack_range, st.attack_range) \
 		and is_equal_approx(_enemy.health_component.max_health, st.max_health)

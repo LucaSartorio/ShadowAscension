@@ -101,7 +101,7 @@ func _phase_dodge() -> void:
 	enemy.hitbox.hit_landed.connect(on_landed)
 	var coming: bool = await _until(func() -> bool:
 		_step_in(p, enemy)
-		return enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and enemy._phase_timer <= DODGE_LEAD, 10.0)
+		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() <= DODGE_LEAD, 10.0)
 	var speed: float = p.effective_dodge_speed
 	p.effective_dodge_speed = 0.0
 	var hp: float = p.health_component.current_health

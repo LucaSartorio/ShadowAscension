@@ -107,7 +107,7 @@ func _phase_interrupt_and_dodge() -> void:
 	# Staggered out of its windup by Light 3.
 	var winding: bool = await _until(func() -> bool:
 		_step_in(p, enemy)
-		return enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and enemy._phase_timer > 0.25, 10.0)
+		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() > 0.25, 10.0)
 	var hp: float = p.health_component.current_health
 	var first: int = _hits.size()
 	_aim(p, enemy)
@@ -136,7 +136,7 @@ func _phase_interrupt_and_dodge() -> void:
 	enemy.hitbox.hit_landed.connect(on_landed)
 	var coming: bool = await _until(func() -> bool:
 		_step_in(p, enemy)
-		return enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and enemy._phase_timer <= DODGE_LEAD, 10.0)
+		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() <= DODGE_LEAD, 10.0)
 	var speed: float = p.effective_dodge_speed
 	p.effective_dodge_speed = 0.0
 	hp = p.health_component.current_health
@@ -416,7 +416,7 @@ func _on_player_hit(target: Node, info: DamageInfo) -> void:
 	if enemy != null:
 		entry["staggered"] = enemy.is_staggered()
 		entry["push"] = enemy.get_knockback_velocity().length()
-		entry["attack_cut"] = enemy._attack_phase == BasicMeleeEnemy.AttackPhase.NONE and not enemy.hitbox.is_active()
+		entry["attack_cut"] = enemy.get_attack_phase() == EnemyMeleeAttack.Phase.NONE and not enemy.hitbox.is_active()
 	_hits.append(entry)
 
 

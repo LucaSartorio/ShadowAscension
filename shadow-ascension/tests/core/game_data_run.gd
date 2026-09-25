@@ -102,16 +102,16 @@ func _phase_enemies_share_configuration_only() -> void:
 		"12) A's health bar reads A's runtime health (ratio %.2f)" % bar.get_ratio())
 
 	var speed: float = a.movement_speed
-	var damage: float = a.attack_damage
+	var damage: float = a.melee_attack.attack_damage
 	a.movement_speed = 0.0
-	a.attack_damage = 99.0
-	_record(is_equal_approx(b.movement_speed, 3.8) and is_equal_approx(b.attack_damage, 15.0),
+	a.melee_attack.attack_damage = 99.0
+	_record(is_equal_approx(b.movement_speed, 3.8) and is_equal_approx(b.melee_attack.attack_damage, 15.0),
 		"13) retuning A in play leaves B at 3.8 speed and 15 damage")
 	_record(is_equal_approx(_enemy_data.movement_speed, 3.8)
 			and is_equal_approx(_enemy_data.attack_damage, 15.0),
 		"14) and leaves the asset untouched too")
 	a.movement_speed = speed
-	a.attack_damage = damage
+	a.melee_attack.attack_damage = damage
 
 
 # --- 15-17. the boss is seeded from BossStats, not from its scene ------------------------
@@ -248,7 +248,7 @@ func _seeded_from(enemy: BasicMeleeEnemy, data: EnemyData) -> bool:
 		and is_equal_approx(enemy.attack_range, data.attack_range) \
 		and is_equal_approx(enemy.nav_agent.max_speed, data.movement_speed) \
 		and is_equal_approx(enemy.nav_agent.radius, data.enemy_spacing_radius) \
-		and enemy.telegraph_color == data.telegraph_color
+		and enemy.melee_attack.telegraph_color == data.telegraph_color
 
 
 func _kill(player: Player, target: RoomCombatant, budget: float = 40.0) -> void:

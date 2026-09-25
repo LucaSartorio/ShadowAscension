@@ -135,7 +135,7 @@ func _phase_enemy_swings() -> void:
 	var enemy: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicMeleeEnemy
 	_park_other(dungeon.get_rooms()[0], enemy)
 	var outcome: Dictionary = await _take_dodge_take(p, [enemy.hitbox], func() -> bool:
-		return enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and enemy._phase_timer <= DODGE_LEAD,
+		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() <= DODGE_LEAD,
 		hud, enemy)
 	_record(outcome["taken_before"] > 0.0 and outcome["stamina_untouched_by_hits"],
 		"E1) an enemy's swing on a standing player takes %.0f HP, and no stamina" % outcome["taken_before"])
@@ -339,7 +339,7 @@ func _phase_second_run() -> void:
 	var enemy: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicMeleeEnemy
 	_park_other(dungeon.get_rooms()[0], enemy)
 	var outcome: Dictionary = await _take_dodge_take(p, [enemy.hitbox], func() -> bool:
-		return enemy._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and enemy._phase_timer <= DODGE_LEAD,
+		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() <= DODGE_LEAD,
 		hud, enemy)
 	_record(outcome["taken_before"] > 0.0 and outcome["connected_in_iframes"] > 0
 			and outcome["taken_in_iframes"] == 0.0 and outcome["taken_after"] > 0.0

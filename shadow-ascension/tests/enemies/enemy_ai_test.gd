@@ -133,7 +133,7 @@ func _idle_tests() -> void:
 	for i in 60:
 		await get_tree().physics_frame
 		quiet = quiet and _a._state == BasicMeleeEnemy.State.IDLE and _a.get_target() == null \
-			and _a._attack_phase == BasicMeleeEnemy.AttackPhase.NONE and not _a.hitbox.is_active()
+			and _a.get_attack_phase() == EnemyMeleeAttack.Phase.NONE and not _a.hitbox.is_active()
 	var drift: float = _flat(_a.global_position - start).length()
 	var group_reads: int = _a.targeting.get_refresh_count() - reads
 	_record(quiet and drift < 0.05 and _transitions.size() == first and group_reads <= 2,
@@ -170,7 +170,7 @@ func _detection_tests() -> void:
 		await get_tree().physics_frame
 		if _a._state == BasicMeleeEnemy.State.ALERT:
 			stood = stood and _flat(_a.global_position - start).length() < 0.05 \
-				and _a._attack_phase == BasicMeleeEnemy.AttackPhase.NONE
+				and _a.get_attack_phase() == EnemyMeleeAttack.Phase.NONE
 	var held: float = (Engine.get_physics_frames() - alert_clock) * DT
 	var turned: bool = _a._facing_error_to(_player) < error_start
 	_a.alert_duration = 0.0
@@ -219,24 +219,24 @@ func _attack_tests() -> void:
 	var phases: Array[String] = []
 	var open_only_active: bool = true
 	while _a._state == BasicMeleeEnemy.State.ATTACK:
-		var phase: String = BasicMeleeEnemy.AttackPhase.keys()[_a._attack_phase]
+		var phase: String = EnemyMeleeAttack.Phase.keys()[_a.get_attack_phase()]
 		if phases.is_empty() or phases[-1] != phase:
 			phases.append(phase)
-		open_only_active = open_only_active and (_a.hitbox.is_active() == (_a._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE))
+		open_only_active = open_only_active and (_a.hitbox.is_active() == (_a.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE))
 		await get_tree().physics_frame
 	var seen: Array[String] = _sequence(_a, first)
-	var cooldown: float = _a._cooldown_timer
+	var cooldown: float = _a.melee_attack.get_cooldown_remaining()
 	_record(seen.slice(0, 3) == ["IDLE>ALERT", "ALERT>CHASE", "CHASE>ATTACK"] and seen[-1] == "ATTACK>CHASE"
-			and phases == ["STARTUP", "ACTIVE", "RECOVERY"] and open_only_active and landed[0] == 1,
+			and phases == ["TELEGRAPH", "ACTIVE", "RECOVERY"] and open_only_active and landed[0] == 1,
 		"AT1) in range: CHASE -> ATTACK, one swing — %s, the hitbox open only in ACTIVE, one hit — then ATTACK -> CHASE" % [phases])
 	# Still in range: the next swing waits for the cooldown.
 	var waited: int = 0
 	while _a._state != BasicMeleeEnemy.State.ATTACK and waited < 120:
 		await get_tree().physics_frame
 		waited += 1
-	_record(absf(cooldown - _a.attack_cooldown) < 0.02 and absf(waited * DT - _a.attack_cooldown) <= 3.0 * DT,
+	_record(absf(cooldown - _a.melee_attack.attack_cooldown) < 0.02 and absf(waited * DT - _a.melee_attack.attack_cooldown) <= 3.0 * DT,
 		"AT2) the player still in range: the next swing starts once the %.2f s cooldown is over (%.2f s later)" % [
-			_a.attack_cooldown, waited * DT])
+			_a.melee_attack.attack_cooldown, waited * DT])
 	await _until(func() -> bool: return _a._state != BasicMeleeEnemy.State.ATTACK, 90)
 	# The player walks off: back to chasing, and no swing out of range.
 	_player.global_position = HOME + Vector3(0, 0, 4)
@@ -282,9 +282,9 @@ func _target_lost_tests() -> void:
 	# The target dies mid-swing: the swing is cut off safely.
 	await _fresh(_a, HOME + Vector3(0, 0, -1.5))
 	_a.set_combat_enabled(true)
-	await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE, 60)
+	await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE, 60)
 	_kill_player()
-	var cut: bool = _a._state == BasicMeleeEnemy.State.IDLE and _a._attack_phase == BasicMeleeEnemy.AttackPhase.NONE \
+	var cut: bool = _a._state == BasicMeleeEnemy.State.IDLE and _a.get_attack_phase() == EnemyMeleeAttack.Phase.NONE \
 		and not _a.hitbox.is_active() and _a.visual_root.scale == Vector3.ONE
 	_revive_player()
 	await _until(func() -> bool: return _a._state == BasicMeleeEnemy.State.CHASE or _a._state == BasicMeleeEnemy.State.ATTACK, 30)
@@ -320,11 +320,11 @@ func _stagger_tests() -> void:
 	var landed: Array[int] = [0]
 	var on_landed: Callable = func(_t: Node, _h: DamageInfo) -> void: landed[0] += 1
 	_a.set_combat_enabled(true)
-	await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP, 60)
+	await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH, 60)
 	_a.hitbox.hit_landed.connect(on_landed)
 	first = _transitions.size()
 	_a.hurtbox.receive_hit(_crafted_hit(1.0, 60.0, 0.0))
-	var cut: bool = _a._state == BasicMeleeEnemy.State.STAGGERED and _a._attack_phase == BasicMeleeEnemy.AttackPhase.NONE \
+	var cut: bool = _a._state == BasicMeleeEnemy.State.STAGGERED and _a.get_attack_phase() == EnemyMeleeAttack.Phase.NONE \
 		and not _a.hitbox.is_active()
 	var refused: bool = not _a._change_state(BasicMeleeEnemy.State.ATTACK) and _a._state == BasicMeleeEnemy.State.STAGGERED
 	await _until(func() -> bool: return _a._state != BasicMeleeEnemy.State.STAGGERED, 60)
@@ -387,7 +387,7 @@ func _death_tests() -> void:
 	_player.combat.reset()
 	_player.combat._start_attack(_player.combat.data.light_combo, 0)
 	await _until(func() -> bool: return striker._state == BasicMeleeEnemy.State.DEAD, 60)
-	var cut: bool = striker._attack_phase == BasicMeleeEnemy.AttackPhase.NONE and not striker.hitbox.is_active()
+	var cut: bool = striker.get_attack_phase() == EnemyMeleeAttack.Phase.NONE and not striker.hitbox.is_active()
 	await _frames(30)
 	var attack_death: bool = _sequence(striker, first) == ["ATTACK>DEAD"] and cut and deaths[0] == 1 \
 		and _player.progression.get_total_xp() - xp == striker.get_xp_reward() and striker.claim_xp() == 0
@@ -446,10 +446,10 @@ func _invalid_transition_tests() -> void:
 
 	await _fresh(_a, HOME + Vector3(0, 0, -1.5))
 	_a.set_combat_enabled(true)
-	await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP, 60)
-	var timer: float = _a._phase_timer
-	var again: bool = not _a._change_state(BasicMeleeEnemy.State.ATTACK) and _a._phase_timer == timer \
-		and _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP
+	await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH, 60)
+	var timer: float = _a.melee_attack.get_phase_remaining()
+	var again: bool = not _a._change_state(BasicMeleeEnemy.State.ATTACK) and _a.melee_attack.get_phase_remaining() == timer \
+		and _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH
 	_record(again, "IT2) ATTACK -> ATTACK is refused: a swing under way is never restarted or doubled")
 	await _until(func() -> bool: return _a._state != BasicMeleeEnemy.State.ATTACK, 90)
 
@@ -470,7 +470,7 @@ func _multi_enemy_tests() -> void:
 		and _c._state == BasicMeleeEnemy.State.IDLE and _a.get_target() == _player and _b.get_target() == _player \
 		and _c.get_target() == null
 	await _until(func() -> bool: return _a._state == BasicMeleeEnemy.State.CHASE, 90)
-	var own_cooldown: bool = _a._cooldown_timer > 0.0 and _b._cooldown_timer == 0.0 and _c._cooldown_timer == 0.0
+	var own_cooldown: bool = _a.melee_attack.get_cooldown_remaining() > 0.0 and _b.melee_attack.get_cooldown_remaining() == 0.0 and _c.melee_attack.get_cooldown_remaining() == 0.0
 	_record(apart and own_cooldown,
 		"ME1) three at once, each its own: %s — two targets on the player, one none; the attacker's cooldown is its alone" % [states])
 	await _park_all()
@@ -550,7 +550,7 @@ func _dodge_tests() -> void:
 	var hp: float = _player.health_component.current_health
 	_a.set_combat_enabled(true)
 	await _until(func() -> bool:
-		return _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP and _a._phase_timer <= 0.12, 60)
+		return _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and _a.melee_attack.get_phase_remaining() <= 0.12, 60)
 	var speed: float = _player.effective_dodge_speed
 	_player.effective_dodge_speed = 0.0
 	var stamina: float = _player.combat.get_stamina()
@@ -606,11 +606,11 @@ func _feedback_and_critical_tests() -> void:
 	_player.combat._start_attack(_player.combat.data.heavy_combo, 0)
 	await _until(func() -> bool: return _player.combat_feedback.is_hit_stop_active(), 60)
 	await get_tree().physics_frame
-	var held: Array[float] = [_a._stagger_timer, _a._cooldown_timer]
+	var held: Array[float] = [_a._stagger_timer, _a.melee_attack.get_cooldown_remaining()]
 	var held_state: BasicMeleeEnemy.State = _a._state
 	var frozen: bool = true
 	while _player.combat_feedback.is_hit_stop_active():
-		frozen = frozen and _a._stagger_timer == held[0] and _a._cooldown_timer == held[1] and _a._state == held_state
+		frozen = frozen and _a._stagger_timer == held[0] and _a.melee_attack.get_cooldown_remaining() == held[1] and _a._state == held_state
 		await get_tree().physics_frame
 	_no_crits.critical_chance = 0.0
 	await _until(func() -> bool: return _a._state == BasicMeleeEnemy.State.CHASE, 60)
@@ -757,9 +757,9 @@ func _check_invariants(e: BasicMeleeEnemy) -> void:
 		_violations.append("%s with no target" % name_of)
 	if (s == BasicMeleeEnemy.State.IDLE or s == BasicMeleeEnemy.State.DEAD) and e.targeting.has_target():
 		_violations.append("%s with a target" % name_of)
-	if (s == BasicMeleeEnemy.State.ATTACK) != (e._attack_phase != BasicMeleeEnemy.AttackPhase.NONE):
-		_violations.append("%s in attack phase %s" % [name_of, BasicMeleeEnemy.AttackPhase.keys()[e._attack_phase]])
-	if e.hitbox.is_active() and e._attack_phase != BasicMeleeEnemy.AttackPhase.ACTIVE:
+	if (s == BasicMeleeEnemy.State.ATTACK) != (e.get_attack_phase() != EnemyMeleeAttack.Phase.NONE):
+		_violations.append("%s in attack phase %s" % [name_of, EnemyMeleeAttack.Phase.keys()[e.get_attack_phase()]])
+	if e.hitbox.is_active() and e.get_attack_phase() != EnemyMeleeAttack.Phase.ACTIVE:
 		_violations.append("%s with its hitbox open" % name_of)
 	if (s == BasicMeleeEnemy.State.DEAD) != e.health_component.is_dead:
 		_violations.append("%s, health dead %s" % [name_of, e.health_component.is_dead])
@@ -825,8 +825,7 @@ func _park(enemy: BasicMeleeEnemy, at: Vector3) -> void:
 	enemy.global_position = at
 	enemy.velocity = Vector3.ZERO
 	enemy.health_component.current_health = enemy.health_component.max_health
-	enemy._cooldown_timer = 0.0
-	enemy._attack_delay_timer = 0.0
+	enemy.melee_attack.reset()
 	enemy._reposition_block_timer = 0.0
 
 

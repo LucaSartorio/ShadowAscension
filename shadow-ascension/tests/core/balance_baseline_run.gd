@@ -80,13 +80,12 @@ func _report_static() -> void:
 	print("  HP / damage          %.0f / %.0f" % [
 		_enemy_data.max_health, _enemy_data.attack_damage])
 	print("  movement             %.2f" % _enemy_data.movement_speed)
-	print("  attack timings       startup %.2f active %.2f recovery %.2f cooldown %.2f" % [
-		_enemy_data.attack_startup, _enemy_data.attack_active,
-		_enemy_data.attack_recovery, _enemy_data.attack_cooldown])
-	var cycle: float = _enemy_data.attack_startup + _enemy_data.attack_active \
-		+ _enemy_data.attack_recovery + _enemy_data.attack_cooldown
+	var basic: AttackData = _enemy_data.attacks[0]
+	print("  attack timings       telegraph %.2f active %.2f recovery %.2f cooldown %.2f" % [
+		basic.windup, basic.active, basic.recovery, _enemy_data.attack_cooldown])
+	var cycle: float = basic.windup + basic.active + basic.recovery + _enemy_data.attack_cooldown
 	print("  -> one hit every     %.2fs  (%.1f dps)" % [
-		cycle, _enemy_data.attack_damage / cycle])
+		cycle, _enemy_data.attack_damage * basic.damage_multiplier / cycle])
 	print("  XP reward            %d" % _enemy_data.xp_reward)
 	print("  loot: any drop       %.1f%%  (%s)" % [
 		_any_drop_chance(_enemy_loot) * 100.0,

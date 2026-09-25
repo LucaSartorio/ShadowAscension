@@ -62,16 +62,23 @@ extends Resource
 @export_range(0.0, 5.0, 0.05, "or_greater") var enemy_spacing_radius: float = 0.8
 
 @export_group("Attack")
+## What the archetype swings (M12.2): AttackData, the same resource as the
+## player's attacks — each its id, its damage multiplier and its telegraph
+## (windup) / active / recovery timing. The first is its basic attack, and for
+## now the only one it chooses.
+@export var attacks: Array[AttackData] = []
+## The archetype's base damage: each attack's damage_multiplier scales it.
 @export_range(0.0, 1000.0, 0.5, "or_greater") var attack_damage: float = 15.0
-@export_range(0.0, 5.0, 0.01, "or_greater") var attack_startup: float = 0.35
-@export_range(0.0, 5.0, 0.01, "or_greater") var attack_active: float = 0.15
-@export_range(0.0, 5.0, 0.01, "or_greater") var attack_recovery: float = 0.65
+## Seconds after a swing's recovery before the next may start.
 @export_range(0.0, 10.0, 0.01, "or_greater") var attack_cooldown: float = 0.4
-## An attack cannot start while the player is outside this cone.
+## An attack cannot start while the target is outside this cone.
 @export_range(0.0, 180.0, 1.0) var max_attack_facing_angle: float = 25.0
-## Fraction of rotation_speed usable during STARTUP. Below 1.0 the swing can be
-## sidestepped instead of tracking the player perfectly.
-@export_range(0.0, 1.0) var attack_startup_turn_fraction: float = 0.3
+## Share of rotation_speed the enemy may turn at while telegraphing: below 1.0
+## the swing cannot track a target perfectly.
+@export_range(0.0, 1.0) var telegraph_turn_fraction: float = 0.3
+## Seconds before the hit when the facing locks: the swing then goes where it
+## was aimed, and stepping aside in that moment makes it miss.
+@export_range(0.0, 2.0, 0.01, "or_greater") var telegraph_facing_lock: float = 0.1
 
 @export_group("Hit Reactions")
 ## A hit whose stagger power is at least this staggers the enemy: its attack is

@@ -398,6 +398,17 @@ it swings when close, facing and in sight, then waits out its cooldown; a strong
 push carries it; death ends everything. Enemies still fight only the player, never the shadow — the
 target an enemy may choose is now part of its data, which is where choosing the shadow will come from.
 
+**M12.2 made the basic enemy's swing the melee archetype.** It walks up to about **1.6 m** and stops
+there, without shoving the player; from **1.8 m** or closer, facing the player, it swings. Every swing
+is announced: for **0.35 s** it rears up and turns yellow, its blow not yet able to hit; then **0.15 s**
+of red lunge that lands **15** once on whoever it reaches — the player and a shadow beside them are
+each hit once; then **0.65 s** of recovery, open to punishment; then at least **0.4 s** before the next.
+It follows a player circling it only slowly while it winds up, and not at all in the last **0.1 s**
+before the blow: stepping aside then, or dodging into the blow, makes it miss. A stagger during the
+wind-up or the blow cancels the swing outright; a lighter hit or a push does not. None of the numbers
+changed; what did is that an enemy walking at a player standing still no longer stops just out of
+reach.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that

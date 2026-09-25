@@ -91,15 +91,11 @@ func _reset_enemy(
 	e.initial_attack_delay = delay
 	e.attack_cooldown_variation = cooldown_variation
 	e._state = BasicMeleeEnemy.State.IDLE
-	e._attack_phase = BasicMeleeEnemy.AttackPhase.NONE
-	e._phase_timer = 0.0
-	e._cooldown_timer = 0.0
-	e._attack_delay_timer = 0.0
+	e.melee_attack.reset()
 	e.targeting.release()
 	e._reposition_timer = 0.0
 	e._reposition_block_timer = 0.0
 	e._desired_horizontal = Vector3.ZERO
-	e._reset_telegraph_instantly()
 	e.visual_root.rotation = Vector3.ZERO
 	if e.mesh_instance != null:
 		e.mesh_instance.scale = Vector3.ONE
@@ -238,7 +234,7 @@ func _test_facing_gate_before_attack() -> void:
 	var blocked: bool = _a._state != BasicMeleeEnemy.State.ATTACK
 	var error_then: float = _a._facing_error_to(_player)
 	await _wait(1.2)
-	var attacked: bool = _a._state == BasicMeleeEnemy.State.ATTACK or _a._attack_phase != BasicMeleeEnemy.AttackPhase.NONE
+	var attacked: bool = _a._state == BasicMeleeEnemy.State.ATTACK or _a.get_attack_phase() != EnemyMeleeAttack.Phase.NONE
 	_record(blocked and attacked, "6) attack gated until aligned (blocked_at %.0f deg=%s, attacked_after_turn=%s)" % [
 		rad_to_deg(error_then), blocked, attacked])
 	await _wait(1.3)
@@ -249,7 +245,7 @@ func _test_startup_facing_correction_is_gradual() -> void:
 	_reset_player()
 	_reset_enemy(_a, Vector3(0, 0.1, 1.5))
 	await _wait(0.15)  # inside STARTUP
-	var in_startup: bool = _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP
+	var in_startup: bool = _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH
 	var yaw_before: float = _a.visual_root.rotation.y
 	# jump the player 90 degrees around the enemy
 	_player.global_position = Vector3(1.5, 0.1, 1.5)
@@ -270,7 +266,7 @@ func _test_no_tracking_during_active() -> void:
 	_reset_enemy(_a, Vector3(0, 0.1, 1.5))
 	# startup 0.35 -> ACTIVE at ~0.36
 	await _wait(0.40)
-	var in_active: bool = _a._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE
+	var in_active: bool = _a.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE
 	var yaw_before: float = _a.visual_root.rotation.y
 	_player.global_position = Vector3(1.5, 0.1, 1.5)
 	await _wait(0.08)
@@ -312,7 +308,7 @@ func _test_attack_range_matches_hitbox_reach() -> void:
 	_reset_enemy(_a, Vector3(0, 0.1, _a.attack_range - 0.05))
 	var hp_before: float = _player.health_component.current_health
 	await _wait(0.65)
-	var connected: bool = hp_before - _player.health_component.current_health == _a.attack_damage
+	var connected: bool = hp_before - _player.health_component.current_health == _a.melee_attack.attack_damage
 	_record(coherent and band_ok and connected, "10) attack range coherent with hitbox (range=%.2f in [%.2f, %.2f], band_ok=%s, edge_hit=%s)" % [
 		_a.attack_range, near_edge, far_edge, band_ok, connected])
 	await _wait(1.0)
@@ -326,7 +322,7 @@ func _test_no_attack_through_wall() -> void:
 	var dist: float = _flat_distance(_a.global_position, _player.global_position)
 	var hp_before: float = _player.health_component.current_health
 	await _wait(1.2)
-	var never_attacked: bool = _a._attack_phase == BasicMeleeEnemy.AttackPhase.NONE
+	var never_attacked: bool = _a.get_attack_phase() == EnemyMeleeAttack.Phase.NONE
 	var no_damage: bool = _player.health_component.current_health == hp_before
 	_record(dist < _a.attack_range and never_attacked and no_damage, "11) no attack through wall (dist=%.2f < range=%.2f, phase_none=%s, dmg=%.0f)" % [
 		dist, _a.attack_range, never_attacked, hp_before - _player.health_component.current_health])
@@ -413,7 +409,7 @@ func _test_attacks_are_not_synchronized() -> void:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
 		for i in 3:
-			if first_active[i] < 0.0 and enemies[i]._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE:
+			if first_active[i] < 0.0 and enemies[i].get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE:
 				first_active[i] = elapsed
 	var all_attacked: bool = first_active[0] >= 0.0 and first_active[1] >= 0.0 and first_active[2] >= 0.0
 	var min_gap: float = 999.0

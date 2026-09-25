@@ -1,7 +1,10 @@
 class_name BasicMeleeEnemy
 extends RoomCombatant
 
-## The basic melee enemy, on the enemy AI foundation (M12.1).
+## The melee archetype (M12.2), on the enemy AI foundation (M12.1): the state
+## machine every melee enemy runs, whatever its data. A melee variant is an
+## EnemyData — its numbers, its target groups, its attacks — not a new script;
+## `basic_melee_enemy.tres` is the first. Nothing here asks which variant it is.
 ##
 ## Its parts, each with one owner:
 ##
@@ -13,9 +16,12 @@ extends RoomCombatant
 ##     Movement    this script's movement section: navigation, avoidance, the
 ##                 push, the one move_and_slide(). The states say where to go;
 ##                 the movement goes there.
-##     Combat      this script's attack section: its phases, hitbox and cooldown.
+##     Combat      EnemyMeleeAttack (child node): the archetype's attacks, the
+##                 swing under way — telegraph, active, recovery — its hitbox and
+##                 its cooldown. The state machine decides when to swing; the
+##                 attack decides what the swing is.
 ##     Health      HealthComponent: the AI hears `damaged` and `died`, owns none.
-##     Visual      the telegraph and the hit reactions' placeholder poses.
+##     Visual      the hit reactions' placeholder poses (the telegraph is the attack's).
 ##
 ## The states, and what moves between them:
 ##
@@ -40,7 +46,6 @@ signal state_changed(from: State, to: State)
 ## REPOSITION is the chase's own manoeuvre (M5): the state machine keeps it
 ## because the behaviour needs it.
 enum State { IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD }
-enum AttackPhase { NONE, STARTUP, ACTIVE, RECOVERY }
 
 ## The legal transitions, from each state. Anything missing is refused.
 const TRANSITIONS: Dictionary = {
@@ -90,8 +95,9 @@ const DEBUG_LABEL_HEIGHT: float = 2.4
 ## DEBUG ONLY. Off by default. Prints every state transition — and every one
 ## refused — with the target and its distance, and every change of target.
 @export var debug_log_ai: bool = false
-## DEBUG ONLY. Off by default. A label over the enemy: its state, its target and
-## the distance to it, and whether its navigation has somewhere to go.
+## DEBUG ONLY. Off by default. A label over the enemy: its state and attack phase
+## (TELEGRAPH, ACTIVE, RECOVERY), its target and the distance to it, and whether
+## its navigation has somewhere to go.
 @export var debug_state_label: bool = false
 
 # RUNTIME tuning: this instance's own values, seeded from `stats` in
@@ -118,13 +124,7 @@ var preferred_combat_distance: float
 var minimum_combat_distance: float
 var enemy_spacing_radius: float
 
-var attack_damage: float
-var attack_startup: float
-var attack_active: float
-var attack_recovery: float
-var attack_cooldown: float
 var max_attack_facing_angle: float
-var attack_startup_turn_fraction: float
 
 var stagger_resistance: float
 var stagger_duration: float
@@ -136,11 +136,6 @@ var reposition_timeout: float
 var reposition_cooldown: float
 var reposition_speed_fraction: float
 var reposition_arrive_tolerance: float
-
-var telegraph_color: Color
-var active_color: Color
-var startup_scale: Vector3
-var active_scale: Vector3
 
 var target_update_interval: float
 
@@ -154,6 +149,7 @@ var target_update_interval: float
 @onready var attack_origin: Node3D = $VisualRoot/AttackOrigin
 @onready var hitbox: Hitbox = $VisualRoot/AttackOrigin/Hitbox
 @onready var targeting: EnemyTargeting = $EnemyTargeting
+@onready var melee_attack: EnemyMeleeAttack = $MeleeAttack
 
 ## The AI state: the one source of truth, written only by _change_state().
 var _state: State = State.IDLE
@@ -164,14 +160,6 @@ var _alert_timer: float = 0.0
 var _reposition_timer: float = 0.0
 var _reposition_block_timer: float = 0.0
 var _stagger_timer: float = 0.0
-
-# Combat — the attack and what gates the next one. The cooldown is the attack's,
-# not a state's: it runs down whatever the enemy is doing.
-var _attack_phase: AttackPhase = AttackPhase.NONE
-var _phase_timer: float = 0.0
-var _cooldown_timer: float = 0.0
-var _attack_delay_timer: float = 0.0
-var _telegraph_tween: Tween = null
 
 # Hit reactions (M11.6), all runtime: the immunity after a stagger and a push.
 var _stagger_immunity_timer: float = 0.0
@@ -193,8 +181,6 @@ var _last_nav_point: Vector3 = Vector3.INF
 var _navigation_checked: bool = false
 var _navigation_missing: bool = false
 
-var _body_material: StandardMaterial3D = null
-var _base_albedo: Color = Color.WHITE
 var _debug_label: Label3D = null
 
 
@@ -203,15 +189,14 @@ func _ready() -> void:
 	# reset_to rather than a bare write: this component filled itself from the
 	# scene's placeholder in its own _ready(), before this one ran.
 	health_component.reset_to(max_health)
-	hitbox.damage = attack_damage
 	hitbox.source = self
+	melee_attack.setup(hitbox, visual_root, mesh_instance)
 	health_component.damaged.connect(_on_damaged)
 	health_component.died.connect(_on_died)
 	targeting.setup(self, target_groups)
 	targeting.target_changed.connect(_on_target_changed)
 	_mesh_rest_quaternion = mesh_instance.quaternion
 	_setup_navigation()
-	_setup_material()
 	_setup_debug_label()
 
 
@@ -249,13 +234,8 @@ func _apply_stats() -> void:
 	minimum_combat_distance = source.minimum_combat_distance
 	enemy_spacing_radius = source.enemy_spacing_radius
 
-	attack_damage = source.attack_damage
-	attack_startup = source.attack_startup
-	attack_active = source.attack_active
-	attack_recovery = source.attack_recovery
-	attack_cooldown = source.attack_cooldown
 	max_attack_facing_angle = source.max_attack_facing_angle
-	attack_startup_turn_fraction = source.attack_startup_turn_fraction
+	melee_attack.configure(source)
 
 	stagger_resistance = source.stagger_resistance
 	stagger_duration = source.stagger_duration
@@ -268,11 +248,6 @@ func _apply_stats() -> void:
 	reposition_speed_fraction = source.reposition_speed_fraction
 	reposition_arrive_tolerance = source.reposition_arrive_tolerance
 
-	telegraph_color = source.telegraph_color
-	active_color = source.active_color
-	startup_scale = source.startup_scale
-	active_scale = source.active_scale
-
 	target_update_interval = source.target_update_interval
 
 
@@ -284,25 +259,15 @@ func _setup_navigation() -> void:
 	nav_agent.velocity_computed.connect(_on_velocity_computed)
 
 
-func _setup_material() -> void:
-	var mat: StandardMaterial3D = mesh_instance.get_surface_override_material(0) as StandardMaterial3D
-	if mat == null:
-		return
-	# Sub-resources are shared across instances of a PackedScene — without this
-	# duplicate every enemy would telegraph at the same time.
-	_body_material = mat.duplicate() as StandardMaterial3D
-	mesh_instance.set_surface_override_material(0, _body_material)
-	_base_albedo = _body_material.albedo_color
-
-
 # --- queries ------------------------------------------------------------------------
 
 func get_state() -> State:
 	return _state
 
 
-func get_attack_phase() -> AttackPhase:
-	return _attack_phase
+## Where the swing under way is — EnemyMeleeAttack's answer.
+func get_attack_phase() -> EnemyMeleeAttack.Phase:
+	return melee_attack.get_phase()
 
 
 ## Whom this enemy is fighting, or null. EnemyTargeting's answer.
@@ -342,8 +307,7 @@ func set_combat_enabled(enabled: bool) -> void:
 		return
 	_change_state(State.IDLE)
 	_clear_reactions()
-	_cooldown_timer = 0.0
-	_attack_delay_timer = 0.0
+	melee_attack.reset()
 	velocity = Vector3.ZERO
 	_refresh_engaged()
 
@@ -425,7 +389,7 @@ func _enter_state(state: State) -> void:
 			_desired_horizontal = Vector3.ZERO
 			_alert_timer = alert_duration
 			# The moment a fight is picked up is when a group's swings desync.
-			_attack_delay_timer = initial_attack_delay
+			melee_attack.hold_off(initial_attack_delay)
 		State.CHASE:
 			# Ask for a path on the first tick rather than one interval in.
 			_target_update_accum = target_update_interval
@@ -435,7 +399,8 @@ func _enter_state(state: State) -> void:
 			_target_update_accum = target_update_interval
 			_last_nav_point = Vector3.INF
 		State.ATTACK:
-			_start_attack()
+			_desired_horizontal = Vector3.ZERO
+			melee_attack.start(melee_attack.select_attack(), attack_cooldown_variation)
 		State.STAGGERED:
 			_stagger_timer = stagger_duration
 			# The AI's own speed goes; a push already under way stays — that is
@@ -448,10 +413,10 @@ func _enter_state(state: State) -> void:
 func _exit_state(state: State) -> void:
 	match state:
 		State.ATTACK:
-			# Finished attacks have already ended their phase; anything else is
-			# cut off here, so no hit window outlives the state.
-			if _attack_phase != AttackPhase.NONE:
-				_interrupt_attack()
+			# A finished swing has already ended; anything else is cut off here,
+			# so no hit window outlives the state.
+			if melee_attack.is_attacking():
+				melee_attack.interrupt()
 		State.STAGGERED:
 			_stagger_timer = 0.0
 			_stagger_immunity_timer = stagger_immunity_time
@@ -492,14 +457,23 @@ func _update_chase(delta: float) -> void:
 
 	_update_nav_target(delta, _combat_slot_position())
 	var dir: Vector3 = _path_direction()
-	# Spacing: once on the ring, hold position instead of grinding into the target.
-	var speed: float = 0.0 if dist <= preferred_combat_distance else movement_speed
+	# Spacing: brake on the way in and hold on the ring, rather than grinding
+	# into the target or sliding past the ring on the deceleration.
+	var speed: float = _arrival_speed(dist - preferred_combat_distance)
 	_drive(_accelerate_toward(dir * speed, delta), delta)
 
 	if speed > 0.0 and dir.length_squared() > 0.001:
 		_rotate_visual_toward(dir, delta, rotation_speed)
 	else:
 		_rotate_toward_target(delta, rotation_speed)
+
+
+## The speed from which `remaining` metres are just enough to stop at
+## `acceleration`: the full movement speed far out, easing to nothing on arrival.
+func _arrival_speed(remaining: float) -> float:
+	if remaining <= 0.0:
+		return 0.0
+	return minf(movement_speed, sqrt(2.0 * acceleration * remaining))
 
 
 func _needs_reposition(dist: float) -> bool:
@@ -540,15 +514,17 @@ func _update_reposition(delta: float) -> void:
 	_rotate_toward_target(delta, rotation_speed)
 
 
-## One attack, start to end, standing still. STARTUP corrects facing slowly;
-## ACTIVE and RECOVERY do not turn at all, so the swing commits to where it was
-## aimed and can be sidestepped. Over, it goes back to chasing, where the next
-## one waits for the cooldown.
+## One swing, start to end, standing still — navigation does not pull it along.
+## It turns only as the attack allows: slowly early in the telegraph, not at all
+## from telegraph_facing_lock before the hit, so the swing commits to where it
+## was aimed and a step aside makes it miss. Over, it goes back to chasing,
+## where the next one waits for the cooldown.
 func _update_attack(delta: float) -> void:
 	_hold_position(delta)
-	if _attack_phase == AttackPhase.STARTUP:
-		_rotate_toward_target(delta, rotation_speed * attack_startup_turn_fraction)
-	if _advance_attack(delta):
+	var turn: float = melee_attack.get_turn_factor()
+	if turn > 0.0:
+		_rotate_toward_target(delta, rotation_speed * turn)
+	if melee_attack.advance(delta):
 		_change_state(State.CHASE)
 
 
@@ -573,10 +549,7 @@ func _end_stagger() -> void:
 
 
 func _tick_timers(delta: float) -> void:
-	if _cooldown_timer > 0.0:
-		_cooldown_timer = maxf(0.0, _cooldown_timer - delta)
-	if _attack_delay_timer > 0.0:
-		_attack_delay_timer = maxf(0.0, _attack_delay_timer - delta)
+	melee_attack.tick(delta)
 	if _reposition_block_timer > 0.0:
 		_reposition_block_timer = maxf(0.0, _reposition_block_timer - delta)
 
@@ -608,8 +581,12 @@ func _hold_position(delta: float) -> void:
 ## The actual move happens in _on_velocity_computed.
 func _drive(desired_horizontal: Vector3, delta: float) -> void:
 	_pending_delta = delta
-	# A push is not the AI's to steer: no avoidance pass may rewrite it.
-	if not nav_agent.avoidance_enabled or is_knocked_back():
+	# A push is not the AI's to steer: no avoidance pass may rewrite it. Nor is
+	# the last stretch of a finished path: the agent calls it arrived
+	# target_desired_distance short and stops passing velocities to avoidance,
+	# whose answer is then zero — short of a slot on the preferred ring, that
+	# froze an enemy just out of attack range, never to swing.
+	if not nav_agent.avoidance_enabled or is_knocked_back() or nav_agent.is_navigation_finished():
 		_apply_motion(desired_horizontal, delta)
 		return
 	nav_agent.set_velocity(desired_horizontal)
@@ -748,17 +725,16 @@ func _has_line_of_sight(target: Node3D) -> bool:
 	return space.intersect_ray(query).is_empty()
 
 
-# --- the attack -------------------------------------------------------------------------
+# --- when to swing -----------------------------------------------------------------------
 #
-# One melee swing: STARTUP (telegraphed, the hitbox shut) -> ACTIVE (the hitbox
-# open) -> RECOVERY (shut again, committed) -> over, with the cooldown started.
-# The state machine only asks whether one may start, starts it, advances it and,
-# when the state is left early, has it cut off.
+# The swing itself is EnemyMeleeAttack's; what the state machine judges is
+# whether one may start from here.
 
-## Whether a swing may start now, `dist` away from the target: off cooldown and
-## past the initial desync, inside the attack band, facing it, and seeing it.
+## Whether a swing may start now, `dist` away from the target: the attack ready
+## (none under way, off cooldown, past the desync), inside the attack band,
+## facing the target, and seeing it.
 func _can_start_attack(dist: float) -> bool:
-	if _cooldown_timer > 0.0 or _attack_delay_timer > 0.0:
+	if not melee_attack.is_ready():
 		return false
 	if dist > attack_range or dist < minimum_combat_distance:
 		return false
@@ -766,95 +742,6 @@ func _can_start_attack(dist: float) -> bool:
 	if target == null or _facing_error_to(target) > deg_to_rad(max_attack_facing_angle):
 		return false
 	return _has_line_of_sight(target)
-
-
-func _start_attack() -> void:
-	_attack_phase = AttackPhase.STARTUP
-	_phase_timer = attack_startup
-	_desired_horizontal = Vector3.ZERO
-	_telegraph_startup()
-
-
-## Runs the swing on; true on the tick it is over — cooldown started, phase
-## dropped. Timed on delta alone, so it always ends: no clip, no callback.
-func _advance_attack(delta: float) -> bool:
-	_phase_timer -= delta
-	if _phase_timer > 0.0:
-		return false
-	match _attack_phase:
-		AttackPhase.STARTUP:
-			_attack_phase = AttackPhase.ACTIVE
-			_phase_timer = attack_active
-			hitbox.damage = attack_damage
-			hitbox.set_debug_color(active_color)
-			hitbox.activate()
-			_telegraph_active()
-		AttackPhase.ACTIVE:
-			hitbox.deactivate()
-			_attack_phase = AttackPhase.RECOVERY
-			_phase_timer = attack_recovery
-			_telegraph_recovery()
-		AttackPhase.RECOVERY:
-			_attack_phase = AttackPhase.NONE
-			_phase_timer = 0.0
-			_cooldown_timer = attack_cooldown + attack_cooldown_variation
-			return true
-	return false
-
-
-## Cuts off whatever attack is under way: the hit window shut at once — no hit can
-## land through it any more — the phase dropped, the telegraph undone. No
-## cooldown: what cut it off (a stagger, a death, a lost target) is delay enough.
-func _interrupt_attack() -> void:
-	if hitbox.is_active():
-		hitbox.deactivate()
-	_attack_phase = AttackPhase.NONE
-	_phase_timer = 0.0
-	_reset_telegraph_instantly()
-
-
-# --- telegraph ---------------------------------------------------------------------------
-
-func _kill_telegraph_tween() -> void:
-	if _telegraph_tween != null and _telegraph_tween.is_running():
-		_telegraph_tween.kill()
-
-
-func _telegraph_startup() -> void:
-	_kill_telegraph_tween()
-	_telegraph_tween = create_tween()
-	_telegraph_tween.set_parallel(true)
-	var duration: float = maxf(0.05, attack_startup * 0.85)
-	_telegraph_tween.tween_property(visual_root, "scale", startup_scale, duration)
-	if _body_material != null:
-		_telegraph_tween.tween_property(_body_material, "albedo_color", telegraph_color, duration)
-
-
-func _telegraph_active() -> void:
-	_kill_telegraph_tween()
-	_telegraph_tween = create_tween()
-	_telegraph_tween.set_parallel(true)
-	var duration: float = maxf(0.03, attack_active * 0.5)
-	_telegraph_tween.tween_property(visual_root, "scale", active_scale, duration)
-	if _body_material != null:
-		_telegraph_tween.tween_property(_body_material, "albedo_color", active_color, duration)
-
-
-func _telegraph_recovery() -> void:
-	_kill_telegraph_tween()
-	_telegraph_tween = create_tween()
-	_telegraph_tween.set_parallel(true)
-	var duration: float = maxf(0.08, attack_recovery * 0.6)
-	_telegraph_tween.tween_property(visual_root, "scale", Vector3.ONE, duration)
-	if _body_material != null:
-		_telegraph_tween.tween_property(_body_material, "albedo_color", _base_albedo, duration)
-
-
-func _reset_telegraph_instantly() -> void:
-	_kill_telegraph_tween()
-	visual_root.scale = Vector3.ONE
-	if _body_material != null:
-		_body_material.albedo_color = _base_albedo
 
 
 # --- damage, reactions, death ------------------------------------------------------------
@@ -1022,6 +909,7 @@ func _process(_delta: float) -> void:
 	var navigation: String = "no path" if nav_agent.is_navigation_finished() else "pathing"
 	if _navigation_missing:
 		navigation = "NO NAVIGATION"
+	var phase: EnemyMeleeAttack.Phase = melee_attack.get_phase()
 	_debug_label.text = "%s%s\n%s %s" % [State.keys()[_state],
-		" (%s)" % AttackPhase.keys()[_attack_phase] if _attack_phase != AttackPhase.NONE else "",
+		" (%s)" % EnemyMeleeAttack.Phase.keys()[phase] if phase != EnemyMeleeAttack.Phase.NONE else "",
 		"%s %.1fm" % [target.name, targeting.get_distance()] if target != null else "no target", navigation]

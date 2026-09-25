@@ -13,6 +13,12 @@ extends Resource
 ## retiming one can never retune combat. Pure configuration, shared by every
 ## player: nothing here changes in play, and nothing of a running attack — its
 ## timers, its place in the chain, whom it hit — is kept here.
+##
+## Enemy attacks are AttackData too (M12.2): EnemyMeleeAttack runs the same
+## windup (its telegraph) / active / recovery and reads the id, the damage
+## multiplier, the stagger and push and the debug colour. The combo and cancel
+## windows, the movement multiplier, the feedback and the animation are the
+## player's and not read for an enemy.
 
 ## Names the attack wherever it is reported: every hit it lands carries it.
 @export var id: StringName = &""

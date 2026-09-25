@@ -87,8 +87,8 @@ func _phase_into_dungeon(run: int) -> void:
 	var listeners: Dictionary = {}
 	for enemy in _basic_enemies(dungeon):
 		clean = clean and enemy.get_state() == BasicMeleeEnemy.State.IDLE and enemy.get_target() == null \
-			and not enemy.combat_enabled and enemy._attack_phase == BasicMeleeEnemy.AttackPhase.NONE \
-			and enemy._cooldown_timer == 0.0
+			and not enemy.combat_enabled and enemy.get_attack_phase() == EnemyMeleeAttack.Phase.NONE \
+			and enemy.melee_attack.get_cooldown_remaining() == 0.0
 		listeners[String(enemy.get_path())] = [enemy.state_changed.get_connections().size(),
 			enemy.targeting.target_changed.get_connections().size(),
 			enemy.health_component.died.get_connections().size(),

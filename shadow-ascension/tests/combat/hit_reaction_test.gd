@@ -294,16 +294,16 @@ func _interrupt_tests() -> void:
 	_player.health_component.current_health = _player.health_component.max_health
 	await _fresh(_a, IN_FRONT)
 	_arm(_a)
-	var began: bool = await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP, 240)
+	var began: bool = await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH, 240)
 	var hp: float = _player.health_component.current_health
-	var remaining: float = _a._phase_timer
+	var remaining: float = _a.melee_attack.get_phase_remaining()
 	var first: int = _hits.size()
 	await _swing(_light, 2, _a, false)
 	var hit: Dictionary = _hits[first] if _hits.size() > first else {}
 	var untouched: bool = _player.health_component.current_health == hp
 	await _until(func() -> bool: return not _a.is_staggered())
 	_record(began and remaining >= _light[2].windup and hit.get("staggered", false)
-			and hit.get("attack_phase", -1) == BasicMeleeEnemy.AttackPhase.NONE and not hit.get("hitbox_open", true)
+			and hit.get("attack_phase", -1) == EnemyMeleeAttack.Phase.NONE and not hit.get("hitbox_open", true)
 			and untouched,
 		"IN1) an enemy winding up, hit by Light 3: STAGGERED, its attack gone, its hitbox shut, and the swing never lands on the player")
 	_record(_a._state == BasicMeleeEnemy.State.CHASE or _a._state == BasicMeleeEnemy.State.ATTACK,
@@ -313,11 +313,11 @@ func _interrupt_tests() -> void:
 	_player.health_component.current_health = _player.health_component.max_health
 	await _fresh(_a, IN_FRONT)
 	_arm(_a)
-	began = await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE, 240)
+	began = await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE, 240)
 	_a.hurtbox.receive_hit(_crafted_hit(1.0, _heavy.stagger_power, 0.0, Vector3.FORWARD))
-	var shut: bool = not _a.hitbox.is_active() and _a._attack_phase == BasicMeleeEnemy.AttackPhase.NONE
+	var shut: bool = not _a.hitbox.is_active() and _a.get_attack_phase() == EnemyMeleeAttack.Phase.NONE
 	hp = _player.health_component.current_health
-	await _wait(_a.attack_active + 0.2)
+	await _wait(_a.melee_attack.select_attack().active + 0.2)
 	_record(began and shut and _a.is_staggered() and _player.health_component.current_health == hp,
 		"IN3) staggered with its hitbox open: shut at once, and no damage lands from the cancelled swing")
 
@@ -325,9 +325,9 @@ func _interrupt_tests() -> void:
 	_player.hurtbox.set_invulnerable(true)
 	await _fresh(_a, IN_FRONT)
 	_arm(_a)
-	began = await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.STARTUP, 240)
+	began = await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH, 240)
 	_a.hurtbox.receive_hit(_crafted_hit(1.0, _light[0].stagger_power, 0.0, Vector3.FORWARD))
-	var carried_on: bool = await _until(func() -> bool: return _a._attack_phase == BasicMeleeEnemy.AttackPhase.ACTIVE, 60)
+	var carried_on: bool = await _until(func() -> bool: return _a.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE, 60)
 	_record(began and carried_on and not _a.is_staggered(),
 		"IS1) a hit below the resistance (%.0f < 25) only flinches: the attack carries on into its swing" % _light[0].stagger_power)
 	await _fresh(_a, IN_FRONT)
@@ -507,7 +507,7 @@ func _death_tests() -> void:
 func _check_invariants() -> void:
 	for enemy in [_a, _b, _c]:
 		var e: BasicMeleeEnemy = enemy
-		if e.is_staggered() and (e._attack_phase != BasicMeleeEnemy.AttackPhase.NONE or e.hitbox.is_active()):
+		if e.is_staggered() and (e.get_attack_phase() != EnemyMeleeAttack.Phase.NONE or e.hitbox.is_active()):
 			_violations.append("%s staggered with an attack" % e.name)
 		if e._state == BasicMeleeEnemy.State.DEAD and (e.is_knocked_back() or e._stagger_timer > 0.0):
 			_violations.append("%s dead with a reaction" % e.name)
@@ -524,7 +524,7 @@ func _on_player_hit(target: Node, info: DamageInfo) -> void:
 		entry["staggered"] = enemy.is_staggered()
 		entry["push"] = enemy.get_knockback_velocity().length()
 		entry["flinched"] = enemy._flinch_tween != null and enemy._flinch_tween.is_running()
-		entry["attack_phase"] = enemy._attack_phase
+		entry["attack_phase"] = enemy.get_attack_phase()
 		entry["hitbox_open"] = enemy.hitbox.is_active()
 	var boss: DungeonBoss = target as DungeonBoss
 	if boss != null:
@@ -547,8 +547,7 @@ func _fresh(enemy: BasicMeleeEnemy, at: Vector3, reset_player: bool = true, play
 	enemy.global_position = at
 	enemy.velocity = Vector3.ZERO
 	enemy.health_component.current_health = enemy.health_component.max_health
-	enemy._cooldown_timer = 0.0
-	enemy._attack_delay_timer = 0.0
+	enemy.melee_attack.reset()
 	_face(enemy, _player.global_position)
 	await _frames(3)
 

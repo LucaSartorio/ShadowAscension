@@ -8,13 +8,16 @@
 
 **M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
-**M12.1 — Enemy AI 2.0 Foundation** is complete: the basic enemy's AI is an explicit state machine
-(`IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`) with one writer of its state and a table of
-legal transitions, and its target has one owner, `EnemyTargeting`, choosing from the target groups its
-data names — the player's alone, as before. The behaviour and every number are the ones M11 shipped;
-the boss keeps its own AI. M12.2 is next; the archetypes, the target choice between player and shadow,
+**M12.1 — Enemy AI 2.0 Foundation** and **M12.2 — Melee Archetype 2.0** are complete. The basic
+enemy's AI is an explicit state machine (`IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`)
+with one writer of its state and a table of legal transitions; its target has one owner,
+`EnemyTargeting`, choosing from the target groups its data names — the player's alone, as before; and
+since M12.2 its swing is the first reusable archetype, the melee: an `AttackData` (the player's
+resource) listed in its `EnemyData`, run by `EnemyMeleeAttack` — telegraph, active, recovery, then a
+cooldown — with the facing locked just before the hit. The numbers are the ones M11 shipped; the boss
+keeps its own AI. M12.3 is next; the other archetypes, the target choice between player and shadow,
 group combat and the Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`, *Enemy
-AI (M12.1)*; the deliverables are in `ROADMAP.md`.
+AI (M12.1)* and *Melee archetype (M12.2)*; the deliverables are in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -32,7 +35,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.2 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -48,6 +51,63 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.2 — Melee Archetype 2.0** (Completed). What M12.1 left was read first: the swing lived in the
+  enemy script — its phase enum, its timers, its telegraph tweens and the hitbox's numbers beside the
+  state machine — its timings were three loose `EnemyData` floats, and the facing turned at 30% right
+  up to the hit, so a swing tracked a player stepping aside until the blow. Running the approach from
+  6 m at a player standing still also showed the stall M11.4 had noted: the navigation agent calls a
+  path finished 0.25 m short and then stops passing velocities to avoidance, whose answer is zero, so
+  the enemy froze at 1.82 m — past its 1.8 m reach — for good. Then, reusing every working part:
+  - **`EnemyMeleeAttack`** (`scripts/enemies/enemy_melee_attack.gd`, the enemy's `MeleeAttack` child) —
+    the archetype's attack: `configure()` copies its part of `EnemyData`, `setup()` takes the hitbox and
+    the telegraph's visuals; `select_attack()` (the first attack), `start()`, `advance()`,
+    `interrupt()`, `tick()` (the cooldown and the desync), `reset()`; one phase record,
+    `Phase { NONE, TELEGRAPH, ACTIVE, RECOVERY }`; the hitbox stamped from the attack when it opens
+    (damage through `DamageModel.attack_damage()`, `attack_id`, stagger and push); the placeholder
+    telegraph on its own copy of the body material.
+  - **`AttackData` for enemies** — `resources/enemies/attacks/melee_basic_attack.tres`
+    (`melee_basic_attack`: ×1.0, 0.35 / 0.15 / 0.65 s, no stagger or push), listed in the new
+    `EnemyData.attacks`. `attack_startup` / `attack_active` / `attack_recovery` left `EnemyData`;
+    `attack_startup_turn_fraction` became `telegraph_turn_fraction`; `telegraph_facing_lock` (0.1 s) is
+    new. `attack_damage` stays the archetype's base, 15.
+  - **`BasicMeleeEnemy`** decides *when* and delegates *what*: ATTACK's enter starts the selected
+    attack, its update turns only as `get_turn_factor()` allows and advances the swing, its exit
+    interrupts a swing still under way; ALERT sets the hold-off; `_can_start_attack()` asks
+    `is_ready()`. The facing now locks for the last 0.1 s of the telegraph — the one behaviour change the
+    spec asked for. The approach arrives: a finished path's last stretch moves without the avoidance
+    pass, and the chase brakes on the way in (`_arrival_speed()`), stopping on the 1.6 m ring rather
+    than 1.82 m out or 0.2 m past it.
+  - **Not touched**: the boss (its own AI and `BossAttack`s), the shadow, the player's combat, every
+    number. No archetype enum: the archetype is the composition and its data.
+
+  Eleven existing suites followed the move with a line or two each (the attack's fields and phase are
+  read off `melee_attack`; `STARTUP` is `TELEGRAPH`; `balance_baseline_run` reads the timings off the
+  `AttackData`). **`tests/enemies/melee_archetype_test`** (33) — the shipped configuration and a copy
+  per enemy; the approach from 6 m (no swing on the way, the swing from inside the band, holding on the
+  ring without jitter); the lifecycle timed (telegraph 0.35 s, the hitbox shut and the player
+  untouched, the body rearing and yellow; ACTIVE one hit of 15 named `melee_basic_attack`, never
+  critical; recovery 0.65 s, no second hit); the cooldown and no spam; a dodge into ACTIVE; a step
+  aside after the lock missing with no turn; slow tracking before it; stagger in the telegraph and in
+  ACTIVE (no ghost hit), a weaker hit and a push not cancelling, a heavy cancelling; the target walking
+  off in the recovery, dying in the telegraph; the player and a shadow each hit once in one swing; an
+  archetype hunting the shadow; three melee on their own clocks; deaths in the telegraph and in ACTIVE;
+  a critical killing blow on a locked melee; the light combo against it; a hit stop holding the
+  telegraph; a heavier variant from data alone; eight swinging at once; and an every-tick watcher (the
+  hitbox open exactly in ACTIVE, a phase exactly in ATTACK). **`tests/core/m12_melee_run.gd`** (15) —
+  the real game, the player vulnerable: every melee parked with its own attack; room one's swings, each
+  after a full telegraph, 15 each, never twice from one swing; a telegraph read and dodged; a critical
+  heavy through the lock; the shadow's kill paid 70/30; the boss on its own attack; a second dungeon
+  clean, no listener doubled, its swings the same; hub, nothing orphaned.
+
+  **2059 assertions across 57 suites, zero failures, zero runtime errors, zero
+  exit-time leaks** (`tests/run_all.gd`). The 55 existing suites keep M12.1's 2011; the two new ones
+  add 48. Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless
+  boot and a headless run of the game are clean.
+
+  Left for M12.3 and later: the other archetypes (ranged, tank, assassin, support, elite), choosing
+  between several attacks, the target choice between the player and the shadow, group combat and
+  attack coordination, enemy scaling, the Boss Framework.
 
 - **M12.1 — Enemy AI 2.0 Foundation** (Completed). The basic enemy's AI was read end to end first —
   spawn parked -> woken by its room -> the player found as "the first node in the `player` group" and
@@ -1845,7 +1905,8 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 has not been started.**
+Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 and
+M12.2 are done, M12.3 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —
