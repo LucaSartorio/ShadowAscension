@@ -126,5 +126,30 @@ static func should_act(source: Node) -> bool:
 	return ui == null or ui.is_current(source)
 
 
+## The key an action is bound to, as the `[KEY] Action` format shows it: read
+## from the real InputMap, so a hint cannot drift from the binding. Every hint
+## that names a key asks here.
+static func key_for(action: StringName) -> String:
+	if not InputMap.has_action(action):
+		return "?"
+	for event in InputMap.action_get_events(action):
+		var key: InputEventKey = event as InputEventKey
+		if key != null:
+			return OS.get_keycode_string(
+				key.physical_keycode if key.physical_keycode != 0 else key.keycode)
+		var button: InputEventMouseButton = event as InputEventMouseButton
+		if button != null:
+			match button.button_index:
+				MOUSE_BUTTON_LEFT:
+					return "LMB"
+				MOUSE_BUTTON_RIGHT:
+					return "RMB"
+				MOUSE_BUTTON_MIDDLE:
+					return "MMB"
+				_:
+					return "M%d" % button.button_index
+	return "?"
+
+
 static func _find(source: Node) -> InteractionPrompt:
 	return source.get_tree().get_first_node_in_group(GROUP) as InteractionPrompt

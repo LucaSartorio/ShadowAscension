@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M10 complete; M11 in progress (M11.1–M11.7 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M10 complete; M11 in progress (M11.1–M11.8 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -25,10 +25,11 @@ dodge has explicit phases whose i-frames the hurtbox enforces since M11.4, and i
 owned by `PlayerCombat`, shown by `PlayerStaminaHUD` — since M11.5. Since M11.6 a hit carries its
 stagger power, push and direction in `DamageInfo`, and enemies flinch, stagger and get knocked back
 from `HealthComponent.damaged`. Since M11.7 the damage rules live in `DamageModel`, and each player
-hit rolls its own critical (`DamageInfo.is_critical`).
+hit rolls its own critical (`DamageInfo.is_critical`). Since M11.8 the player can lock onto an enemy:
+`PlayerTargeting` owns the locked target, `TargetLockIndicator` shows it.
 Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M11 — Combat System 2.0**, from M11.8 (M11.1–M11.7 are complete). See
+Next: **M11 — Combat System 2.0**, from M11.9 (M11.1–M11.8 are complete). See
 `shadow-ascension/docs/ROADMAP.md` for the M11–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, and `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today.
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3]
+[gd_scene load_steps=32 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/hub.gd" id="0_root"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/dungeon_objective_ui.tscn" id="8_objective"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_health_hud.tscn" id="89_hphud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_stamina_hud.tscn" id="89_sthud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/target_lock_indicator.tscn" id="89_lockui"]
 [ext_resource type="PackedScene" path="res://scenes/ui/progression_hud.tscn" id="90_proghud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_stats_menu.tscn" id="91_statsmenu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/inventory_menu.tscn" id="92_invmenu"]
@@ -231,6 +232,8 @@ default_text = "Entra nel Gate"
 [node name="PlayerHealthHUD" parent="." instance=ExtResource("89_hphud")]
 
 [node name="PlayerStaminaHUD" parent="." instance=ExtResource("89_sthud")]
+
+[node name="TargetLockIndicator" parent="." instance=ExtResource("89_lockui")]
 
 [node name="ProgressionHUD" parent="." instance=ExtResource("90_proghud")]
 

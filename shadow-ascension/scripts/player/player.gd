@@ -45,6 +45,7 @@ const RUNTIME_STATE_NODE: String = "PlayerRuntimeState"
 @onready var shadow_summoner: PlayerShadowSummoner = $PlayerShadowSummoner
 @onready var shadow_commander: PlayerShadowCommander = $PlayerShadowCommander
 @onready var combat: PlayerCombat = $PlayerCombat
+@onready var targeting: PlayerTargeting = $PlayerTargeting
 
 ## What the controller actually uses. Recomputed from the base values whenever
 ## the stats change — never from the previous effective value.
@@ -97,6 +98,7 @@ func _wire_components() -> void:
 	if shadow_commander != null:
 		shadow_commander.setup(self, shadow_summoner)
 	combat.setup(attack_hitbox, hurtbox, health_component, progression)
+	targeting.setup(self, camera_rig, health_component)
 
 
 ## The session's persistent player state, or null where there is none.
@@ -170,11 +172,18 @@ func _apply_stat_effects() -> void:
 # --- input: devices in, combat intents out -----------------------------------------------
 #
 # The only place the player's devices are read. Combat is told what the player
-# wants — an attack, a dodge — and decides whether it happens.
+# wants — an attack, a dodge — and decides whether it happens; the targeting is
+# told to lock, let go or switch, and decides what that means.
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("dodge"):
 		_on_dodge_pressed()
+	elif event.is_action_pressed("target_lock"):
+		targeting.toggle_lock()
+	elif event.is_action_pressed("target_switch_left"):
+		targeting.switch_target(PlayerTargeting.LEFT)
+	elif event.is_action_pressed("target_switch_right"):
+		targeting.switch_target(PlayerTargeting.RIGHT)
 
 
 func _on_attack_light_pressed() -> void:
@@ -236,17 +245,37 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 
-	if combat.allows_turning() and desired_dir.length_squared() > 0.001:
-		var target_yaw: float = atan2(-desired_dir.x, -desired_dir.z)
-		var diff: float = wrapf(target_yaw - visual_root.rotation.y, -PI, PI)
-		var max_step: float = rotation_speed * delta
-		visual_root.rotation.y += clamp(diff, -max_step, max_step)
+	if combat.allows_turning():
+		_turn_toward(delta, desired_dir)
 
 
+## Free, the player faces where it walks. Locked on, it faces its target
+## whichever way it walks — so walking sideways or back strafes around it — and
+## turns at the lock's own speed rather than snapping.
+func _turn_toward(delta: float, walking: Vector3) -> void:
+	var facing: Vector3 = walking
+	var speed: float = rotation_speed
+	if targeting.is_locked():
+		facing = targeting.direction_to_target()
+		speed = targeting.data.rotation_speed
+	if facing.length_squared() <= 0.001:
+		return
+	var target_yaw: float = atan2(-facing.x, -facing.z)
+	var diff: float = wrapf(target_yaw - visual_root.rotation.y, -PI, PI)
+	var max_step: float = speed * delta
+	visual_root.rotation.y += clamp(diff, -max_step, max_step)
+
+
+## Where the movement keys point, locked on or not — a dodge is never drawn
+## toward a target. With no key held: straight away from a locked target, else
+## straight back from the facing.
 func _compute_dodge_direction() -> Vector3:
 	var dir: Vector3 = _input_direction()
 	if dir.length_squared() > 0.001:
 		return dir.normalized()
+	var away: Vector3 = -targeting.direction_to_target()
+	if away != Vector3.ZERO:
+		return away
 	var facing_back: Vector3 = visual_root.global_transform.basis.z
 	facing_back.y = 0.0
 	if facing_back.length() < 0.0001:
@@ -285,9 +314,13 @@ func _face_aim_direction() -> void:
 	visual_root.rotation.y = atan2(-aim.x, -aim.z)
 
 
-## Where an attack should go, flat on the ground: the camera's forward. The one
-## thing a target lock replaces — the combo and the facing code stay as they are.
+## Where an attack should go, flat on the ground: at the locked target if there
+## is one, else the camera's forward. Only the facing: whether the swing lands is
+## still the hitbox's to find out.
 func _aim_direction() -> Vector3:
+	var to_target: Vector3 = targeting.direction_to_target()
+	if to_target != Vector3.ZERO:
+		return to_target
 	var forward: Vector3 = -camera_rig.global_transform.basis.z
 	forward.y = 0.0
 	if forward.length() < 0.0001:

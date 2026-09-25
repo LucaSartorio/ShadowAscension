@@ -164,29 +164,7 @@ func _on_mode_changed(mode: BasicMeleeShadow.CommandMode) -> void:
 ## Reads the real bindings, so the hints cannot drift from the InputMap.
 func _build_hints() -> String:
 	return "\n".join([
-		"[%s] %s" % [_key_for(PlayerShadowCommander.ACTION_RECALL), hint_recall],
-		"[%s] %s" % [_key_for(PlayerShadowCommander.ACTION_MODE_TOGGLE), hint_mode],
-		"[%s] %s" % [_key_for(PlayerShadowCommander.ACTION_ATTACK_COMMAND), hint_attack],
+		"[%s] %s" % [InteractionPrompt.key_for(PlayerShadowCommander.ACTION_RECALL), hint_recall],
+		"[%s] %s" % [InteractionPrompt.key_for(PlayerShadowCommander.ACTION_MODE_TOGGLE), hint_mode],
+		"[%s] %s" % [InteractionPrompt.key_for(PlayerShadowCommander.ACTION_ATTACK_COMMAND), hint_attack],
 	])
-
-
-func _key_for(action: StringName) -> String:
-	if not InputMap.has_action(action):
-		return "?"
-	for event in InputMap.action_get_events(action):
-		var key: InputEventKey = event as InputEventKey
-		if key != null:
-			return OS.get_keycode_string(
-				key.physical_keycode if key.physical_keycode != 0 else key.keycode)
-		var button: InputEventMouseButton = event as InputEventMouseButton
-		if button != null:
-			match button.button_index:
-				MOUSE_BUTTON_LEFT:
-					return "LMB"
-				MOUSE_BUTTON_RIGHT:
-					return "RMB"
-				MOUSE_BUTTON_MIDDLE:
-					return "MMB"
-				_:
-					return "M%d" % button.button_index
-	return "?"

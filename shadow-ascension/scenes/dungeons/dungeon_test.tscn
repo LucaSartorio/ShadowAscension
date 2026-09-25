@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3]
+[gd_scene load_steps=32 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_controller.gd" id="1_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
@@ -20,6 +20,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/run_summary.tscn" id="96_summary"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_health_hud.tscn" id="89_hphud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_stamina_hud.tscn" id="89_sthud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/target_lock_indicator.tscn" id="89_lockui"]
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_run_stats.gd" id="97_runstats"]
 
 [sub_resource type="Environment" id="env"]
@@ -266,5 +267,7 @@ script = ExtResource("97_runstats")
 [node name="PlayerHealthHUD" parent="." instance=ExtResource("89_hphud")]
 
 [node name="PlayerStaminaHUD" parent="." instance=ExtResource("89_sthud")]
+
+[node name="TargetLockIndicator" parent="." instance=ExtResource("89_lockui")]
 
 [node name="RunSummary" parent="." instance=ExtResource("96_summary")]

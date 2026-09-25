@@ -17,6 +17,9 @@ signal enemy_died(combatant: RoomCombatant)
 ## The combatant only declares the number — deciding whether to take it belongs to
 ## whoever is progressing (see PlayerProgression). Read through get_xp_reward().
 @export var xp_reward: int = 0
+## Where a target lock points at this: its indicator sits here, and the view to
+## it is checked to here. Optional — without one, the body's origin, at its feet.
+@export var target_anchor: Node3D = null
 
 var _died: bool = false
 var _xp_claimed: bool = false
@@ -39,6 +42,13 @@ func report_death(killer: Node = null) -> void:
 	_died = true
 	_killer = killer
 	enemy_died.emit(self)
+
+
+## The point a target lock aims its indicator and its line of sight at.
+func get_target_point() -> Vector3:
+	if target_anchor != null and is_instance_valid(target_anchor):
+		return target_anchor.global_position
+	return global_position
 
 
 func get_killer() -> Node:

@@ -14,8 +14,8 @@ moving.
 M10 — Core Refactor & Game Architecture, the first milestone of the Core Production Foundation
 phase, is complete. **M11 — Combat System 2.0** is in progress: M11.1 (the combat foundation), M11.2
 (the light attack combo chain), M11.3 (the heavy attack), M11.4 (the dodge and its i-frames), M11.5
-(stamina), M11.6 (hit reactions, stagger and knockback) and M11.7 (critical hits and the damage
-model) are done; the phase runs to Alpha 1 at M20.
+(stamina), M11.6 (hit reactions, stagger and knockback), M11.7 (critical hits and the damage model)
+and M11.8 (target lock) are done; the phase runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub

@@ -136,7 +136,7 @@ Systems are built from small, composable components attached to a scene root (e.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, and the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2).
 
-The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); see *Combat architecture (M11)*.
+The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); so is its target lock, **`PlayerTargeting`** (M11.8), the one owner of which enemy the player is locked onto. See *Combat architecture (M11)*.
 
 Progression stats live in `scripts/player/` (`PlayerProgression`, `ProgressionStats`) rather than in a generic stats component, because so far only the player has allocatable stats.
 
@@ -208,6 +208,7 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
+| `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
 | `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
@@ -311,7 +312,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 1506 assertions**; at M11.2, **39 suites and 1565 assertions**;
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
-**49 suites and 1845 assertions**, all clean. Since M11.7 a player hit can be critical at
+**49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**, all clean. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
 its script), and the critical suites test them deterministically.
 
@@ -443,6 +444,7 @@ control rectangles rather than by eye.
 | top-right | `DungeonObjectiveUI`, deliberately below the boss bar's band |
 | bottom-centre | `InteractionPrompt` |
 | bottom-right | `ActiveShadowHUD`, then the three menu hints |
+| bottom-left | the target lock's hint, only while a target is locked (M11.8) |
 
 The objective sits below the boss bar's band rather than beside it because "beside" depends on the
 window width: centred and right-anchored rectangles that clear each other at one size overlap at
@@ -457,6 +459,11 @@ exists.
 **`PlayerStaminaHUD`** (M11.5) is the same idea for stamina: a thin, caption-less bar (y 62–72)
 between the health bar and the level, driven by `PlayerCombat.stamina_changed` alone. `ProgressionHUD`
 moved down 14 px to make room; `vertical_slice_run` includes the bar in its overlap check.
+
+**`TargetLockIndicator`** (M11.8, `scripts/ui/target_lock_indicator.gd`) is the target lock shown: a
+ring on the locked target plus the `[Tab] Sblocca bersaglio` / `[Z] [X] Cambia bersaglio` hint,
+bottom-left, both only while a lock holds. It hears `PlayerTargeting.target_changed` and nothing else;
+see *Target lock (M11.8)*.
 
 **`DungeonObjectiveUI`** shows `default_text` when there is no `DungeonController` above it, which
 is how the hub says "Entra nel Gate" without a second UI doing the same job in a different place.
@@ -943,16 +950,19 @@ has one owner and the animation is never the source of truth. M11.2 (Light Attac
 the combo a real chain on that foundation, M11.3 (Heavy Attack & Attack Variants) added a second
 attack type on the same controller, M11.4 (Dodge & I-Frames) made the dodge's phases and its
 invulnerability explicit, M11.5 (Stamina & Combat Resource Management) made the dodge cost
-stamina, M11.6 (Hit Reactions, Stagger & Knockback) made enemies answer the hits they take, and
-M11.7 (Critical Hits & Damage Model 2.0) put the damage rules in one place and added critical hits:
-see *Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina
-(M11.5)*, *Hit reactions, stagger and knockback (M11.6)* and *Damage model and critical hits (M11.7)*
+stamina, M11.6 (Hit Reactions, Stagger & Knockback) made enemies answer the hits they take, M11.7
+(Critical Hits & Damage Model 2.0) put the damage rules in one place and added critical hits, and
+M11.8 (Target Lock & Combat Targeting) let the player lock onto an enemy: see *Light attack combo
+(M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina (M11.5)*, *Hit reactions,
+stagger and knockback (M11.6)*, *Damage model and critical hits (M11.7)* and *Target lock (M11.8)*
 below.
 
 ```
 Input          CameraRig (attack_light, attack_heavy — only while the mouse is captured) and
-               Player (dodge):
+               Player (dodge, target_lock, target_switch_left / _right):
    |             the only code that reads a device. It sends intents and nothing else.
+   |           PlayerTargeting.toggle_lock() / switch_target(): the locked target, if any;
+   |             target_changed(target) -> TargetLockIndicator
    v
 Combat         PlayerCombat.request_light_attack() / request_heavy_attack() / request_dodge()
    |             combat state, attack timeline, input buffer, combo chain, hit window,
@@ -977,7 +987,8 @@ Health         health_changed -> health bars;  damaged(hit) -> the target's hit 
                  -> RoomCombatant.report_death(last_damage_source) -> enemy_died
                  -> PlayerProgression (XP, split by the killer), room, loot, remnant, run tally
 
-Presentation   attack_started(attack) -> Player faces the aim and plays the placeholder
+Presentation   attack_started(attack) -> Player faces the aim (the locked target, else the
+                 camera's forward) and plays the placeholder
 ```
 
 | Part | Lives in | Does not know about |
@@ -988,6 +999,7 @@ Presentation   attack_started(attack) -> Player faces the aim and plays the plac
 | Hit detection | `Hitbox` | who is attacking beyond `source`, what the target does with the hit |
 | Damage resolution | `PlayerCombat.calculate_damage()` (outgoing); `HealthComponent.take_damage()` (incoming) | each other: the hit crosses as a `DamageInfo` |
 | Presentation | `Player` (`_on_attack_started`, `_play_attack_animation`, `_play_dodge_visual`) | timing: it is told an attack started and shows it |
+| Targeting | `PlayerTargeting` (`scripts/player/player_targeting.gd`) | attacks, hits, damage, the UI: it holds a target, others read it |
 
 `PlayerCombat` is wired by the player like every other component —
 `Player._wire_components()` hands it the attack hitbox, the hurtbox (for i-frames), the health
@@ -1492,6 +1504,92 @@ multiplier, critical chance, whether it was critical, final damage; when off, no
 own run; `critical_hit_test` and `m11_critical_run` test criticals at 0% and 100% — exact — and one
 per-target case on a seeded generator, and `m11_critical_run` also plays a dungeon on the shipped 10%.
 
+### Target lock (M11.8)
+
+The player can lock onto one enemy: turn to face it, aim every attack at it, strafe around it, switch
+to the next one. **`PlayerTargeting`** (`scripts/player/player_targeting.gd`), a player component
+wired in `Player._wire_components()`, is the one owner of the locked target; the player's movement
+and attacks read it through its API, and the indicator hears it. Its tuning is
+`PlayerTargetingData` (`resources/characters/player_targeting.tres`).
+
+**Input.** `target_lock` (`Tab`) toggles the lock; `target_switch_left` (`Z`) / `target_switch_right`
+(`X`) move it. The player's `_unhandled_input` turns them into `toggle_lock()` and
+`switch_target(LEFT / RIGHT)`; nothing in the targeting reads a device. Temporary bindings (M19
+rebinds): the middle mouse button is the shadow's attack order.
+
+**State.** Locked is `get_target() != null` and nothing else — no flag beside the reference. The one
+signal is `target_changed(target)`, `null` when the lock ends.
+
+**What can be locked onto.** A living `RoomCombatant` — every enemy and the boss — within
+`acquisition_range` (15 m, flat) with the world (`line_of_sight_mask`, layer 1) not in the way from
+the player's eyes (`eye_height` 1.2 m) to the target's anchor. Shadows, the player and anything else
+are not `RoomCombatant`s and never count: the type decides, not a name or a group. No new group and no
+faction system were needed.
+
+**Finding them.** One physics query — a sphere of `acquisition_range` on the enemy-body layer
+(`target_body_mask`, layer 3), filtered by type, alive, range and line of sight — run only when the
+player locks on or switches (`get_search_count()` counts them). Nothing scans the tree, sorts targets
+or re-evaluates candidates per frame.
+
+**Choosing.** Lowest score wins: the degrees between the camera's forward and the target (flat) plus
+`distance_weight` (3) degrees per metre. What is in front of the camera comes first, distance breaks
+ties, and a target behind is chosen only when nothing is in front — so a near enemy far off to the
+side loses to a further one straight ahead. No threat, level or class weighting.
+
+**Switching** takes the nearest candidate on the asked side of the held target by *bearing* — its
+angle off the camera's forward, right positive — so right and left mean what the screen shows, not an
+order in a list. Nothing on that side: the lock stays (no wrapping). Candidates are filtered exactly
+as for a lock: dead, out of range, out of view, non-combatants never come up.
+
+**Holding and losing it.** While locked, only the held target is checked, once a physics tick
+(`_physics_process` runs only while locked): the lock ends past `lose_range` (18 m — three more than
+the reach, so a target on the edge does not flicker). It also ends, in the same call, when the target
+dies (`enemy_died`) or leaves the scene (`tree_exiting`), when the player dies (`HealthComponent.died`),
+and when the player presses the button again. It never jumps to another target on its own, and a
+dead player locks onto nothing. A staggered
+or knocked-back target stays locked — the lock follows it. Off-screen but in range, it stays held:
+there is no angle limit. Line of sight is checked only when a target is chosen: a held target that
+walks behind a pillar stays held.
+
+**The target's anchor.** `RoomCombatant.target_anchor` (optional) is where a lock points: the
+indicator sits there and line of sight is checked to it; without one, the body's origin. The enemy's
+`TargetAnchor` is 1.1 m up, the boss's 1.5 m — the boss is a target like any other, with no
+boss-specific code.
+
+**Facing.** Unlocked, the player turns toward where it walks, as before. Locked, it turns toward the
+target instead, at `rotation_speed` (12 rad/s) — progressively, never a snap, so a target that passes
+behind is followed round — and only on the ground plane. Movement itself is unchanged and
+camera-relative, which is what makes strafing: sideways or backwards keeps the player facing the
+target. While an attack runs the facing is committed (as since M11.1); while dodging it is kept.
+
+**Attacks.** Each attack of the combo and the heavy faces the aim when it starts, and the aim is now
+the locked target (`Player._aim_direction()`), else the camera's forward. That is all a lock does to
+an attack: no homing, no magnetism, no teleport. Whether the swing lands is still the hitbox's to find
+out — a locked target out of reach takes nothing. Criticals, stagger and knockback are untouched.
+
+**Switching or locking during an attack** is always accepted and moves the lock at once, but the
+attack under way keeps its aim; the next attack faces the new target. Locking on mid-attack leaves the
+attack exactly where it was.
+
+**The dodge** still goes where the movement keys point, relative to the camera — never drawn toward
+the target. With no key held, locked on, it goes straight away from the target (unlocked: straight
+back from the facing, as in M11.4). Stamina, i-frames and cooldown are unchanged, and the lock holds.
+
+**The camera** is unchanged: it stays under the player's control and only its forward is read, to
+rank targets. There is no lock-on camera; a target can leave the screen while held.
+
+**The indicator.** `TargetLockIndicator` (`scenes/ui/target_lock_indicator.tscn`), placed in the hub
+and the dungeon like the other HUD pieces, hears `target_changed` and shows it: a red ring on the
+target's anchor, turned to face the camera and drawn through whatever stands in front of it, plus the
+lock's `[KEY] Action` hint bottom-left, both only while locked (CLAUDE.md §9). One ring, moved rather
+than parented to each target; `_process` runs only while it is showing. PLACEHOLDER until the UI pass.
+The keys in hints come from `InteractionPrompt.key_for(action)`, which reads the real InputMap —
+moved there from `ActiveShadowHUD`, which now uses it too.
+
+**Lifecycle.** The targeting lives and dies with its player: leaving the scene drops the lock without
+a signal (its listeners are leaving too), and every new player starts unlocked. Nothing of a lock
+survives a gate, the exit, a death or a New Game.
+
 ### Damage flow
 
 - **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's raw damage
@@ -1528,10 +1626,10 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 - **Movement during an attack is unchanged** — full speed. The player's movement multiplies its speed
   by `PlayerCombat.get_movement_multiplier()`, which is the current attack's `movement_multiplier`:
   1.0 on every shipped attack. A slowed, rooted or lunging attack is data from here.
-- **Facing**: the player turns toward where it walks only while `allows_turning()` (IDLE). Every
-  attack of the chain faces the aim when it starts (`Player._face_aim_direction()`), and the aim is
-  one function, `Player._aim_direction()` (the camera's forward today): target lock replaces that
-  function, and neither the combo nor the facing code changes.
+- **Facing**: the player turns only while `allows_turning()` (IDLE) — toward where it walks, or,
+  with a target locked, toward the target (`Player._turn_toward()`). Every attack of the chain faces
+  the aim when it starts (`Player._face_aim_direction()`), and the aim is one function,
+  `Player._aim_direction()`: the locked target, else the camera's forward (M11.8).
 - **The hitbox no longer rolls with the placeholder.** It hangs under `VisualRoot`, which only turns
   with the facing; the model moved to `VisualRoot/Model`, and the attack and dodge tilts rotate that
   node alone. Before, the finisher's 15° roll moved its hit volume up to ~0.2 m sideways — the only
@@ -1561,9 +1659,12 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
   dodge-phase change, every queued follow-up, every stamina spend, a dodge refused for stamina and
   stamina reaching full, with the current attack, its place in the chain, the queued attack, the
   buffer, the dodge phase, whether the i-frames are on, and the stamina with its pending delay. The hitbox's debug mesh, visible while the window is open, is the existing placeholder.
-- The input actions are `attack_light` (left mouse button), `attack_heavy` (right mouse button, M11.3)
-  and `dodge`. The heavy's binding is temporary until key rebinding (M19). New ones follow the same
-  pattern — `target_lock` — and are added with their features, not before.
+- The input actions are `attack_light` (left mouse button), `attack_heavy` (right mouse button, M11.3),
+  `dodge`, and since M11.8 `target_lock` (`Tab`), `target_switch_left` (`Z`) and `target_switch_right`
+  (`X`). The heavy's and the targeting's bindings are temporary until key rebinding (M19); the middle
+  mouse button, the usual lock-on key, already orders the shadow to attack.
+- `PlayerTargeting.debug_log_enabled` (off by default) prints each lock, switch and release with the
+  target, its distance and bearing, and how many candidates the search found.
 
 ### Left for the next M11 steps
 
@@ -1580,7 +1681,9 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 - **Defense and mitigation**: on the receiving side, in `Hurtbox.receive_hit()` before the health
   (see *Damage model and critical hits (M11.7)*); armour penetration travels in `DamageInfo`.
 - **Critical feedback**: damage numbers, sound, a flash — reading `DamageInfo.is_critical`.
-- **Target lock**: the aim source of `_face_aim_direction()`.
+- **Targeting 2.0**: soft targeting (a light aim assist with no lock), a camera that frames the
+  locked target, line of sight kept while a target is held, moving the lock to the next target when
+  one dies — none built; see *Target lock (M11.8)*.
 - **An enemy can stall out of reach** (found at M11.4, not fixed): a `BasicMeleeEnemy` chasing a
   player who stands still can stop about 1.83 m away — its navigation counts it arrived within 0.25 m
   of its slot on the 1.6 m ring, and 1.83 m is past its 1.8 m `attack_range`, so it neither closes

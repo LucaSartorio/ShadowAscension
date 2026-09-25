@@ -1,0 +1,56 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/target_lock_indicator.gd" id="1_indicator"]
+
+[sub_resource type="StandardMaterial3D" id="ring_mat"]
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 0.3, 0.22, 0.95)
+disable_receive_shadows = true
+render_priority = 1
+
+[sub_resource type="TorusMesh" id="ring_mesh"]
+material = SubResource("ring_mat")
+inner_radius = 0.4
+outer_radius = 0.48
+rings = 24
+ring_segments = 8
+
+[node name="TargetLockIndicator" type="Node3D"]
+script = ExtResource("1_indicator")
+
+[node name="Ring" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+cast_shadow = 0
+gi_mode = 0
+mesh = SubResource("ring_mesh")
+
+[node name="HintLayer" type="CanvasLayer" parent="."]
+layer = 44
+
+[node name="Root" type="Control" parent="HintLayer"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -64.0
+offset_right = 284.0
+offset_bottom = -24.0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="HintLabel" type="Label" parent="HintLayer/Root"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(1, 0.72, 0.66, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+text = "[Tab] Sblocca bersaglio
+[Z] [X] Cambia bersaglio"
+vertical_alignment = 2

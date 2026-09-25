@@ -368,6 +368,15 @@ combo can go normal, critical, normal, and one swing can crit one enemy and not 
 critical only does more damage: it does not stagger harder, push further or get through a dodge. The
 shadow, enemies and the boss do not land critical hits.
 
+**M11.8 added a target lock.** `Tab` locks onto the enemy best placed in front of the camera — within
+**15 m** and not behind a wall — shows a red ring on it and a reminder of the keys, and turns the
+player to face it; walking sideways or back then circles it while still facing it. `Z` and `X` move
+the lock to the next enemy to the left or right as the screen shows them. Every attack aims at the
+locked enemy when it starts, but still has to reach it: the lock turns the player, it never pulls the
+swing onto the target. A dodge still goes where the movement keys point; with no key, it jumps back
+away from the target. The lock lets go when the target dies, gets further than **18 m**, when `Tab` is
+pressed again, or when the player dies. The boss can be locked like any enemy; the shadow never can.
+
 **Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
 timing windows or interactions are committed yet (the heavy attack, the dodge's timing, stamina, hit
 reactions and critical hits shipped in M11.3 to M11.7):
@@ -433,6 +442,8 @@ shadow is summoned, and their on-screen hints appear with it.
 | Light attack (3-hit combo) | left mouse button |
 | Heavy attack | right mouse button (temporary binding) |
 | Dodge (i-frames) | `Space` |
+| Lock onto a target / let go | `Tab` (temporary binding) |
+| Switch target left / right (while locked) | `Z` / `X` (temporary binding) |
 | Interact — gate, exit, loot, remnant | `E` |
 | Character sheet | `C` |
 | Inventory and equipment | `I` |

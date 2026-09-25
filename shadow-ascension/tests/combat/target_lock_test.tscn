@@ -1,0 +1,96 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://tests/combat/target_lock_test.gd" id="1_test"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/basic_melee_enemy.tscn" id="3_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/bosses/dungeon_boss.tscn" id="4_boss"]
+[ext_resource type="PackedScene" path="res://scenes/ui/target_lock_indicator.tscn" id="5_indicator"]
+
+[sub_resource type="Environment" id="env_1"]
+background_mode = 1
+background_color = Color(0.2, 0.2, 0.25, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.7, 0.7, 0.7, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(120, 1, 120)
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+size = Vector3(120, 1, 120)
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.3, 0.3, 0.32, 1)
+
+[sub_resource type="BoxShape3D" id="wall_shape"]
+size = Vector3(8, 3, 1)
+
+[sub_resource type="BoxMesh" id="wall_mesh"]
+size = Vector3(8, 3, 1)
+
+[sub_resource type="CapsuleShape3D" id="dummy_shape"]
+radius = 0.45
+height = 1.9
+
+[node name="TargetLockTest" type="Node3D"]
+script = ExtResource("1_test")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env_1")
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("floor_mesh")
+surface_material_override/0 = SubResource("floor_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("floor_shape")
+
+[node name="Wall" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 1.5, -12)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Wall"]
+mesh = SubResource("wall_mesh")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Wall"]
+shape = SubResource("wall_shape")
+
+[node name="EnemyLayerProp" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 50)
+collision_layer = 4
+collision_mask = 1
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="EnemyLayerProp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+shape = SubResource("dummy_shape")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+
+[node name="EnemyA" parent="." instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0.1, 40)
+combat_enabled = false
+
+[node name="EnemyB" parent="." instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0.1, 40)
+combat_enabled = false
+
+[node name="EnemyC" parent="." instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.1, 40)
+combat_enabled = false
+
+[node name="EnemyD" parent="." instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.1, 40)
+combat_enabled = false
+
+[node name="EnemyE" parent="." instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.1, 40)
+combat_enabled = false
+
+[node name="Boss" parent="." instance=ExtResource("4_boss")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0.1, 40)
+combat_enabled = false
+
+[node name="TargetLockIndicator" parent="." instance=ExtResource("5_indicator")]

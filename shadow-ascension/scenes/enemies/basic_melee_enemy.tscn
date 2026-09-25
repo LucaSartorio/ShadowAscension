@@ -38,11 +38,12 @@ size = Vector3(1.4, 1.4, 1.6)
 transparency = 1
 albedo_color = Color(1, 0.4, 0.2, 0.35)
 
-[node name="BasicMeleeEnemy" type="CharacterBody3D"]
+[node name="BasicMeleeEnemy" type="CharacterBody3D" node_paths=PackedStringArray("target_anchor")]
 collision_layer = 4
 collision_mask = 7
 script = ExtResource("1_enemy")
 stats = ExtResource("5_stats")
+target_anchor = NodePath("TargetAnchor")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
@@ -116,3 +117,6 @@ script = ExtResource("30_shadow")
 shadow_extractable = true
 shadow_data = ExtResource("31_shadowdata")
 remnant_scene = ExtResource("32_remnant")
+
+[node name="TargetAnchor" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="PlayerTargetingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/player_targeting_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+acquisition_range = 15.0
+lose_range = 18.0
+distance_weight = 3.0
+rotation_speed = 12.0
+target_body_mask = 4
+line_of_sight_mask = 1
+eye_height = 1.2
+max_candidates = 32

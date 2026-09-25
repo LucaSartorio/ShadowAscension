@@ -10,12 +10,13 @@
 
 **M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain**, **M11.3 — Heavy Attack &
 Attack Variants**, **M11.4 — Dodge & I-Frames**, **M11.5 — Stamina & Combat Resource Management**
-**M11.6 — Hit Reactions, Stagger & Knockback** and **M11.7 — Critical Hits & Damage Model 2.0** are
-complete: the player's combat runs on its own controller (`PlayerCombat`); the light attack is a real
-three-hit chain on it, the heavy attack a second, slower chain of one on its own button, the dodge has
-explicit phases whose i-frames the hurtbox enforces and costs stamina, enemies flinch, stagger and get
-knocked back by what hits them, and every hit's damage follows one model, with its own critical roll.
-M11.8 is next; sprint, combat feedback and targeting are not built yet. The architecture
+**M11.6 — Hit Reactions, Stagger & Knockback**, **M11.7 — Critical Hits & Damage Model 2.0** and
+**M11.8 — Target Lock & Combat Targeting** are complete: the player's combat runs on its own
+controller (`PlayerCombat`); the light attack is a real three-hit chain on it, the heavy attack a
+second, slower chain of one on its own button, the dodge has explicit phases whose i-frames the
+hurtbox enforces and costs stamina, enemies flinch, stagger and get knocked back by what hits them,
+every hit's damage follows one model, with its own critical roll, and the player can lock onto an
+enemy. M11.9 is next; sprint, combat feedback and soft targeting are not built yet. The architecture
 is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
 
 ## Where the project is
@@ -23,7 +24,7 @@ is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROAD
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.7 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.8 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -39,6 +40,60 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11.8 — Target Lock & Combat Targeting** (Completed). The player can lock onto an enemy — one new
+  component and one new view, on the existing input, movement, combat and HUD:
+
+    - **`PlayerTargeting`** (`scripts/player/player_targeting.gd`, wired by `Player._wire_components()`)
+      owns the locked target: locked is `get_target() != null`, and `target_changed(target)` is its one
+      signal. Tuning in `PlayerTargetingData` (`resources/characters/player_targeting.tres`):
+      acquisition **15 m**, let go past **18 m**, **3** degrees a metre, turn at **12 rad/s**.
+    - **Input**: `target_lock` **Tab**, `target_switch_left` **Z**, `target_switch_right` **X**
+      (temporary; the middle mouse button is the shadow's attack order), read in the player's
+      `_unhandled_input` and passed on as intents.
+    - **Choosing**: one sphere query on the enemy-body layer, only on a lock or a switch; a target is a
+      living `RoomCombatant` (enemy or boss) within reach and in view (a ray to its anchor, the world
+      blocking). Score = degrees off the camera's forward + 3 × metres; lowest wins. Switching takes the
+      nearest by bearing on the asked side, no wrapping.
+    - **Holding**: only the held target is checked, once a physics tick; the lock ends past 18 m, on
+      the target's `enemy_died` or `tree_exiting` (same call), on the player's death, or on Tab. A
+      staggered or pushed target stays locked; an off-screen one in range too.
+    - **Facing and movement**: locked, the player turns toward the target at 12 rad/s instead of toward
+      where it walks, so moving sideways or back strafes. Every attack aims at the target when it
+      starts (facing only; hits stay physical). The dodge still follows the keys; with none, it goes
+      straight away from the target. The camera is unchanged.
+    - **The anchor**: `RoomCombatant.target_anchor` (optional) — 1.1 m up on the enemy, 1.5 m on the
+      boss — for the ring and the line of sight.
+    - **The indicator**: `TargetLockIndicator` in the hub and the dungeon — a red ring on the anchor,
+      facing the camera, drawn through geometry, and the `[Tab] Sblocca bersaglio` / `[Z] [X] Cambia
+      bersaglio` hint bottom-left, both only while locked. `InteractionPrompt.key_for()` now reads keys
+      from the InputMap for every hint (moved from `ActiveShadowHUD`).
+
+  Tests: **`tests/combat/target_lock_test.tscn`** (31) — configuration, bindings and the hint; nothing
+  in reach, an enemy past 15 m, a non-combatant on the enemy layer; the first lock (the ring on the
+  anchor, a progressive turn); the pick (in front beats near-but-aside and behind; behind when alone;
+  the camera, not the body, decides); a wall hiding one; the manual unlock and walking-facing back;
+  17 m held, 19 m dropped, no search while holding; switching left / centre / right with no wrapping,
+  and nothing invalid to switch to; the combo and the heavy on a target to the side (turned to, landed,
+  critical, staggered, pushed, the ring following), a locked target out of reach untouched, a switch
+  mid-swing keeping the swing's aim, a lock mid-windup leaving the attack alone; the dodge left /
+  forward / none while locked (stamina, i-frames, lock kept); a target killed or freed (dropped in the
+  same call, no reference left); the boss locked on its own anchor, hit, killed, released; the player's
+  death; and an every-frame watcher. **`tests/core/m11_target_run.gd`** (20) — the hub (the shadow in
+  front is no target) → a dungeon: lock, switch right and back; the combo and the heavy on a target 50
+  degrees aside, its death dropping the lock; lock the other, dodge left while locked, a critical and
+  a heavy, a second heavy killing it; a locked heavy killing blow; the shadow keeping its own target
+  and killing the player's locked one at 70/30; the boss locked, its swing dodged, hit for 60, killed —
+  released, the dungeon completed → hub (XP 282, level 3, shadow 18, no lock, one indicator, no
+  orphans) → a second dungeon: lock and switch again, a kill releasing it → hub.
+
+  **1896 assertions across 51 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 49 existing suites keep M11.7's 1845 (`vertical_slice_run` adds the
+  hint to its overlap check); the two new ones add 51. Zero parser warnings in the changed scripts and
+  the new tests; cold-cache reimport, headless boot and a headless run of the game are clean.
+
+  Left for M11.9 and later: soft targeting, a lock-on camera, keeping line of sight while holding, sprint,
+  combat feedback, defense, player reactions.
 
 - **M11.7 — Critical Hits & Damage Model 2.0** (Completed). Every place damage was worked out was
   found first — the player's swing (`PlayerCombat.calculate_damage()` → `PlayerProgression`), the

@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="2_camera"]
@@ -14,6 +14,8 @@
 [ext_resource type="Script" path="res://scripts/player/player_shadow_commander.gd" id="15_commander"]
 [ext_resource type="Script" path="res://scripts/player/player_combat.gd" id="16_combat"]
 [ext_resource type="Resource" path="res://resources/characters/player_combat.tres" id="17_combatdata"]
+[ext_resource type="Script" path="res://scripts/player/player_targeting.gd" id="18_targeting"]
+[ext_resource type="Resource" path="res://resources/characters/player_targeting.tres" id="19_targetingdata"]
 
 [sub_resource type="CapsuleShape3D" id="capsule_shape"]
 radius = 0.4
@@ -118,6 +120,10 @@ script = ExtResource("15_commander")
 [node name="PlayerCombat" type="Node" parent="."]
 script = ExtResource("16_combat")
 data = ExtResource("17_combatdata")
+
+[node name="PlayerTargeting" type="Node" parent="."]
+script = ExtResource("18_targeting")
+data = ExtResource("19_targetingdata")
 
 [node name="CameraRig" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
