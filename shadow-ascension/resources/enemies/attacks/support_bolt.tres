@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="1_attack"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/enemy_projectile.tscn" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_attack")
+id = &"support_bolt"
+damage_multiplier = 1.0
+windup = 0.5
+active = 0.1
+recovery = 0.5
+stagger_power = 0.0
+knockback_force = 0.0
+projectile_scene = ExtResource("2_projectile")
+projectile_speed = 11.0
+projectile_lifetime = 2.5
+debug_color = Color(0.7, 0.9, 1, 0.4)

@@ -439,6 +439,19 @@ was aimed, so stepping aside or rolling through it avoids it. Staggering it agai
 work for long: like every enemy, it cannot be staggered again for a moment after a stagger. Like the
 others, it is not in the dungeon yet.
 
+**M12.6 added the support.** It keeps its distance like the ranged — about **6.5 m** — with **65**
+health, and it is dangerous for what it does for the others. When an ally falls below **70%** of its
+health, the support picks the worst hurt (by share of its health, so a battered tank before a scratched
+melee), walks into reach and sight of it — round a pillar if it must — and casts a heal for **1.2 s**:
+its body glows green, it turns to the ally, and a green ring appears under the one it is healing. If
+the cast completes, that ally gets back a quarter of its maximum health; then the support cannot heal
+again for **6 s**. Staggering it mid-cast — Light 3 or a heavy — cancels the heal and still costs it
+the full wait, so reaching the support and interrupting it is worth it; a light hit, a critical or a
+shadow's blows only hurt it. When nobody needs healing it strengthens a fighting ally instead: an
+orange glow, **+20%** damage for **6 s**, never doubled by a second support. With nothing to do it fires
+a small bolt (**8**) that can be dodged or stepped out of. It backs away if the player closes in, and
+alone it simply fights. Like the others, it is not in the dungeon yet.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that

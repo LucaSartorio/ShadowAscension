@@ -129,9 +129,9 @@ Systems are built from small, composable components attached to a scene root (e.
 
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
-- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down, and returns whether it took the hit (M11.9). Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
+- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down, and returns whether it took the hit (M11.9). Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`. `heal(amount)` is the only way health goes up — never past the maximum, never for the dead, so a heal after a killing blow (even in the same frame) raises nothing — and returns what it restored (M12.6: a support's heal goes through it).
 - **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier (`use_attack(attack, base_damage)` stamps all but the critical from an `AttackData`, M12.3), sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, then `hit_accepted(target, hit)` if the target took it (M11.9), and will not hit the same target twice within one activation.
-- **`DamageModel`** (`scripts/combat/damage_model.gd`, static, M11.7) — the damage rules in one place: `attack_damage(base, multiplier)`, `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`. Stateless; see *Damage model and critical hits (M11.7)*.
+- **`DamageModel`** (`scripts/combat/damage_model.gd`, static, M11.7) — the damage rules in one place: `attack_damage(base, multiplier)`, `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`, and `buffed_damage(base, bonus)` — an enemy's base under a support's buff (M12.6). Stateless; see *Damage model and critical hits (M11.7)*.
 - **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to; it returns whether the hit counted (M11.9). `get_center()` (M12.3) is the middle of its shape — where a ranged attack aims.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2), its stagger power and push (M11.6), and its hit stop and camera shake (M11.9). Since M12.2 it is the melee enemy's attack too, which reads only its timing, damage and impact fields.
@@ -141,7 +141,10 @@ components: **`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), the one
 fights, and an **`EnemyAttack`** (`scripts/enemies/enemy_attack.gd`, M12.2, a base since M12.3), the one
 owner of what it attacks with and of the attack under way — **`EnemyMeleeAttack`** for the melee
 archetype (and the tank and the assassin, melee tuned by data, M12.4–M12.5), **`EnemyRangedAttack`** for
-the ranged. See *Enemy AI (M12.1)* and the archetype sections, M12.2 to M12.5.
+the ranged, **`EnemySupportAttack`** for the support (M12.6: the ranged's shot and its casts). A support
+has a third component, **`EnemySupport`** (`scripts/enemies/enemy_support.gd`), the one owner of the
+ally it supports and of what it means to do for it. See *Enemy AI (M12.1)* and the archetype sections,
+M12.2 to M12.6.
 
 - **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
@@ -213,14 +216,15 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 
 | Resource | Responsible for | Main fields | Read by | Must NOT contain |
 | --- | --- | --- | --- | --- |
-| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4), `basic_assassin_enemy.tres` (M12.5) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance, and the disengage distance (M12.5) — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4), `basic_assassin_enemy.tres` (M12.5), `basic_support_enemy.tres` (M12.6) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance, and the disengage distance (M12.5) — its `support` (`EnemySupportData`, M12.6; null on the other four) — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `EnemySupportData` (`scripts/enemies/enemy_support_data.gd`, M12.6) | what a support does for its allies — a sub-resource of `basic_support_enemy.tres` | the ally layer, the ranges (notice, reach, the cast's break margin), the look-around interval, the approach timeout; the heal (its `AttackData`, threshold, share of the ally's maximum, cooldown, colour); the buff (its `AttackData`, damage bonus, duration, cooldown, colour) | `EnemySupport.configure()` | whom it supports, a cast under way, a cooldown left, a buff on anyone — `EnemySupport`'s and `EnemyAttack`'s runtime state |
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3), the tank's `tank_heavy_swing.tres` (M12.4), the assassin's `assassin_quick_strike.tres` (M12.5) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3), an enemy attack's lunge speed (M12.5) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3), the tank's `tank_heavy_swing.tres` (M12.4), the assassin's `assassin_quick_strike.tres` (M12.5), the support's `support_bolt.tres`, `support_heal.tres` and `support_buff.tres` (M12.6: a heal and a buff are AttackData too — their windup the cast) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3), an enemy attack's lunge speed (M12.5) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -328,7 +332,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
 **49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
-(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**; at M12.5, **63 suites and 2224 assertions**, all clean. Since M11.9 a hit stop holds the
+(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**; at M12.5, **63 suites and 2224 assertions**; at M12.6, **65 suites and 2295 assertions**, all clean. Since M11.9 a hit stop holds the
 game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
 in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
@@ -1909,11 +1913,11 @@ in range but facing away), kept because the behaviour needs it.
 | --- | --- | --- | --- |
 | `IDLE` | lets the target go | holds still (inside avoidance); looks for a target in detection range -> `ALERT` | — |
 | `ALERT` | stops; starts `alert_duration`; starts the per-instance attack desync (`initial_attack_delay`, the attack's hold-off) | holds still, turns toward the target; target lost -> `IDLE`; duration over -> `CHASE`. At 0 s — the basic enemy's — IDLE's update runs it in the same tick, so noticing costs no time | — |
-| `CHASE` | asks for a path on its first tick | target lost -> `IDLE`; can swing -> `ATTACK`; too close or facing away -> `REPOSITION`; else paths to its slot beside the target, braking on the way in and holding on the ring (M12.2), turning with its movement (or to the target once there) | — |
+| `CHASE` | asks for a path on its first tick | target lost -> `IDLE`; can swing (or cast, M12.6) -> `ATTACK`; too close or facing away -> `REPOSITION`; a support with an ally to support walks into reach and sight of it instead (M12.6); else paths to its slot beside the target, braking on the way in and holding on the ring (M12.2), turning with its movement (or to the target once there) | — |
 | `REPOSITION` | starts its timeout; asks for a path | target lost -> `IDLE`; timed out -> `CHASE` (and blocks re-entry for `reposition_cooldown`); can swing -> `ATTACK`; else steps round to its slot, always facing the target | — |
-| `ATTACK` | starts the swing the attack selects: TELEGRAPH | holds still — or, in ACTIVE, lunges along its facing if the attack has a `lunge_speed` (M12.5); turns slowly early in the telegraph only; advances the swing; over -> `CHASE` | cuts off a swing still under way (hitbox shut, telegraph undone) |
+| `ATTACK` | starts the swing the attack selects: TELEGRAPH — for a support, the cast its `EnemySupport` can make now, else its bolt (M12.6) | holds still — or, in ACTIVE, lunges along its facing if the attack has a `lunge_speed` (M12.5); turns slowly early in the telegraph only, toward the attack's facing target (the foe; a support's ally, M12.6); advances the swing — dropped, no cooldown, if what it was for went away (M12.6); over -> `CHASE` | cuts off a swing still under way (hitbox shut, telegraph undone; a support's cast spent) |
 | `STAGGERED` | starts `stagger_duration`; stops the AI's own speed | no decision, no turning, no path: the body moves only if pushed; over -> `CHASE` with a target and combat on, else `IDLE` | starts the immunity, releases the lean |
-| `DEAD` | clears the reactions, lets the target go, stops the navigation (path to where it lies, out of avoidance), turns its collision off, topples | nothing: `_physics_process` returns first | never left |
+| `DEAD` | clears the reactions, lets the target go, ends a buff on it and lets its support target go (M12.6), stops the navigation (path to where it lies, out of avoidance), turns its collision off, topples | nothing: `_physics_process` returns first | never left |
 
 Parked (`combat_enabled` off — a room not yet entered, or suspended) the enemy perceives, paths and
 counts nothing: a stagger still runs its course and a push still plays out, and that is all.
@@ -2062,9 +2066,10 @@ where the behaviour lives — a ranged enemy is a different attack component (wh
 swing does) and a different slot distance, not an `if enemy_type == RANGED` in the state machine;
 there is no enemy type anywhere in it. The transitions table is the place a new state (a retreat, a
 stun) is allowed in, with its enter, update and exit. M12.2 built the first archetype on it, the melee,
-M12.3 the second, the ranged, M12.4 the third, the tank — a melee specialised by data alone — and M12.5
-the fourth, the assassin — a melee with a disengage and a lunge, both data — all on this one state
-machine; the rest is M12.6 onwards.
+M12.3 the second, the ranged, M12.4 the third, the tank — a melee specialised by data alone — M12.5
+the fourth, the assassin — a melee with a disengage and a lunge, both data — and M12.6 the fifth, the
+support — a ranged with an optional part, `EnemySupport`, whose casts run as attacks — all on this one
+state machine; the rest is M12.7 onwards.
 
 ## Melee archetype (M12.2)
 
@@ -2556,6 +2561,192 @@ it pays 70/30 (21 / 9 of its 30). Against the player together: the assassin stri
 next, the tank last (1.8 s after the assassin), and the ranged keeps its 7 m; the lock switches across
 all four. Twelve assassins at once cost 4.4 ms of physics a tick. The shipped dungeon still holds melee
 only; `assassin_archetype_test` and `m12_assassin_run` bring their own.
+
+## Support archetype (M12.6)
+
+M12.6 (Support Archetype 2.0) added the fifth archetype, the first whose decisions are not all about
+hurting the player: it finds its allies, picks the most hurt, walks into reach and sight of it and
+heals it — or, with nobody to heal, buffs a fighting ally's damage — and fights when there is nothing
+to do for anyone. It is the ranged's state machine, distance model and shot, with one optional part
+added to its scene and two data-driven hooks in the shared code:
+
+- **`EnemySupport`** (`scripts/enemies/enemy_support.gd`, the scene's `Support` node) — the one owner of
+  the **support target** (the ally it has chosen) and of the plan (that ally and the action — heal or
+  buff), the allies it has seen, and the heal's and buff's own cooldowns. `BasicEnemy` finds it by name
+  as it finds its other parts (`get_node_or_null`: without one, an enemy supports nobody) and hands it
+  its body, its hostile targeting and its attack.
+- **`EnemySupportAttack`** (`scripts/enemies/enemy_support_attack.gd`, the `Attack` node, an
+  `EnemyRangedAttack`) — runs the casts through the same lifecycle as any attack: `select_attack()`
+  returns the action `EnemySupport` can cast now, else the bolt; `_begin_active()` lands the action
+  (`EnemySupport.apply_cast()`) instead of firing.
+- **`EnemySupportData`** (`scripts/enemies/enemy_support_data.gd`) — its tuning, `EnemyData.support`,
+  null on the other four. The heal and the buff are `AttackData` (`support_heal.tres`,
+  `support_buff.tres`): their windup is the cast, their active the effect, their recovery the
+  commitment after.
+
+**Two targets, two owners.** The **hostile target** stays `EnemyTargeting`'s, under the M12.1 policy —
+the player, or a shadow if its data lists the shadow's group. The **support target** is
+`EnemySupport`'s. One reference each; neither replaces the other; a support with an ally to help is
+still fighting someone (the FSM's fighting states need the hostile target), and acts only then.
+
+**One record of the action.** What the support is doing is its attack's current attack and phase —
+`EnemySupport.get_current_action()` (`NONE`, `HEAL`, `BUFF`, `OFFENSIVE`) only names it, and
+"casting" is `is_casting()`: the planned action in its attack's telegraph. No `is_healing` flag.
+
+No support state machine, no new state, no new transition, no archetype enum. The shared code gained,
+all inert for the other four:
+
+- `EnemyAttack`: `get_attack_damage()` and the **damage buff** (below); `_is_still_valid()`, asked every
+  tick of an attack — false drops it, no cooldown; `get_facing_target()` — the foe, a support's ally
+  mid-cast; `_telegraph_color()` — a cast's colour.
+- `BasicEnemy`: the optional `support`; in CHASE, with an ally to support, it walks to that ally
+  (`_move_to_support()`) instead of its ring and fires nothing at the foe; `_can_start_attack()` lets a
+  castable action start from any hostile distance but inside the minimum; the facing-away reposition
+  does not apply while it supports.
+- `HealthComponent.heal()` returns what it restored; `DamageModel.buffed_damage()`.
+
+| | Support | Ranged | Melee |
+| --- | --- | --- | --- |
+| Max Health | 65 | 70 | 100 (tank 260, assassin 60) |
+| Move Speed / acceleration / turn | 3.6 m/s / 14 / 7 rad/s | 3.4 / 12 / 6 | 3.8 / 12 / 7 |
+| ALERT | 0.3 s | 0.3 s | 0 s |
+| Minimum / preferred / attack range (to the foe) | 3.5 / 6.5 / 9 m | 4 / 7 / 10 m | 1.15 / 1.6 / 1.8 m |
+| Ally notice / support range / cast break | 14 / 9 / 9 + 3 m | — | — |
+| Offence | `support_bolt`: 8 damage, 0.5 / 0.1 / 0.5 s, 11 m/s, 2.5 s | 12 damage, 0.6 / 0.1 / 0.5 s, 12 m/s | 15 damage |
+| Attack cooldown (after any action) | 2.0 s | 1.6 s | 0.4 s |
+| Heal | under 70% — 25% of the ally's max — cast 1.2 s, effect 0.1 s, recovery 0.6 s — cooldown 6 s | — | — |
+| Buff | +20% damage for 6 s — cast 0.9 s, 0.1 s, recovery 0.5 s — cooldown 10 s | — | — |
+| Stagger resistance / duration / immunity | 20 / 0.6 s / 1.0 s | 25 / 0.6 s / 1.0 s | 25 / 0.5 s / 1.0 s |
+| Knockback multiplier | 1.2 | 1.2 | 1.0 |
+| XP | 30 | 25 | 25 |
+
+The scene, `basic_support_enemy.tscn`, is a green-grey body (0.42 m × 1.8 m) with a pale orb at the
+staff's height (the projectile spawn), the `Support` node, and a `CastMarker` — a flat ring, top-level,
+laid under the ally while a cast is for it. Its loot is the melee's table; it has no shadow to extract.
+
+### Ally selection
+
+- **Discovery**: every `ally_scan_interval` (0.5 s), and only while it fights, one physics query — a
+  14 m sphere on the enemy body layer (`ally_mask`), at most 16 bodies. Never `get_nodes_in_group()`,
+  never a walk of the tree, never per frame; between two looks it only checks its plan.
+- **A valid ally**: a `RoomCombatant` in the scene, alive (not died, its health not dead), awake
+  (`combat_enabled` — a parked enemy is not in the fight), not itself, within 14 m, and on the AI
+  foundation — it has an `EnemyAttack`. The boss, on its own AI, never is: `m12_support_run` puts a
+  support beside it at 40 HP and it is neither listed nor healed.
+- **Priority**: the lowest share of health, `current_health / max_health`, under `heal_threshold`
+  (0.7) — a share, not points: a tank at 40% (104) comes before a melee at 60% (60). Exactly on the
+  threshold is not under it. A tie (within 0.001) goes to the nearer.
+- **Stickiness**: the plan is kept until the action lands, the ally dies or leaves the scene, goes past
+  14 m, or — before the cast — no longer needs it (healed or buffed by someone else). A slightly more
+  hurt ally never steals it; nothing is re-chosen during a cast. The one exception is priority itself:
+  a planned buff gives way to a heal that has become needed.
+- **Unreachable**: an ally it cannot reach or see for `approach_timeout` (4 s) is given up; that
+  action waits out its cooldown, and the support fights meanwhile.
+
+### Heal
+
+```
+Target (a look: the most hurt ally under 70%)
+  -> Positioning (CHASE: into 9 m and sight of it, round a wall if need be; pressed inside 3.5 m -> REPOSITION first)
+  -> Cast (TELEGRAPH, 1.2 s: body green, turned to the ally, a green ring under it — nothing healed yet)
+  -> Heal (the start of ACTIVE: the ally's HealthComponent.heal(25% of its max), once, clamped; the ring flares)
+  -> Recovery (0.6 s) -> the attack cooldown (2 s)            the heal's own cooldown: 6 s from the landing
+```
+
+- **Amount**: 25% of the healed ally's own maximum — a tank +65, a melee +25, an assassin +15 — through
+  `HealthComponent.heal()`, so never past the maximum (a heal landing on a full ally restores nothing),
+  never on the dead, and the health bar redraws from `health_changed` as it does for damage. The HUD
+  knows nothing of supports.
+- **Range and sight**: within 9 m, with nothing of the world between them (one ray, trusted 0.2 s). The
+  cast, once begun, is committed: the ally stepping out of sight does not stop it; the ally carried
+  more than 3 m past the 9 m (12 m) drops it.
+- **Interruption**: a hit that staggers the support (20 or more: Light 3, the heavy) cuts the cast off —
+  no heal — and the heal is **spent**: its 6 s cooldown starts, so interrupting a support is worth it.
+  A flinch (Light 1 / 2), a critical Light, a shadow's hits, a hit stop and the player standing 1.6 m
+  away change nothing: the cast lands. Before a cast, though, a player inside 3.5 m makes it step back
+  first.
+- **Deaths**: the support killed mid-cast — DEAD at once, and nothing lands later: every timing is its
+  attack's delta, no timer or callback exists to fire. Its ally killed or carried off mid-cast — the
+  cast is dropped that tick (`EnemyAttack.get_dropped_count()`), not spent, and it chooses again on the
+  next tick (in the test, 0.02 s later it is healing another ally).
+- **No loop**: a tank under constant fire is healed at most every 6 s plus a cast, with bolts at the
+  player in between — in the test, 2 heals in 15 s.
+- **Races**: two supports healing one ally at once — the first +65, the second clamped to +39. A dead
+  ally is never healed: the heal refuses it, and damage and heal in one frame resolve in call order.
+
+### Buff
+
+Implemented, and deliberately narrow: **the ally's attack damage, +20%, for 6 s** — a 0.9 s cast, 0.1 s,
+0.5 s recovery, then 10 s before the next.
+
+- **Where it lives**: on the one thing it changes — the ally's `EnemyAttack`, the owner of the base its
+  attacks scale. `get_attack_damage()` is `DamageModel.buffed_damage(attack_damage, bonus)`, read by the
+  melee's hitbox and the ranged's projectile when an attack begins. `attack_damage` itself is never
+  written, so when the buff ends the damage is the archetype's again, exactly (15, not 15.000001).
+- **Target**: a fighting ally (its own targeting holds a target), not buffed already, the one nearest
+  the support's foe.
+- **No stacking**: one slot. `apply_damage_buff()` refuses while one is on — two supports buffing one
+  melee: one takes, the other lands on nothing; its damage is never above 18.
+- **Cleanup**: it runs out on the ally's own clock, only while the ally is awake; it is cleared when the
+  ally dies, when its room parks it, and goes with the node when the scene is unloaded. Nothing else
+  holds it.
+- **Feedback**: the ally glows in the buff's colour (emission, the telegraph owns the albedo) while it
+  lasts.
+- **Why this is not a framework**: one fixed effect, one slot, on the component that uses the stat — no
+  effect container, no stacking rules, no modifier pipeline, no serialisation. Debuffs, shields, several
+  effects at once are the Status Effect framework's, later; this buff moves there when it exists.
+
+**Priority**, the whole of it: an ally under the threshold and the heal ready — heal; else a fighting
+unbuffed ally and the buff ready — buff; else the offence. No utility scoring.
+
+### Offensive fallback, and alone
+
+- **The offence** is the ranged's shot, unchanged: the same `Projectile` scene and path (source
+  filtering, lifetime, world, i-frames), its own `support_bolt.tres`: 8 damage (the ranged's 12), a
+  0.5 s telegraph, 11 m/s, 2 s between shots. It flies straight — step aside after it fires and it
+  misses; dodge into it and the i-frames refuse it.
+- **Nobody needs anything**: no plan; it holds its 6.5 m ring and fires, like a ranged.
+- **While it has an ally to support** it fires nothing at the foe: supporting comes first.
+- **Alone**: its looks find nobody — no plan, nothing to wait for — and it fights at once. When its
+  last ally dies the plan goes with it; in the test it is firing 0.8 s later.
+
+### Reposition
+
+The ranged's model: minimum 3.5 m, ring 6.5 m, reach 9 m. The player inside 3.5 m: REPOSITION, backing
+away on the navigation facing the player; out of the minimum it is free to act again. With its back to a
+wall the retreat times out (1.5 s) and, cornered, it fires from where it stands (1.5 m in the test),
+never through the wall. A cast under way is never broken off for the player coming close. Walking to an
+ally is CHASE toward the ally through the navigation — round a wall that hides it, stopping two bodies'
+spacing short of it.
+
+### Stagger, knockback, critical, lock, shadow
+
+- **Stagger** (20): Light 1 (10) and Light 2 (15) flinch it; Light 3 (30) and the heavy (60) stagger it
+  — while it backs away, in its bolt's telegraph (no shot, then or later), mid-buff (the buff spent) and
+  mid-heal (the heal spent). The stagger over, it is back in CHASE on the foe and decides afresh.
+- **Knockback** (×1.2): a heavy pushes it at 9.6 m/s, 1.62 m, and cuts the cast; then it moves again.
+- **Critical**: damage only — a critical Light 1 is 30 and does not stop a cast.
+- **The lock** holds through CHASE, the cast, the reposition and the stagger; the ring follows it.
+- **Shadow**: the hostile policy is M12.1's; a shadow striking it mid-cast does not stagger it. A
+  shadow's kill pays 70/30 (21 / 9 of its 30), the player's 30 once; healing earns nothing and changes
+  no attribution.
+
+### Mixed archetypes
+
+| Archetype | Role |
+| --- | --- |
+| Melee | standard pressure: in to 1.6 m, a steady swing |
+| Ranged | pressure at a distance: holds 7 m, a shot every 1.6 s |
+| Tank | the resistant front: slow, hard to stagger or push, a heavy telegraphed swing |
+| Assassin | mobility and aggression: in fast, a lunging strike, out to 4.5 m, back |
+| Support | sustain: holds 6.5 m, heals the most hurt, buffs the fighters, fires when idle |
+
+All five together (`support_archetype_test`, MX1–MX3): the assassin strikes first, then the melee, then
+the tank; the ranged keeps 7.0 m and the support 6.5 m at the nearest; with nobody hurt the support buffs
+a fighter; the tank brought to 40%, the support turns to heal it and the player's heavy cuts the cast
+off. The lock switches across all five. Four supports and eight allies cost about 3 ms of physics a
+tick; each support looks around 8 times in 4 s. The shipped dungeon still holds melee only;
+`support_archetype_test` and `m12_support_run` bring their own.
 
 ## Content pipeline (M13+)
 

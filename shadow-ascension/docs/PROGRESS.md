@@ -9,7 +9,8 @@
 **M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
 **M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0**, **M12.3 — Ranged
-Archetype 2.0**, **M12.4 — Tank Archetype 2.0** and **M12.5 — Assassin Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
+Archetype 2.0**, **M12.4 — Tank Archetype 2.0**, **M12.5 — Assassin Archetype 2.0** and **M12.6 —
+Support Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
 ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`), with one writer of its state and a table of legal
 transitions; its target has one owner, `EnemyTargeting`, choosing from the target groups its data
 names — the player's alone, as before. An archetype is an attack component and its data: the melee
@@ -19,12 +20,14 @@ and fires a telegraphed `Projectile` that flies straight — both on one `EnemyA
 (M12.4) is a melee specialised by data alone — heavier, slower, harder to stagger and to push, a
 slower and harder swing; the assassin (M12.5) is a fast, fragile melee that strikes with a lunge,
 backs out to a disengage ring while its attack cools down and comes back in — two data-driven rules
-of the shared code. The boss keeps its own AI; the shipped dungeon still holds melee only. M12.6 is
-next; the other archetypes, the target
-choice between player and shadow, group combat and the Boss Framework are not built yet. The
-architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged
-archetype (M12.3)*, *Tank archetype (M12.4)* and *Assassin archetype (M12.5)*; the deliverables are
-in `ROADMAP.md`.
+of the shared code; the support (M12.6) keeps a ranged's distance and helps its allies — it finds
+them, heals the most hurt through their health, buffs a fighter's damage when nobody needs healing,
+and fires the ranged's bolt when there is nothing to do — through one optional part, `EnemySupport`,
+whose casts run as attacks. The boss keeps its own AI; the shipped dungeon still holds melee only.
+M12.7 is next; the elite archetype, the target choice between player and shadow, group combat and the
+Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee
+archetype (M12.2)*, *Ranged archetype (M12.3)*, *Tank archetype (M12.4)*, *Assassin archetype
+(M12.5)* and *Support archetype (M12.6)*; the deliverables are in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -42,7 +45,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.5 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.6 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -58,6 +61,75 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.6 — Support Archetype 2.0** (Completed). What was there first, and asked: an enemy's health is
+  its `HealthComponent` (`current_health` / `max_health`, `health_changed`, `died`, and a `heal()` that
+  already clamped and refused the dead — no caller until now); allies had no group, but every enemy's
+  body is on the enemy physics layer, which `PlayerTargeting` already queries; there was no modifier
+  structure of any kind; the attack lifecycle (`EnemyAttack`: telegraph, active, recovery, cooldown)
+  and the ranged's distance model and shot were generic. So the support is the ranged, plus one part
+  and a few hooks — no support state machine, no new state or transition, no archetype enum:
+  - **`EnemySupport`** (`scripts/enemies/enemy_support.gd`, the scene's `Support` node): the support
+    target — apart from the hostile target, which stays `EnemyTargeting`'s — and the plan (that ally
+    and the heal or the buff), the allies seen, the heal's and buff's cooldowns. Allies are looked for
+    every 0.5 s by one sphere query on the enemy layer (14 m, at most 16), only while it fights; valid
+    is alive, awake, not itself, on the AI foundation (an `EnemyAttack` — so never the boss). The most
+    hurt by share under 70% is chosen, ties to the nearer, and kept until healed, dead, gone or no
+    longer in need; a needed heal overrides a planned buff; an ally unreachable for 4 s is given up.
+  - **`EnemySupportAttack`** (`scripts/enemies/enemy_support_attack.gd`, an `EnemyRangedAttack`): a
+    heal or a buff is `AttackData` run through the lifecycle — the castable action if any, else the
+    bolt. The cast turns to the ally, takes the action's colour; the effect lands at the start of
+    ACTIVE (`EnemySupport.apply_cast()`), once. Cut off before it lands, the action is spent (its
+    cooldown starts); its ally dying or carried 3 m past its 9 m reach drops it with no cooldown, and it
+    chooses again on the next tick.
+  - **Shared hooks, inert for the other four**: `EnemyAttack.get_attack_damage()`, the damage buff
+    (`apply_damage_buff()` — one slot, refused while one is on — `clear_damage_buff()`, run down in
+    `tick()`, cleared by `reset()` and on death, a placeholder glow), `_is_still_valid()`,
+    `get_facing_target()`, `_telegraph_color()`; `BasicEnemy`'s optional `support` (CHASE walks to the
+    ally to support and fires nothing meanwhile; a cast may start from any hostile distance outside the
+    minimum; the facing-away reposition is skipped while supporting); `HealthComponent.heal()` returns
+    what it restored; `DamageModel.buffed_damage()`. The melee's hitbox and the ranged's projectile take
+    `get_attack_damage()`.
+  - **Data**: `resources/enemies/basic_support_enemy.tres` (65 HP, 3.6 m/s, ALERT 0.3 s, 3.5 / 6.5 / 9
+    m, 8 damage, cooldown 2 s, stagger resistance 20, knockback ×1.2, 30 XP) with its
+    `EnemySupportData` (`scripts/enemies/enemy_support_data.gd`) — notice 14 m, reach 9 m, break margin
+    3 m, look every 0.5 s, approach timeout 4 s; heal under 70% for 25% of the ally's maximum, 6 s
+    cooldown; buff +20% for 6 s, 10 s cooldown — and `resources/enemies/attacks/support_heal.tres`
+    (1.2 / 0.1 / 0.6 s), `support_buff.tres` (0.9 / 0.1 / 0.5 s), `support_bolt.tres` (the ranged's
+    projectile, 0.5 / 0.1 / 0.5 s, 11 m/s).
+  - **Scene**: `scenes/enemies/basic_support_enemy.tscn` — a green-grey body with an orb, the `Support`
+    node, a `CastMarker` ring laid under the ally while it casts; the melee's loot, no shadow.
+
+  **`tests/enemies/support_archetype_test`** (56) — configuration against the other four; spawn; the
+  allies found (not itself, a parked or a dead enemy, the player); the tank at 40% chosen over a melee at
+  60%; no switch mid-cast; a look every 0.5 s; 75% and exactly 70% not healed; nobody hurt and no buff:
+  the offence; the heal (104 -> 169 of 260, the bar redrawn), its cast (1.2 s, green, a ring, turned
+  to the ally), effect and recovery; the cooldown, filled by bolts; a clamped heal (+10 to 260); a tank
+  under constant fire (2 heals in 15 s); a heavy interrupt (no heal, the heal spent), a Light 1 and a
+  critical that do not interrupt, the player at 1.6 m during a cast, the hit stop; the ally killed or
+  carried off mid-cast; the support killed mid-cast and in its bolt's telegraph; the player's kill;
+  alone, and the last one standing; the bolt dodged and stepped out of; the retreat and the cornered
+  shot; a wall between it and its ally, and the approach timeout; the buff (15 -> 18, 6 s, back to
+  exactly 15), two supports not stacking, a buffed ally's death, the heal before the buff; two supports
+  healing one tank (+65, +39, clamped) and two on their own allies; the light combo, staggers in
+  reposition / bolt / buff, the heavy's push mid-heal; the lock; a shadow hitting it mid-cast and the
+  shadow's kill (21 / 9); the five archetypes together, the tank's heal cut off by the player, the lock
+  across all five with the shadow; four supports and eight allies; the invariants (state and phase, a
+  landed action from its own ATTACK once, no health above its maximum or raised from the dead, the
+  shared data never written). **`tests/core/m12_support_run.gd`** (15) — the real game: a support
+  healing room one's hurt melee (40 -> 65), the next heal cut off by a heavy, the room clearing, a
+  critical heavy on the locked support (30 XP once), the shadow's kill (21 / 9), a support beside the
+  hurt boss that never counts it an ally, leaving mid-cast (nothing survives), a second dungeon the
+  same, no listener doubled; hub, nothing orphaned.
+
+  **2295 assertions across 65 suites, zero failures, zero runtime errors, zero
+  exit-time leaks** (`tests/run_all.gd`). The 63 existing suites keep M12.5's 2224; the two new ones add
+  71. Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M12.7 and later: the elite archetype; the Status Effect framework (the buff moves there);
+  a support that shields, cleanses or heals several at once; a support that retreats from a shadow
+  hitting it; placing supports in the dungeon (M18); group coordination; the Boss Framework.
 
 - **M12.5 — Assassin Archetype 2.0** (Completed). What was there first: the melee holds its ring
   through its cooldown; the ranged's REPOSITION already walks the navigation to a slot on a ring,
@@ -2064,7 +2136,7 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 ## In Progress
 
 Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 to
-M12.5 are done, M12.6 is next.
+M12.6 are done, M12.7 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —

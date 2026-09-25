@@ -29,6 +29,13 @@ extends Node
 ## Shared configuration, never written: every enemy of an archetype reads the
 ## same EnemyData and AttackData. What an attack is doing — its phase, its clock,
 ## the cooldown left — is this node's, one per enemy.
+##
+## A support's damage buff (M12.6) lands here too, on the one thing it changes:
+## the base every attack of this enemy scales. One at a time — a second is
+## refused, never stacked — on its own clock, and gone with a death, a room
+## parking the enemy or the enemy leaving the scene. attack_damage is never
+## written: get_attack_damage() is the base with the buff on top, so when the buff
+## ends the damage is the archetype's again, exactly.
 
 enum Phase { NONE, TELEGRAPH, ACTIVE, RECOVERY }
 
@@ -69,6 +76,12 @@ var _hold_off_remaining: float = 0.0
 var _telegraph_tween: Tween = null
 var _started: int = 0
 var _withheld: int = 0
+var _dropped: int = 0
+
+# The damage buff under way (M12.6): its share and the seconds it has left; 0
+# and 0 without one.
+var _damage_bonus: float = 0.0
+var _damage_bonus_remaining: float = 0.0
 
 
 ## Copies what this archetype attacks with from its data. Called by the enemy
@@ -161,6 +174,30 @@ func get_lunge_speed() -> float:
 	return _attack.lunge_speed if _phase == Phase.ACTIVE and _attack != null else 0.0
 
 
+## The base this enemy's attacks scale now: the archetype's attack_damage, with a
+## support's buff on top while one lasts (DamageModel.buffed_damage()).
+func get_attack_damage() -> float:
+	return DamageModel.buffed_damage(attack_damage, _damage_bonus)
+
+
+## Whom the enemy turns to while this attack is aimed: the target it fights. A
+## support's cast turns to the ally it is for instead (M12.6).
+func get_facing_target() -> Node3D:
+	return _targeting.get_target() if _targeting != null else null
+
+
+func has_damage_buff() -> bool:
+	return _damage_bonus_remaining > 0.0
+
+
+func get_damage_bonus() -> float:
+	return _damage_bonus
+
+
+func get_damage_buff_remaining() -> float:
+	return _damage_bonus_remaining
+
+
 ## How many attacks this enemy has started — telegraphs shown.
 func get_swing_count() -> int:
 	return _started
@@ -170,6 +207,12 @@ func get_swing_count() -> int:
 ## begin (a ranged shot with nothing clear to fire at).
 func get_withheld_count() -> int:
 	return _withheld
+
+
+## How many attacks were dropped under way because what they were for went away
+## (a support's ally dead or out of reach, M12.6).
+func get_dropped_count() -> int:
+	return _dropped
 
 
 # --- the attack -----------------------------------------------------------------------
@@ -192,6 +235,11 @@ func start(attack: AttackData, cooldown_variation: float = 0.0) -> bool:
 func advance(delta: float) -> bool:
 	if _phase == Phase.NONE:
 		return false
+	if not _is_still_valid():
+		# What it was for is gone: dropped where it is, with no cooldown.
+		_dropped += 1
+		interrupt()
+		return true
 	_phase_remaining -= delta
 	if _phase_remaining > 0.0:
 		return false
@@ -226,13 +274,17 @@ func interrupt() -> void:
 	_end_attack()
 
 
-## Runs down the cooldown and the desync. Called by the enemy's own tick, while
-## it is awake.
+## Runs down the cooldown, the desync and a buff. Called by the enemy's own tick,
+## while it is awake.
 func tick(delta: float) -> void:
 	if _cooldown_remaining > 0.0:
 		_cooldown_remaining = maxf(0.0, _cooldown_remaining - delta)
 	if _hold_off_remaining > 0.0:
 		_hold_off_remaining = maxf(0.0, _hold_off_remaining - delta)
+	if _damage_bonus_remaining > 0.0:
+		_damage_bonus_remaining -= delta
+		if _damage_bonus_remaining <= 0.0:
+			clear_damage_buff()
 
 
 ## No attack before `seconds` have passed: a group's desync, set when a fight is
@@ -241,12 +293,34 @@ func hold_off(seconds: float) -> void:
 	_hold_off_remaining = maxf(0.0, seconds)
 
 
-## Nothing under way and nothing pending: no attack, no cooldown, no desync. For
-## an enemy the room parks — or a test resetting one.
+## Nothing under way and nothing pending: no attack, no cooldown, no desync, no
+## buff. For an enemy the room parks — or a test resetting one.
 func reset() -> void:
 	interrupt()
 	_cooldown_remaining = 0.0
 	_hold_off_remaining = 0.0
+	clear_damage_buff()
+
+
+## A support's damage buff (M12.6): every attack of this enemy deals `bonus` more
+## (a share) for `duration` seconds, and the body glows `color`. Refused — false —
+## while one is already on: buffs never stack, from one support or two.
+func apply_damage_buff(bonus: float, duration: float, color: Color) -> bool:
+	if bonus <= 0.0 or duration <= 0.0 or has_damage_buff():
+		return false
+	_damage_bonus = bonus
+	_damage_bonus_remaining = duration
+	_show_buff(color)
+	return true
+
+
+## Ends the buff, if there is one: the damage is the archetype's again.
+func clear_damage_buff() -> void:
+	if _damage_bonus == 0.0 and _damage_bonus_remaining <= 0.0:
+		return
+	_damage_bonus = 0.0
+	_damage_bonus_remaining = 0.0
+	_show_buff(Color.BLACK)
 
 
 func _enter_phase(phase: Phase, duration: float) -> void:
@@ -278,6 +352,18 @@ func _cancel() -> void:
 	pass
 
 
+## Whether the attack under way still has something to be for. Asked every tick
+## before it runs on; false drops it. Always true for an attack at a hostile
+## target — its target going away ends the ATTACK state instead.
+func _is_still_valid() -> bool:
+	return true
+
+
+## The telegraph's colour for the attack under way: the archetype's.
+func _telegraph_color() -> Color:
+	return telegraph_color
+
+
 # --- the telegraph (PLACEHOLDER until M14's clips) --------------------------------------
 #
 # The body rears up and takes the telegraph's colour through the telegraph,
@@ -290,7 +376,7 @@ func _kill_telegraph_tween() -> void:
 
 
 func _telegraph_startup() -> void:
-	_tween_look(startup_scale, telegraph_color, maxf(0.05, _attack.windup * 0.85))
+	_tween_look(startup_scale, _telegraph_color(), maxf(0.05, _attack.windup * 0.85))
 
 
 func _telegraph_active() -> void:
@@ -310,6 +396,15 @@ func _tween_look(scale: Vector3, color: Color, duration: float) -> void:
 	_telegraph_tween.tween_property(_visual_root, "scale", scale, duration)
 	if _body_material != null:
 		_telegraph_tween.tween_property(_body_material, "albedo_color", color, duration)
+
+
+## PLACEHOLDER: a buffed body glows in the buff's colour; black is no glow.
+func _show_buff(color: Color) -> void:
+	if _body_material == null:
+		return
+	var glowing: bool = color != Color.BLACK
+	_body_material.emission_enabled = glowing
+	_body_material.emission = color
 
 
 func _reset_telegraph_instantly() -> void:

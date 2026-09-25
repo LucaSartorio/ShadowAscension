@@ -98,6 +98,11 @@ extends Resource
 ## was aimed, and stepping aside in that moment makes it miss.
 @export_range(0.0, 2.0, 0.01, "or_greater") var telegraph_facing_lock: float = 0.1
 
+@export_group("Support")
+## What it does for its allies (M12.6): whom it notices and reaches, its heal and
+## its buff. Null — every archetype but the support — supports nobody.
+@export var support: EnemySupportData = null
+
 @export_group("Hit Reactions")
 ## A hit whose stagger power is at least this staggers the enemy: its attack is
 ## cut off and it stands helpless for stagger_duration. Anything weaker is only

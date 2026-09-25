@@ -1,0 +1,70 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_data.gd" id="1_stats"]
+[ext_resource type="Resource" path="res://resources/enemies/attacks/support_bolt.tres" id="2_bolt"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_support_data.gd" id="3_support"]
+[ext_resource type="Resource" path="res://resources/enemies/attacks/support_heal.tres" id="4_heal"]
+[ext_resource type="Resource" path="res://resources/enemies/attacks/support_buff.tres" id="5_buff"]
+
+[sub_resource type="Resource" id="support_data"]
+script = ExtResource("3_support")
+ally_mask = 4
+ally_detection_range = 14.0
+support_range = 9.0
+cast_break_margin = 3.0
+ally_scan_interval = 0.5
+max_allies = 16
+approach_timeout = 4.0
+heal_action = ExtResource("4_heal")
+heal_threshold = 0.7
+heal_fraction = 0.25
+heal_cooldown = 6.0
+heal_color = Color(0.3, 1, 0.45, 1)
+buff_action = ExtResource("5_buff")
+buff_damage_bonus = 0.2
+buff_duration = 6.0
+buff_cooldown = 10.0
+buff_color = Color(1, 0.55, 0.15, 1)
+
+[resource]
+script = ExtResource("1_stats")
+xp_reward = 30
+max_health = 65.0
+movement_speed = 3.6
+acceleration = 14.0
+rotation_speed = 7.0
+gravity = 20.0
+target_groups = Array[StringName]([&"player"])
+detection_range = 12.0
+lose_target_range = 16.0
+lose_target_delay = 1.0
+eye_height = 1.2
+line_of_sight_mask = 1
+line_of_sight_interval = 0.2
+alert_duration = 0.3
+attack_range = 9.0
+preferred_combat_distance = 6.5
+minimum_combat_distance = 3.5
+disengage_distance = 0.0
+enemy_spacing_radius = 0.8
+attacks = Array[Resource]([ExtResource("2_bolt")])
+attack_damage = 8.0
+attack_cooldown = 2.0
+max_attack_facing_angle = 25.0
+telegraph_turn_fraction = 0.6
+telegraph_facing_lock = 0.15
+support = SubResource("support_data")
+stagger_resistance = 20.0
+stagger_duration = 0.6
+stagger_immunity_time = 1.0
+knockback_multiplier = 1.2
+knockback_deceleration = 30.0
+reposition_timeout = 1.5
+reposition_cooldown = 0.8
+reposition_speed_fraction = 0.9
+reposition_arrive_tolerance = 0.5
+telegraph_color = Color(0.7, 0.9, 1, 1)
+active_color = Color(1, 1, 1, 1)
+startup_scale = Vector3(0.92, 1.15, 0.92)
+active_scale = Vector3(1.1, 0.92, 1.1)
+target_update_interval = 0.2

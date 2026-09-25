@@ -6,7 +6,8 @@ extends RefCounted
 ##
 ##     raw    = base damage x attack multiplier        attack_damage(), once per swing,
 ##              then the attacker's own stats            by the attacker (the player's
-##              (the player: weapon, STR, rounded)       weapon and STR: PlayerProgression)
+##              (the player: weapon, STR, rounded;       weapon and STR: PlayerProgression;
+##               an enemy: a support's buff)             an enemy's buff: buffed_damage())
 ##     crit   = roll_critical(chance)                  once per hit: each target of a
 ##                                                       swing rolls on its own
 ##     final  = raw, or round(raw x crit multiplier)   final_damage(), per hit
@@ -26,6 +27,13 @@ extends RefCounted
 ## the attack.
 static func attack_damage(base_damage: float, attack_multiplier: float) -> float:
 	return base_damage * attack_multiplier
+
+
+## An enemy's base damage under a support's buff (M12.6): raised by `bonus`, a
+## share — 0.2 is +20%. With no buff (0) it is the base, exactly: the buff never
+## writes the base, so nothing of it outlives the buff.
+static func buffed_damage(base_damage: float, bonus: float) -> float:
+	return base_damage * (1.0 + maxf(bonus, 0.0))
 
 
 ## Whether one hit is critical. `chance` is 0.0 to 1.0 (0.1 = 10%), clamped: at

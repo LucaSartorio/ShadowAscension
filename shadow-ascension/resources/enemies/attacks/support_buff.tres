@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+id = &"support_buff"
+damage_multiplier = 0.0
+windup = 0.9
+active = 0.1
+recovery = 0.5
+stagger_power = 0.0
+knockback_force = 0.0
+debug_color = Color(1, 0.55, 0.15, 0.4)

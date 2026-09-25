@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M11 complete; M12 in progress (M12.1–M12.5 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M11 complete; M12 in progress (M12.1–M12.6 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -42,14 +42,20 @@ data alone — health, speed, reach, stagger resistance, knockback multiplier an
 with no code of its own. Since M12.5 the assassin (`basic_assassin_enemy.tscn`) is a fast, fragile melee
 whose rhythm comes from two data-driven rules of the shared code: `EnemyData.disengage_distance` (the
 ring it backs out to while its attack cools down) and `AttackData.lunge_speed` (movement along its
-locked facing during ACTIVE).
+locked facing during ACTIVE). Since M12.6 the support (`basic_support_enemy.tscn`) keeps a ranged's
+distance and helps its allies through one optional part, `EnemySupport` (`EnemyData.support`:
+`EnemySupportData`) — the support target, apart from the hostile target; allies found by a physics
+query every 0.5 s; the most hurt by share of health healed through `HealthComponent.heal()`; a damage
+buff that lives on the ally's `EnemyAttack` (one slot, never stacked) — its casts running as attacks
+(`EnemySupportAttack`), its fallback the ranged's bolt.
 Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.6 (M12.1–M12.5 are complete). See
+Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.7 (M12.1–M12.6 are complete). See
 `shadow-ascension/docs/ROADMAP.md` for the M12–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today, and
 *Enemy AI (M12.1)* for the enemy AI foundation, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)*,
-*Tank archetype (M12.4)* and *Assassin archetype (M12.5)* for the archetypes.
+*Tank archetype (M12.4)*, *Assassin archetype (M12.5)* and *Support archetype (M12.6)* for the
+archetypes.
 
 ---
 

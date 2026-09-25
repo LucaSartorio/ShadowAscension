@@ -76,10 +76,16 @@ func reset_to(maximum: float) -> void:
 	health_changed.emit(current_health, max_health)
 
 
-func heal(amount: float) -> void:
+## The only place health goes up, whoever heals — a support's heal (M12.6)
+## included. Never past the maximum, and never for the dead: a death is final, so
+## a heal that arrives after a killing blow — even in the same frame — raises
+## nothing. Returns the health it actually restored.
+func heal(amount: float) -> float:
 	if is_dead:
-		return
+		return 0.0
 	if amount <= 0.0:
-		return
+		return 0.0
+	var before: float = current_health
 	current_health = min(max_health, current_health + amount)
 	health_changed.emit(current_health, max_health)
+	return current_health - before

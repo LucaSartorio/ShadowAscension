@@ -1,0 +1,133 @@
+[gd_scene load_steps=20 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/basic_enemy.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="4_health"]
+[ext_resource type="Resource" path="res://resources/enemies/basic_support_enemy.tres" id="5_stats"]
+[ext_resource type="PackedScene" path="res://scenes/ui/enemy_health_bar_3d.tscn" id="20_bar"]
+[ext_resource type="Script" path="res://scripts/items/loot_dropper.gd" id="21_loot"]
+[ext_resource type="Resource" path="res://resources/items/loot/basic_melee_enemy_loot.tres" id="22_table"]
+[ext_resource type="PackedScene" path="res://scenes/items/world_item.tscn" id="23_worlditem"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_targeting.gd" id="40_targeting"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_support_attack.gd" id="41_attack"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_support.gd" id="42_support"]
+
+[sub_resource type="CapsuleShape3D" id="body_shape"]
+radius = 0.42
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="body_mesh"]
+radius = 0.38
+height = 1.75
+
+[sub_resource type="StandardMaterial3D" id="body_mat"]
+albedo_color = Color(0.3, 0.55, 0.45, 1)
+
+[sub_resource type="SphereMesh" id="orb_mesh"]
+radius = 0.16
+height = 0.32
+radial_segments = 12
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="orb_mat"]
+shading_mode = 0
+albedo_color = Color(0.6, 1, 0.75, 1)
+
+[sub_resource type="CapsuleShape3D" id="hurtbox_shape"]
+radius = 0.52
+height = 1.9
+
+[sub_resource type="TorusMesh" id="marker_mesh"]
+inner_radius = 0.6
+outer_radius = 0.75
+rings = 24
+ring_segments = 6
+
+[sub_resource type="StandardMaterial3D" id="marker_mat"]
+shading_mode = 0
+albedo_color = Color(0.3, 1, 0.45, 1)
+
+[node name="BasicSupportEnemy" type="CharacterBody3D" node_paths=PackedStringArray("target_anchor")]
+collision_layer = 4
+collision_mask = 7
+script = ExtResource("1_enemy")
+stats = ExtResource("5_stats")
+target_anchor = NodePath("TargetAnchor")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("body_shape")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("body_mesh")
+surface_material_override/0 = SubResource("body_mat")
+
+[node name="ProjectileSpawn" type="Marker3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, -0.55)
+
+[node name="Orb" type="MeshInstance3D" parent="VisualRoot/ProjectileSpawn"]
+mesh = SubResource("orb_mesh")
+material_override = SubResource("orb_mat")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.4
+target_desired_distance = 0.25
+path_height_offset = 0.5
+avoidance_enabled = true
+height = 1.8
+radius = 0.8
+neighbor_distance = 4.0
+max_neighbors = 6
+time_horizon_agents = 1.0
+time_horizon_obstacles = 0.5
+max_speed = 3.6
+use_3d_avoidance = false
+avoidance_layers = 1
+avoidance_mask = 1
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("4_health")
+
+[node name="EnemyTargeting" type="Node" parent="."]
+script = ExtResource("40_targeting")
+
+[node name="Attack" type="Node" parent="." node_paths=PackedStringArray("support", "projectile_spawn")]
+script = ExtResource("41_attack")
+support = NodePath("../Support")
+projectile_spawn = NodePath("../VisualRoot/ProjectileSpawn")
+
+[node name="Support" type="Node" parent="." node_paths=PackedStringArray("cast_marker")]
+script = ExtResource("42_support")
+cast_marker = NodePath("../CastMarker")
+
+[node name="CastMarker" type="MeshInstance3D" parent="."]
+top_level = true
+visible = false
+cast_shadow = 0
+mesh = SubResource("marker_mesh")
+material_override = SubResource("marker_mat")
+
+[node name="Hurtbox" type="Area3D" parent="."]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+monitorable = true
+script = ExtResource("3_hurtbox")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("hurtbox_shape")
+
+[node name="EnemyHealthBar3D" parent="." instance=ExtResource("20_bar")]
+health_bar_height_offset = 2.1
+
+[node name="LootDropper" type="Node" parent="."]
+script = ExtResource("21_loot")
+loot_table = ExtResource("22_table")
+world_item_scene = ExtResource("23_worlditem")
+
+[node name="TargetAnchor" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0)

@@ -31,7 +31,7 @@ func setup(enemy: CharacterBody3D, targeting: EnemyTargeting, visual_root: Node3
 ## opens. activate() also forgets whom the last swing hit.
 func _begin_active() -> bool:
 	if hitbox != null:
-		hitbox.use_attack(_attack, attack_damage)
+		hitbox.use_attack(_attack, get_attack_damage())
 		hitbox.activate()
 	return true
 

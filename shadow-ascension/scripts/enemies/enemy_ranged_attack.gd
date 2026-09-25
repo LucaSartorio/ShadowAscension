@@ -88,7 +88,7 @@ func _fire() -> bool:
 		return false
 	world.add_child(projectile)
 	projectile.global_position = origin
-	projectile.launch(_enemy, _aim_direction(origin, aim_point), _attack, attack_damage)
+	projectile.launch(_enemy, _aim_direction(origin, aim_point), _attack, get_attack_damage())
 	_shots += 1
 	fired.emit(projectile)
 	return true

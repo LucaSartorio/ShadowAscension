@@ -2,11 +2,12 @@ class_name BasicEnemy
 extends RoomCombatant
 
 ## An enemy on the AI foundation (M12.1): the state machine every enemy
-## archetype runs — the melee (M12.2), the ranged (M12.3). Named BasicMeleeEnemy
-## until M12.3, when it stopped being the melee's alone. Nothing here asks which
-## archetype it is: an archetype is the attack component its scene gives it (the
-## `Attack` node: EnemyMeleeAttack, EnemyRangedAttack) and the EnemyData that
-## tunes it — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres`.
+## archetype runs — the melee (M12.2), the ranged (M12.3), the tank (M12.4), the
+## assassin (M12.5), the support (M12.6). Named BasicMeleeEnemy until M12.3, when
+## it stopped being the melee's alone. Nothing here asks which archetype it is: an
+## archetype is the parts its scene gives it (the `Attack` node: EnemyMeleeAttack,
+## EnemyRangedAttack, EnemySupportAttack; a support's `Support` node) and the
+## EnemyData that tunes it — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres`.
 ##
 ## Its parts, each with one owner:
 ##
@@ -22,6 +23,9 @@ extends RoomCombatant
 ##                 the attack under way — telegraph, active, recovery — and its
 ##                 cooldown. The state machine decides when to attack; the
 ##                 attack decides what the attack is.
+##     Support     EnemySupport (child node `Support`, a support's only): the ally
+##                 it supports and what it means to do for it (M12.6). Optional:
+##                 without one, an enemy supports nobody.
 ##     Health      HealthComponent: the AI hears `damaged` and `died`, owns none.
 ##     Visual      the hit reactions' placeholder poses (the telegraph is the attack's).
 ##
@@ -32,6 +36,10 @@ extends RoomCombatant
 ## An archetype with a `disengage_distance` (the assassin, M12.5) keeps that wider
 ## ring instead while its attack cools down: it strikes, backs off, and comes
 ## back in when it may strike again.
+##
+## A support (M12.6) keeps its ring like a ranged, and while it has an ally to
+## support it walks into reach and sight of that ally instead, and casts: the
+## cast is an ATTACK like any other — the same states, no new one.
 ##
 ## The states, and what moves between them:
 ##
@@ -160,6 +168,8 @@ var target_update_interval: float
 @onready var body_collision: CollisionShape3D = $CollisionShape3D
 @onready var targeting: EnemyTargeting = $EnemyTargeting
 @onready var attack: EnemyAttack = $Attack
+## Optional: only a support's scene has one.
+@onready var support: EnemySupport = get_node_or_null("Support") as EnemySupport
 
 ## The AI state: the one source of truth, written only by _change_state().
 var _state: State = State.IDLE
@@ -205,6 +215,8 @@ func _ready() -> void:
 	# scene's placeholder in its own _ready(), before this one ran.
 	health_component.reset_to(max_health)
 	attack.setup(self, targeting, visual_root, mesh_instance)
+	if support != null:
+		support.setup(self, targeting, attack)
 	health_component.damaged.connect(_on_damaged)
 	health_component.died.connect(_on_died)
 	targeting.setup(self, target_groups)
@@ -252,6 +264,8 @@ func _apply_stats() -> void:
 
 	max_attack_facing_angle = source.max_attack_facing_angle
 	attack.configure(source)
+	if support != null:
+		support.configure(source)
 
 	stagger_resistance = source.stagger_resistance
 	stagger_duration = source.stagger_duration
@@ -324,6 +338,8 @@ func set_combat_enabled(enabled: bool) -> void:
 	_change_state(State.IDLE)
 	_clear_reactions()
 	attack.reset()
+	if support != null:
+		support.reset()
 	_sight_age = INF
 	velocity = Vector3.ZERO
 	_refresh_engaged()
@@ -471,6 +487,9 @@ func _update_chase(delta: float) -> void:
 	if _reposition_block_timer <= 0.0 and _needs_reposition(dist):
 		_change_state(State.REPOSITION)
 		return
+	if _is_supporting():
+		_move_to_support(delta)
+		return
 
 	# On the ring but unable to see the target — a wall between them — holding
 	# there would wait for ever: it closes in on the target itself, down to the
@@ -518,6 +537,9 @@ func _needs_reposition(dist: float) -> bool:
 		return true
 	if is_disengaging() and dist < disengage_distance - reposition_arrive_tolerance:
 		return true
+	# Turned to an ally it is about to support, it is not facing away by mistake.
+	if _is_supporting():
+		return false
 	if dist <= attack_range and _facing_error_to(targeting.get_target()) > deg_to_rad(max_attack_facing_angle):
 		return true
 	return false
@@ -575,8 +597,9 @@ func _update_attack(delta: float) -> void:
 	else:
 		_hold_position(delta)
 	var turn: float = attack.get_turn_factor()
-	if turn > 0.0:
-		_rotate_toward_target(delta, rotation_speed * turn)
+	var facing: Node3D = attack.get_facing_target()
+	if turn > 0.0 and facing != null:
+		_rotate_toward_point(facing.global_position, delta, rotation_speed * turn)
 	if attack.advance(delta):
 		_change_state(State.CHASE)
 
@@ -603,6 +626,8 @@ func _end_stagger() -> void:
 
 func _tick_timers(delta: float) -> void:
 	attack.tick(delta)
+	if support != null:
+		support.tick(delta, FIGHTING_STATES.has(_state))
 	_sight_age += delta
 	if _reposition_block_timer > 0.0:
 		_reposition_block_timer = maxf(0.0, _reposition_block_timer - delta)
@@ -723,6 +748,35 @@ func _has_navigation() -> bool:
 	return not _navigation_missing
 
 
+## Whether it has an ally to support (M12.6): then it goes to that ally rather
+## than to its ring, and fires nothing at the foe until it has cast.
+func _is_supporting() -> bool:
+	return support != null and support.has_plan()
+
+
+## Toward the ally it supports, until it could cast on it — in reach and in
+## sight — then holding there, turned to it, for its attack to be ready. Walking
+## toward the ally is also how a wall between them is got round. The ring and the
+## retreat still come first: CHASE checks the player pressing it before this.
+func _move_to_support(delta: float) -> void:
+	var ally: Node3D = support.get_support_target()
+	if support.can_cast():
+		_hold_position(delta)
+		_rotate_toward_point(ally.global_position, delta, rotation_speed)
+		return
+	var to_ally: Vector3 = ally.global_position - global_position
+	to_ally.y = 0.0
+	_update_nav_target(delta, ally.global_position)
+	var dir: Vector3 = _path_direction()
+	# Two bodies' personal space short of it: never into it.
+	var speed: float = _arrival_speed(to_ally.length() - enemy_spacing_radius * 2.0)
+	_drive(_accelerate_toward(dir * speed, delta), delta)
+	if speed > 0.0 and dir.length_squared() > 0.001:
+		_rotate_visual_toward(dir, delta, rotation_speed)
+	else:
+		_rotate_toward_point(ally.global_position, delta, rotation_speed)
+
+
 ## The point this instance wants to occupy: on its ring around the target (the
 ## preferred distance, or the disengage distance while it disengages), biased by
 ## combat_angle_offset_degrees so instances do not stack.
@@ -750,6 +804,14 @@ func _rotate_toward_target(delta: float, speed: float) -> void:
 	if to_target.length_squared() < 0.0001:
 		return
 	_rotate_visual_toward(to_target.normalized(), delta, speed)
+
+
+func _rotate_toward_point(point: Vector3, delta: float, speed: float) -> void:
+	var to_point: Vector3 = point - global_position
+	to_point.y = 0.0
+	if to_point.length_squared() < 0.0001:
+		return
+	_rotate_visual_toward(to_point.normalized(), delta, speed)
 
 
 ## Where the enemy faces, flat and of length 1.
@@ -805,7 +867,10 @@ func _has_line_of_sight(target: Node3D) -> bool:
 
 ## Whether an attack may start now, `dist` away from the target: the attack ready
 ## (none under way, off cooldown, past the desync), inside the attack band,
-## facing the target, and seeing it.
+## facing the target, and seeing it. A support's cast (M12.6) needs none of the
+## last three — its own reach and sight of the ally are the support's to judge —
+## but not with the player inside its minimum distance: it steps back first. While
+## it has an ally to support and cannot cast yet, it fires nothing at the foe.
 ##
 ## Nearer than the minimum is no place to attack from — the enemy steps back
 ## first (REPOSITION) — unless stepping back has just failed: a REPOSITION that
@@ -815,9 +880,13 @@ func _has_line_of_sight(target: Node3D) -> bool:
 func _can_start_attack(dist: float) -> bool:
 	if not attack.is_ready():
 		return false
-	if dist > attack_range:
-		return false
 	if dist < minimum_combat_distance and not is_cornered():
+		return false
+	if support != null and support.get_castable_action() != null:
+		return true
+	if _is_supporting():
+		return false
+	if dist > attack_range:
 		return false
 	var target: Node3D = targeting.get_target()
 	if target == null or _facing_error_to(target) > deg_to_rad(max_attack_facing_angle):
@@ -950,6 +1019,9 @@ func _on_died() -> void:
 func _enter_dead() -> void:
 	_clear_reactions()
 	targeting.release()
+	attack.clear_damage_buff()
+	if support != null:
+		support.release()
 	velocity = Vector3.ZERO
 	_desired_horizontal = Vector3.ZERO
 
