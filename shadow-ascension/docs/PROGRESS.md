@@ -6,9 +6,17 @@
 
 ## Current Milestone
 
-**M11 — Combat System 2.0** (Completed)
+**M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
-**M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
+**M12.1 — Enemy AI 2.0 Foundation** is complete: the basic enemy's AI is an explicit state machine
+(`IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`) with one writer of its state and a table of
+legal transitions, and its target has one owner, `EnemyTargeting`, choosing from the target groups its
+data names — the player's alone, as before. The behaviour and every number are the ones M11 shipped;
+the boss keeps its own AI. M12.2 is next; the archetypes, the target choice between player and shadow,
+group combat and the Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`, *Enemy
+AI (M12.1)*; the deliverables are in `ROADMAP.md`.
+
+**M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
 attack as chains of `AttackData`, a dodge with explicit phases whose i-frames the hurtbox enforces,
 stamina paying for the dodge, enemies that flinch, stagger and get knocked back, one damage model
@@ -16,15 +24,15 @@ with a critical rolled per hit, a target lock, and — since M11.9 — every hit
 hit stop and a camera shake, with a mark for a critical. Sprint, soft targeting, floating damage
 numbers and the damage model's prospective fields were not built (`ROADMAP.md`, *M11*).
 
-Next: **M12 — Enemy AI 2.0 & Boss Framework**, not started. The architecture is `ARCHITECTURE.md`,
-*Combat architecture (M11)*, and what M12 inherits is its *Combat System 2.0 at the close of M11*.
+The combat architecture is `ARCHITECTURE.md`, *Combat architecture (M11)*, and what M12 inherited
+is its *Combat System 2.0 at the close of M11*.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 not started |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -40,6 +48,78 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.1 — Enemy AI 2.0 Foundation** (Completed). The basic enemy's AI was read end to end first —
+  spawn parked -> woken by its room -> the player found as "the first node in the `player` group" and
+  cached -> detected by flat distance -> chase to a slot on a ring, or reposition -> a telegraphed swing
+  on timers, then a cooldown -> a hit: flinch, stagger, push -> death — and what was wrong with it
+  listed: `_state` written directly from seven places with no exit or enter logic, a lose-target timer
+  among the AI's own, a path asked for five times a second whether or not anything had moved, and an
+  enemy in a scene with no navigation standing still in silence. There was no redundant state flag to
+  remove (`_engaged` and the stagger timers were already derived or runtime). Then, reusing every
+  working part:
+
+    - **A state machine** (`BasicMeleeEnemy.State`: `IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED,
+      DEAD`). `_change_state()` is the only writer of `_state`: the old state's exit, the new one's
+      enter, the engagement, an optional log, `state_changed(from, to)`. `TRANSITIONS` lists what is
+      legal; a fighting state needs a target and combat on; everything else is refused and announced
+      by nothing. Each state has its enter, update and exit (see `ARCHITECTURE.md`). REPOSITION is the
+      existing manoeuvre, kept.
+    - **ALERT**: noticed, not yet after it — stands and turns to the target for `alert_duration`. The
+      basic enemy's is **0 s**, run in the same tick as the detection, so nothing about its timing
+      changed.
+    - **`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`, a child of the enemy scene): the one
+      reference to whom it fights. Candidates are the living members of `EnemyData.target_groups` —
+      **`[Player.GROUP]`**, so the policy is unchanged: the player, never a shadow. Nearest within
+      detection range; kept until it dies or leaves the scene (signals, same call), stops being valid,
+      or stays past 14 m for 1 s. The groups are read at most once a second, only while searching.
+    - **Movement apart from decisions**: states say hold or go; `_hold_position()` / `_drive()` /
+      `_apply_motion()` do it — the push first, avoidance, the one `move_and_slide()`. A new path only
+      when the slot moves 10 cm (one in a second of chasing instead of five). No navigation region:
+      one warning naming the enemy, and it steers straight at its target.
+    - **The attack** as a section with a small API (`_can_start_attack()`, `_start_attack()`,
+      `_advance_attack()`, `_interrupt_attack()`); the cooldown is the attack's; a swing cut off by a
+      stagger, a death or a lost target shuts its hitbox at once.
+    - **M11 kept**: the stagger is the STAGGERED state, the push stays `_apply_motion()`'s, death is
+      DEAD with its cleanup and the reward is still `PlayerProgression`'s; the dodge, the lock, the
+      critical and the hit stop go through untouched.
+    - **Debug**, off by default: `debug_log_ai` (transitions, refusals, targets), `debug_state_label`
+      (state, target, distance, navigation over the enemy).
+    - **Removed**: `_get_player()` and the cached `_player`, `_check_lose_target()` and its timer,
+      `_enter_idle()` / `_enter_chase()` / `_enter_reposition()` / `_enter_attack()` and every direct
+      write of `_state`, `_tick_reactions()`'s hidden state change.
+    - **Not touched**: the boss (its own AI; the Boss Framework is M12's), the shadow's AI, every
+      number in `EnemyData`.
+
+  Tests: **`tests/enemies/enemy_ai_test.tscn`** (36) — the data and each enemy's own copies; IDLE with
+  nobody in range (no step, no swing, the groups read once); IDLE -> ALERT -> CHASE in one tick, and a
+  0.5 s ALERT standing and turning; the chase closing in with one path a second; one full swing, its
+  hitbox open only in ACTIVE, the next after the cooldown, the chase when the player steps off; the
+  target lost to distance (after the grace), to its death (same call) and mid-swing (cut off); staggered
+  from CHASE (no step, navigation not followed) and from STARTUP (no ghost hit, no swing before it is
+  over); pushed mid-chase; killed from IDLE, CHASE, ATTACK (by the player: 25 XP once) and STAGGERED —
+  nothing after; refused transitions; three enemies in three states with their own cooldowns; the
+  shipped policy with a shadow nearer, and an archetype with the shadow's group — nearest, sticky,
+  let go on recall and on death; its swing dodged; the player's lock through IDLE, ATTACK, STAGGERED,
+  CHASE and the death; a critical heavy through a hit stop; 16 enemies at once at the game's rate (the
+  same cost as before M12.1); a scene with no navigation; the debug label; and an every-tick watcher
+  (a fighting state always has a target, IDLE and DEAD never do, ATTACK and an attack phase go
+  together, the hitbox opens only in ACTIVE, DEAD matches the health).
+  **`tests/core/m12_ai_run.gd`** (12) — the real game: every enemy parked and clean; room one armed,
+  both noticing the player in one tick, finding their way to it and swinging; killed, 50 XP once, the
+  room cleared; the player and the shadow against three, every enemy on the player, a target taken at
+  most twice, 2 kills the player's and 1 the shadow's paid 70/30; the boss locked and killed on its own
+  AI, the dungeon completed; hub; a second dungeon with every enemy clean and no listener doubled,
+  room one fought again; hub, nothing orphaned.
+
+  **2011 assertions across 55 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 53 existing suites keep M11.9's 1963; four needed a line each for
+  what the refactor removed (`_lose_target_timer`, `_enter_chase()`, `_get_player()`); the two new ones
+  add 48. Zero parser warnings in the changed scripts and the new tests; cold-cache reimport,
+  headless boot and a headless run of the game are clean.
+
+  Left for M12.2 and later: the archetypes, the target choice between the player and the shadow,
+  group combat and attack coordination, configurable telegraphs, enemy scaling, the Boss Framework.
 
 - **M11 — Combat System 2.0** (Completed). Closed on M11.9. The player's combat was rebuilt on its
   own controller and grown step by step on it — the combo chain, the heavy attack, the dodge and its
@@ -1805,7 +1885,9 @@ Findings and decisions from the prototype phase that were deliberately left alon
 - **Enemies never target the summoned shadow.** It can be damaged and killed — the masks allow it
   and the boss does hit it — but normal enemies aim only at the player, so in a measured room the
   shadow took **0 damage in 60 seconds**. → **M12**, which makes target selection between the
-  player and the shadow an explicit deliverable.
+  player and the shadow an explicit deliverable. Since M12.1 the policy is data: an enemy's
+  candidates are its `EnemyData.target_groups`, the player's alone for the basic enemy; adding the
+  shadow's group makes it a candidate (tested), and choosing well between the two is still M12's.
 - **The shadow's offensive share.** At Lv.1 it is ~19% of the player's peak DPS against an
   indicative ~50%. Measured in practice the gap is much smaller, because the shadow fights
   continuously while the player spends most of a fight repositioning — it clears a two-enemy room

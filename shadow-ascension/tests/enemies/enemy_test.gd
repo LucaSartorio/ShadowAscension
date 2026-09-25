@@ -94,7 +94,7 @@ func _reset_enemy(pos: Vector3) -> void:
 	_enemy._phase_timer = 0.0
 	_enemy._cooldown_timer = 0.0
 	_enemy._attack_delay_timer = 0.0
-	_enemy._lose_target_timer = 0.0
+	_enemy.targeting.release()
 	_enemy._reposition_timer = 0.0
 	_enemy._reposition_block_timer = 0.0
 	_enemy._desired_horizontal = Vector3.ZERO

@@ -379,7 +379,12 @@ Turn prototype combat into a real action-RPG combat system.
 
 ## M12 — Enemy AI 2.0 & Boss Framework
 
-**Status:** not started.
+**Status:** in progress.
+
+| Step | State | What it did |
+| --- | --- | --- |
+| **M12.1** Enemy AI 2.0 Foundation | **Complete** | the basic enemy's AI as an explicit state machine — `IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD` — with one writer of the state (`_change_state()`: exit, enter, `state_changed`), a table of legal transitions (DEAD never left, no swing from a stagger, none without a target, none doubled), enter / update / exit per state; the target owned by one component (`EnemyTargeting`): candidates from the data's `target_groups` (the player's alone — enemies still never fight the shadow), nearest in range, kept until it dies, leaves or runs off, the groups read once a second only while searching; movement separate from decisions; a path asked for only when the slot moves; a missing navigation said once; M11.6's stagger and push, M11.9's hit stop, the dodge and the lock untouched. Behaviour and numbers unchanged; the boss not migrated |
+| M12.2 onwards | Not started | the rest of the deliverables below |
 
 **Goal**
 Build a reusable framework for enemies and bosses, rather than one hand-made enemy and one

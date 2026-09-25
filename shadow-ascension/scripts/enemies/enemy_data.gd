@@ -12,9 +12,11 @@ extends Resource
 ## this: `max_health` here is the archetype's ceiling and is never decremented.
 ##
 ## What does NOT belong here: current health or anything else that changes during
-## a fight; AI state; placement (the approach angle and attack desync are set on
-## each instance in its room); and what a kill drops or leaves behind, which the
-## LootDropper and ShadowSource components on the enemy scene declare themselves.
+## a fight; AI state — the current state, the target, the cooldown and stagger
+## left, the navigation — all of which is the enemy's own; placement (the
+## approach angle and attack desync are set on each instance in its room); and
+## what a kill drops or leaves behind, which the LootDropper and ShadowSource
+## components on the enemy scene declare themselves.
 ##
 ## The defaults below are the template a new asset starts from in the editor, and
 ## what an enemy with no asset falls back to. An archetype's real numbers are the
@@ -35,6 +37,11 @@ extends Resource
 @export var gravity: float = 20.0
 
 @export_group("Perception")
+## The groups whose members this archetype fights (M12.1). A candidate must also
+## be alive (it carries a health component that is not dead). The basic enemy's
+## is the player's alone: it has never fought a shadow.
+@export var target_groups: Array[StringName] = [Player.GROUP]
+## A target is acquired when it comes closer than this, flat.
 @export_range(0.0, 50.0, 0.5, "or_greater") var detection_range: float = 10.0
 @export_range(0.0, 50.0, 0.5, "or_greater") var lose_target_range: float = 14.0
 ## Grace period before a target outside lose_target_range is dropped, so a
@@ -43,6 +50,9 @@ extends Resource
 @export var eye_height: float = 1.2
 ## Physics layers that block line of sight (world geometry only).
 @export_flags_3d_physics var line_of_sight_mask: int = 1
+## Seconds between noticing a target and going after it (ALERT): the enemy
+## stands and turns to face it. 0: noticed and chased in the same tick.
+@export_range(0.0, 5.0, 0.05, "or_greater") var alert_duration: float = 0.0
 
 @export_group("Combat Spacing")
 @export_range(0.0, 10.0, 0.05, "or_greater") var attack_range: float = 1.8

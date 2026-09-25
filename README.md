@@ -4,7 +4,7 @@ Action RPG 3D in Godot 4.7 (GDScript). The Godot project lives in `shadow-ascens
 
 ## Status
 
-**M0–M11 complete — Vertical Slice (RC1) on a consolidated architecture, with Combat System 2.0.**
+**M0–M11 complete, M12 in progress — Vertical Slice (RC1) on a consolidated architecture, with Combat System 2.0.**
 
 The slice runs from the main menu through a hub, a dungeon and a boss, and back, with progression,
 loot, equipment and the shadow mechanic all live. Everything you can see is a **placeholder**:
@@ -16,7 +16,8 @@ phase, is complete. **M11 — Combat System 2.0** is complete: M11.1 (the combat
 (the light attack combo chain), M11.3 (the heavy attack), M11.4 (the dodge and its i-frames), M11.5
 (stamina), M11.6 (hit reactions, stagger and knockback), M11.7 (critical hits and the damage model),
 M11.8 (target lock) and M11.9 (combat feedback — hit stop, camera shake — and the closure of M11).
-**M12 — Enemy AI 2.0 & Boss Framework** is next, not started; the phase runs to Alpha 1 at M20.
+**M12 — Enemy AI 2.0 & Boss Framework** is in progress: M12.1 (the enemy AI foundation — a state
+machine and a target owner) is done; the phase runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub

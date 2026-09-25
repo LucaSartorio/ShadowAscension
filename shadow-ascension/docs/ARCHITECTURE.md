@@ -136,6 +136,10 @@ Systems are built from small, composable components attached to a scene root (e.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2), its stagger power and push (M11.6), and its hit stop and camera shake (M11.9).
 
+The basic enemy's AI (M12.1) is its state machine in `BasicMeleeEnemy` plus one component,
+**`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), the one owner of whom it fights. See
+*Enemy AI (M12.1)*.
+
 The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); so are its target lock, **`PlayerTargeting`** (M11.8), the one owner of which enemy the player is locked onto, and **`PlayerCombatFeedback`** (M11.9), which plays the hit stop, the camera shake (`CameraRig.shake()`) and a critical's mark for the player's hits that count. See *Combat architecture (M11)*.
 
 Progression stats live in `scripts/player/` (`PlayerProgression`, `ProgressionStats`) rather than in a generic stats component, because so far only the player has allocatable stats.
@@ -204,7 +208,7 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 
 | Resource | Responsible for | Main fields | Read by | Must NOT contain |
 | --- | --- | --- | --- | --- |
-| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype | `xp_reward`, `max_health`, movement, perception, spacing, attack damage and timings, hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), telegraph | `BasicMeleeEnemy._apply_stats()` | current health or any fight state — a stagger or a push in progress included; placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1), spacing, attack damage and timings, hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), telegraph | `BasicMeleeEnemy._apply_stats()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
@@ -319,7 +323,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
 **49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
-(M11.9), **53 suites and 1963 assertions**, all clean. Since M11.9 a hit stop holds the
+(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**, all clean. Since M11.9 a hit stop holds the
 game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
 in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
@@ -386,7 +390,7 @@ it owns and calls it; what is owned reports back with signals; the UI observes a
 | **`owner`** | a node reaching the root of the scene it was placed in | `RunSummary`, `DungeonObjectiveUI` → their `DungeonController` |
 | **Own subtree** | a controller finding what belongs to its scene | `DungeonController` resolves its player once, inside itself; `DungeonRunStats` asks it |
 | **Signals** | everything that flows back up, and everything the UI shows | `enemy_died`, `room_cleared`, `dungeon_completed`, `xp_changed`, `shadow_summoned`, `extraction_finished` |
-| **Typed groups** | genuinely "whoever that is" lookups, done once | enemies acquire `Player.GROUP`; HUDs find the player once on ready; `BossHealthBar` finds `DungeonBoss.GROUP` |
+| **Typed groups** | genuinely "whoever that is" lookups, done once | an enemy's candidates are the members of its data's target groups (`Player.GROUP`), read at most once a second while it searches (M12.1); HUDs find the player once on ready; `BossHealthBar` finds `DungeonBoss.GROUP` |
 
 **Dependency rules.**
 
@@ -401,8 +405,9 @@ it owns and calls it; what is owned reports back with signals; the UI observes a
 - **Generic scenes do not know the level they are in.** A player, an enemy, a shadow, a gate, an item
   and a remnant each come up on their own and either work or stand still — nothing assumes a
   `Player`, a `HUD` or a `DungeonController` at a known path.
-- **No lookups per frame.** Enemies and the boss cache the player they acquire; the character sheet
-  caches its player instead of searching on every refresh.
+- **No lookups per frame.** An enemy holds the target it acquires (`EnemyTargeting`, M12.1) and reads
+  its groups on a one-second cadence only while it has none; the boss caches the player it acquires;
+  the character sheet caches its player instead of searching on every refresh.
 - **A connection to something that outlives the connector is dropped explicitly** in `_exit_tree()`
   — the two `SceneTree.node_added` listeners (`DungeonRunStats`, `ExtractionFeedback`) do.
 
@@ -434,9 +439,10 @@ Completion     the boss dies like any combatant -> its room clears -> dungeon_co
                -> exit portal enabled, RunSummary opens; the boss never knows the dungeon
 ```
 
-**Deliberately unchanged**, with the reason. Enemies acquire the player through the typed group:
-the room could hand them the player that walked in, but choosing a target is M12's to redesign (the
-shadow is not a target yet). And the rule for which interactable answers [E] when two overlap lives in
+**Deliberately unchanged**, with the reason. Enemies choose their own target from their target groups
+(M12.1, *Enemy AI (M12.1)*): the room could hand them the player that walked in, but an enemy that
+chooses is what lets an archetype fight a shadow too — the shipped enemy's only group is the
+player's. And the rule for which interactable answers [E] when two overlap lives in
 `InteractionPrompt.should_act()` — a UI node arbitrating gameplay. It works, it is the contract
 CLAUDE.md §9 prescribes, and moving it means moving the whole interaction system to the player, which
 is its own change.
@@ -1820,7 +1826,8 @@ a chain, a dodge, a reset, a death.
   recovery) and send the same `DamageInfo`; they carry no critical chance, stagger power or push.
 - The player has no hit reaction of its own: nothing listens to its `damaged`.
 - Enemies acquire their target through `Player.GROUP`; nothing chooses between the player and a
-  shadow.
+  shadow. (Since M12.1: through `EnemyTargeting` and the data's target groups — still the player's
+  alone; see *Enemy AI (M12.1)*.)
 - An enemy can stall out of reach of a still player (below).
 - Only the player's hits have feedback; any other source goes through `PlayerCombatFeedback`.
 
@@ -1850,10 +1857,187 @@ a chain, a dodge, a reset, a death.
   nor attacks until the player moves. Distance management is M12's; `m11_dodge_run` steps the player
   in to 1.5 m before waiting for a swing.
 
-Still true from before M11: enemies are found by physics, not a registry; enemies acquire their
-target through `Player.GROUP` (choosing between player and shadow is M12's); new runtime state goes on
+Still true from before M11: enemies are found by physics, not a registry; enemies choose their target
+from their data's target groups — the player's alone (M12.1; a shadow group is data); new runtime state goes on
 its component and its tuning in a resource, never in `PlayerRuntimeState` unless it must outlive a
 scene; and the session is reached through `Player.session()`.
+
+## Enemy AI (M12.1)
+
+M12.1 (Enemy AI 2.0 Foundation) rebuilt the basic enemy's AI as the base the rest of M12 extends. Its
+behaviour is the one M4–M11 shipped — the same detection, chase, spacing, reposition, telegraphed
+swing, cooldown, stagger, push and death, and the same numbers — reorganised so that the AI state has
+one owner and one way to change, the target has one owner, and moving is separate from deciding.
+Before it the AI was one `_physics_process()` that looked the player up as "the first node in the
+`player` group", wrote `_state` from seven places with no exit or enter logic, kept the lose-target
+timer among the AI's own, and asked the navigation server for a path five times a second whether or
+not anything had moved.
+
+```
+BasicMeleeEnemy (scenes/enemies/basic_melee_enemy.tscn)
+├── Data        EnemyData (`stats`), copied into runtime fields once in _ready()
+├── AI state    `_state`, changed only by _change_state(): exit -> enter -> state_changed
+├── Target      EnemyTargeting (child node): the one reference to whom it fights
+├── Movement    _hold_position(), _drive() -> NavigationAgent3D avoidance -> _apply_motion():
+│               the push, gravity, the one move_and_slide()
+├── Combat      the attack section: _can_start_attack(), _start_attack(), _advance_attack(),
+│               _interrupt_attack(); the hitbox; the cooldown
+├── Health      HealthComponent — the AI hears damaged and died, owns none of it
+└── Visual      the telegraph, the flinch, the stagger lean, the topple (placeholders until M14)
+```
+
+Not one script per part: at seven states and one attack a single, sectioned script reads better than
+a framework. What matters is that the states say *what* to do — hold, go toward the target, swing —
+and the movement and attack sections decide *how*, so a future archetype changes a section, not the
+state machine.
+
+### The state machine
+
+`BasicMeleeEnemy.State`: `IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`. `_state` is the
+only record of it — no `is_attacking` / `is_chasing` flag beside it; `is_staggered()` and
+`get_state()` read it. REPOSITION is not new: it is the chase's own manoeuvre since M5 (too close, or
+in range but facing away), kept because the behaviour needs it.
+
+| State | Enter | Update (each physics tick) | Exit |
+| --- | --- | --- | --- |
+| `IDLE` | lets the target go | holds still (inside avoidance); looks for a target in detection range -> `ALERT` | — |
+| `ALERT` | stops; starts `alert_duration`; starts the per-instance attack desync (`initial_attack_delay`) | holds still, turns toward the target; target lost -> `IDLE`; duration over -> `CHASE`. At 0 s — the basic enemy's — IDLE's update runs it in the same tick, so noticing costs no time | — |
+| `CHASE` | asks for a path on its first tick | target lost -> `IDLE`; can swing -> `ATTACK`; too close or facing away -> `REPOSITION`; else paths to its slot beside the target, stopping on the ring, turning with its movement (or to the target once there) | — |
+| `REPOSITION` | starts its timeout; asks for a path | target lost -> `IDLE`; timed out -> `CHASE` (and blocks re-entry for `reposition_cooldown`); can swing -> `ATTACK`; else steps round to its slot, always facing the target | — |
+| `ATTACK` | starts the swing: STARTUP, telegraph | holds still; turns slowly in STARTUP only; advances the swing; over -> `CHASE` | cuts off a swing still under way (hitbox shut, telegraph undone) |
+| `STAGGERED` | starts `stagger_duration`; stops the AI's own speed | no decision, no turning, no path: the body moves only if pushed; over -> `CHASE` with a target and combat on, else `IDLE` | starts the immunity, releases the lean |
+| `DEAD` | clears the reactions, lets the target go, stops the navigation (path to where it lies, out of avoidance), turns its collision off, topples | nothing: `_physics_process` returns first | never left |
+
+Parked (`combat_enabled` off — a room not yet entered, or suspended) the enemy perceives, paths and
+counts nothing: a stagger still runs its course and a push still plays out, and that is all.
+
+**Transitions.** `_change_state(to)` is the only writer of `_state`. It runs the old state's exit,
+the new one's enter, refreshes the engagement (the health bar's signal), logs when asked, and emits
+`state_changed(from, to)`. It refuses — changing nothing, emitting nothing — a transition not listed
+in `TRANSITIONS`, the same state again, and a fighting state (`ALERT, CHASE, REPOSITION, ATTACK`)
+without a target or with combat off:
+
+```
+IDLE --target in detection range--> ALERT --alert_duration--> CHASE <--> REPOSITION
+CHASE / REPOSITION --swing possible--> ATTACK --recovery over--> CHASE
+ALERT / CHASE / REPOSITION / ATTACK --target lost--> IDLE
+any but DEAD --a hit strong enough--> STAGGERED --over--> CHASE (target, combat on) or IDLE
+any --died--> DEAD
+```
+
+So, by construction: DEAD is never left; STAGGERED cannot start a swing (it has no edge to ATTACK) and
+ends only when its time does; ATTACK is never re-entered, so a swing is never restarted or doubled;
+IDLE cannot jump to CHASE or ATTACK; no swing starts without a target in range (the one edge to
+ATTACK is taken only when `_can_start_attack()` says so). Priority falls out of the same rules: a
+death is always taken, a stagger from any living state, and nothing the AI decides runs during a
+stagger.
+
+### Targeting
+
+**`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), a child node wired by the enemy in
+`_ready()`, is the one owner of whom the enemy fights: `get_target()`, `has_target()`, the flat
+offset and distance to it, and `target_changed(target)`. The navigation, the facing, the slot and the
+swing all read the target from it; nothing keeps a copy. Untargeted is `get_target() == null`, and
+nothing else.
+
+- **Candidates** are the living members of the enemy's `target_groups` (`EnemyData`): a `Node3D` in
+  the scene, not the enemy itself, carrying a `health_component` that is not dead. The groups are read
+  at most once a second (`CANDIDATE_REFRESH_INTERVAL`), and only while the enemy is searching; between
+  two readings the cached candidates are only measured, which allocates nothing.
+- **Policy**: the nearest candidate closer than `detection_range`, flat, with no line of sight
+  required — as before. The basic enemy's only group is `Player.GROUP`, so **it fights the player and
+  never a shadow** (the behaviour since M4, and the finding M9 recorded). Adding the shadow's group
+  (`BasicMeleeShadow.GROUP`) to an archetype's data makes shadows candidates under the same rules —
+  `enemy_ai_test` does exactly that. Choosing between them by anything but distance (threat, damage
+  taken) is not built.
+- **Stickiness**: a target once held is kept. No candidate replaces it for being nearer; it is let go
+  only when it dies (`HealthComponent.died`), leaves the scene (`tree_exiting`) — both signals, so in
+  the same call — is otherwise no longer valid (checked each tick in a fighting state, cheaply), or
+  stays past `lose_target_range` (14 m) for `lose_target_delay` (1 s) while chased. So an enemy never
+  flickers between targets; with nothing held it goes back to IDLE, and searches again.
+- **Enemies never know** whether their target is dodging, invulnerable or locking onto them: they
+  swing, and the target's hurtbox decides (M11.4); the player's lock is the player's (M11.8).
+
+### Navigation
+
+In CHASE and REPOSITION the enemy paths to its **slot**: on the `preferred_combat_distance` ring
+around the target, biased by its `combat_angle_offset_degrees` so a group does not stack. The path is
+asked for on the state's first tick, then at most every `target_update_interval` (0.2 s) — and only
+when the slot has moved 10 cm or more since the last request, so a target standing still costs no
+query at all (`enemy_ai_test` counts one path in a second of chasing where there used to be five).
+The desired velocity goes through the agent's RVO avoidance to `_apply_motion()`, the one place the
+body moves; with avoidance unavailable it moves anyway after ten ticks. Turning is smooth, at
+`rotation_speed` (and `attack_startup_turn_fraction` of it in STARTUP), never a snap.
+
+**No navigation.** An enemy whose navigation map has no region — a scene with no baked
+`NavigationRegion3D` — says so once, as a warning naming it, and steers straight at its slot rather
+than standing still in silence. Checked once, the first time a path is needed.
+
+### The attack
+
+`_can_start_attack(distance)`: off cooldown and past the initial desync, inside the band
+`minimum_combat_distance`..`attack_range` (1.15–1.8 m), facing the target within
+`max_attack_facing_angle` (25°), and seeing it (a ray on `line_of_sight_mask`). The swing is
+STARTUP 0.35 s (telegraphed, hitbox shut) -> ACTIVE 0.15 s (hitbox open) -> RECOVERY 0.65 s
+(committed) -> over, timed on `delta` alone: no clip or callback can leave it running, so ATTACK
+always ends. Over, it starts the **cooldown** (`attack_cooldown` + the instance's variation, 0.4 s) —
+the attack's own clock, not a state's; it runs down whatever the enemy is doing, and CHASE starts the
+next swing when it allows. A swing cut off (a stagger, a death, the target lost) shuts the hitbox at
+once, undoes the telegraph and starts no cooldown: what cut it off is delay enough. No hysteresis is
+needed at the edge of the range: every swing is a full, committed lifecycle followed by a cooldown,
+so CHASE and ATTACK cannot alternate tick by tick. Several enemies may swing at the player at once, as
+before; nothing coordinates them yet.
+
+### Stagger and knockback (M11.6)
+
+The AI does not reimplement them: `HealthComponent.damaged` reaches `_on_damaged()` as since M11.6 —
+a flinch, a stagger if the hit's power reaches the resistance (outside a stagger and its immunity), a
+push. The stagger *is* the `STAGGERED` state: entering it from ATTACK cuts the swing off through
+ATTACK's exit; while in it no decision runs and the navigation is not followed; leaving it starts the
+immunity. A push lives beside the state, not in it: `_apply_motion()` gives it the body for as long
+as it lasts, whatever the state wanted — the avoidance pass never rewrites it — and the AI's own
+movement resumes where it was when it has died out. A hit stop (M11.9) holds all of it: every clock
+here runs on `delta`.
+
+### Death
+
+`HealthComponent.died` -> `_change_state(DEAD)` -> `report_death(last_damage_source)`. DEAD outranks
+everything and is never left; its enter logic is the cleanup listed above. The reward is not the
+AI's: `enemy_died` goes on to the room, the loot, the remnant and `PlayerProgression`, which pays the
+player the whole of its own kills and a shadow 70% of its (30% to the player), once
+(`claim_xp()`).
+
+### EnemyData (M12.1)
+
+Two fields, both read: `target_groups` (`[Player.GROUP]` for the basic enemy) and `alert_duration`
+(0 s for the basic enemy — its behaviour before ALERT existed). Every other number is M11's,
+unchanged. The runtime AI state — state, target, cooldown and stagger left, alert left, navigation —
+is the enemy's; nothing of it is written to the shared asset.
+
+### Debug
+
+Off by default and free when off: `debug_log_ai` prints every transition, every refusal and every
+change of target, with the distance; `debug_state_label` puts a label over the enemy with its state
+and attack phase, its target and the distance, and whether its navigation is pathing (its `_process`
+runs only then); `debug_log_reactions` (M11.6) prints each hit's reaction. `state_changed(from, to)` is
+what the tests and the label read.
+
+### The boss and the shadow
+
+**The boss is not on this foundation.** `DungeonBoss` keeps its own AI (`INTRO / DECIDE / CHASE /
+REPOSITION / ATTACK / RECOVERY / DEAD`, phases, multi-hit attacks) and still finds the player as the
+first member of `Player.GROUP`; migrating it is the M12 Boss Framework's, and forcing it here would
+risk the encounter for nothing. It shares everything common: the same `DamageInfo` in and out, the same
+`HealthComponent` and death report, the player's lock, the hit feedback — and `m12_ai_run` fights it
+through to the dungeon's completion. The shadow's AI is untouched; enemies simply do not target it.
+
+### Extending it (M12.2 onwards)
+
+An archetype is data first: its numbers, its target groups, its ALERT. What differs in behaviour goes
+where the behaviour lives — a ranged enemy is a different attack section (what "can start", what the
+swing does) and a different slot distance, not an `if enemy_type == RANGED` in the state machine;
+there is no enemy type anywhere in it. The transitions table is the place a new state (a retreat, a
+stun) is allowed in, with its enter, update and exit. None of that is built: M12.1 is the base.
 
 ## Content pipeline (M13+)
 

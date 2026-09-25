@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M11 complete.** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M11 complete; M12 in progress (M12.1 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -29,13 +29,15 @@ hit rolls its own critical (`DamageInfo.is_critical`). Since M11.8 the player ca
 `PlayerTargeting` owns the locked target, `TargetLockIndicator` shows it. Since M11.9 a player hit
 that counts (`Hitbox.hit_accepted`) is felt — a hit stop, a camera shake, a critical's mark — through
 `PlayerCombatFeedback`, the only writer of `Engine.time_scale`, which always restores it. M11 — Combat
-System 2.0 is closed.
+System 2.0 is closed. Since M12.1 the enemy's AI is an explicit state machine in `BasicMeleeEnemy`
+(`_change_state()` is the only writer of its state; `TRANSITIONS` lists what is legal) and its target
+has one owner, `EnemyTargeting`, choosing from `EnemyData.target_groups`; the boss keeps its own AI.
 Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M12 — Enemy AI 2.0 & Boss Framework** (not started). See
+Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.2 (M12.1 is complete). See
 `shadow-ascension/docs/ROADMAP.md` for the M12–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
-shipped, and `docs/ARCHITECTURE.md`, *Combat architecture (M11)* — *Combat System 2.0 at the close of
-M11* in particular — for how combat is built today.
+shipped, `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today, and
+*Enemy AI (M12.1)* for the enemy AI foundation.
 
 ---
 

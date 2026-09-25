@@ -553,10 +553,10 @@ func _fresh(enemy: BasicMeleeEnemy, at: Vector3, reset_player: bool = true, play
 	await _frames(3)
 
 
-## Wakes a parked enemy straight into the fight.
+## Wakes a parked enemy: with the player in its detection range it picks the
+## fight up on its own — IDLE, ALERT, CHASE.
 func _arm(enemy: BasicMeleeEnemy) -> void:
 	enemy.set_combat_enabled(true)
-	enemy._enter_chase()
 
 
 ## The player's own attack, aimed at `target` through the camera, run to its end.

@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/basic_melee_enemy.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/shadows/shadow_source.gd" id="30_shadow"]
 [ext_resource type="Resource" path="res://resources/shadows/basic_melee_shadow.tres" id="31_shadowdata"]
 [ext_resource type="PackedScene" path="res://scenes/shadows/shadow_remnant.tscn" id="32_remnant"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_targeting.gd" id="40_targeting"]
 
 [sub_resource type="CapsuleShape3D" id="body_shape"]
 radius = 0.45
@@ -93,6 +94,9 @@ avoidance_mask = 1
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("4_health")
+
+[node name="EnemyTargeting" type="Node" parent="."]
+script = ExtResource("40_targeting")
 
 [node name="Hurtbox" type="Area3D" parent="."]
 collision_layer = 16

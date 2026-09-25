@@ -391,6 +391,13 @@ shakes the screen. Nothing of it plays over a menu or a death, and the boss's la
 to the run summary with no slow motion. The shake and the stop can each be turned down or off (there
 is no settings screen for it yet).
 
+**M12.1 rebuilt how enemies think, without changing what they do.** An enemy stands until the player
+comes within **10 m**, notices them — in the same instant, for the basic enemy — and goes after them;
+it keeps to its target until that target dies, leaves, or stays more than **14 m** away for a second;
+it swings when close, facing and in sight, then waits out its cooldown; a strong hit staggers it and a
+push carries it; death ends everything. Enemies still fight only the player, never the shadow — the
+target an enemy may choose is now part of its data, which is where choosing the shadow will come from.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that

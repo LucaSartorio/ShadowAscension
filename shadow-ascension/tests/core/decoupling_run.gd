@@ -72,7 +72,7 @@ func _phase_scenes_in_isolation() -> void:
 	root.add_child(enemy)
 	var start: Vector3 = enemy.global_position
 	await _frames(30)
-	_record(is_instance_valid(enemy) and enemy._get_player() == null
+	_record(is_instance_valid(enemy) and enemy.get_target() == null
 			and enemy._state == BasicMeleeEnemy.State.IDLE,
 		"3) an enemy with no player anywhere stays idle instead of failing")
 	# There is no floor out here, so it falls; what matters is that it goes
