@@ -9,7 +9,7 @@
 **M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
 **M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0**, **M12.3 — Ranged
-Archetype 2.0** and **M12.4 — Tank Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
+Archetype 2.0**, **M12.4 — Tank Archetype 2.0** and **M12.5 — Assassin Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
 ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`), with one writer of its state and a table of legal
 transitions; its target has one owner, `EnemyTargeting`, choosing from the target groups its data
 names — the player's alone, as before. An archetype is an attack component and its data: the melee
@@ -17,11 +17,14 @@ names — the player's alone, as before. An archetype is an attack component and
 and fires a telegraphed `Projectile` that flies straight — both on one `EnemyAttack` lifecycle
 (telegraph, active, recovery, then a cooldown) and `AttackData`, the player's resource; the tank
 (M12.4) is a melee specialised by data alone — heavier, slower, harder to stagger and to push, a
-slower and harder swing. The boss keeps its own AI; the shipped dungeon still holds melee only. M12.5
-is next; the other archetypes, the target
+slower and harder swing; the assassin (M12.5) is a fast, fragile melee that strikes with a lunge,
+backs out to a disengage ring while its attack cools down and comes back in — two data-driven rules
+of the shared code. The boss keeps its own AI; the shipped dungeon still holds melee only. M12.6 is
+next; the other archetypes, the target
 choice between player and shadow, group combat and the Boss Framework are not built yet. The
 architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged
-archetype (M12.3)* and *Tank archetype (M12.4)*; the deliverables are in `ROADMAP.md`.
+archetype (M12.3)*, *Tank archetype (M12.4)* and *Assassin archetype (M12.5)*; the deliverables are
+in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -39,7 +42,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.4 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.5 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -55,6 +58,52 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.5 — Assassin Archetype 2.0** (Completed). What was there first: the melee holds its ring
+  through its cooldown; the ranged's REPOSITION already walks the navigation to a slot on a ring,
+  facing the target, with a timeout into the cornered fallback; the tank is data. So an assassin that
+  was only a faster melee needed nothing — and would not be an assassin. What gives it its rhythm,
+  strike and out and back, fitted that machinery with two small, generic rules, each data that every
+  other archetype leaves at 0:
+  - **The disengage ring** (`EnemyData.disengage_distance`): while its attack cools down the ring it
+    keeps is that distance — `BasicEnemy._ring_distance()`, `is_disengaging()` — so CHASE hands it to
+    REPOSITION (too close for its ring), REPOSITION backs it out to the slot on the ring and ends on
+    arrival, and when the cooldown ends CHASE brings it back in. The cooldown is the one record: no
+    flag, no new state, no new transition.
+  - **The lunge** (`AttackData.lunge_speed`, `EnemyAttack.get_lunge_speed()`): in ACTIVE the body moves
+    along its facing — locked since before ACTIVE — through `_apply_motion()` and `move_and_slide()`.
+  - **Data**: `resources/enemies/basic_assassin_enemy.tres` (60 HP, 5.6 m/s, acceleration 24, turn 11
+    rad/s, ALERT 0.15 s, reach 2.3 m / ring 1.8 m / minimum 1.0 m, disengage 4.5 m, 18 damage, cooldown
+    1.3 s, tracking 60% and lock 0.1 s, stagger resistance 20 with 0.35 s stagger and 1.2 s immunity,
+    knockback ×1.2, reposition timeout 1.0 s and block 0.5 s, 30 XP) and
+    `resources/enemies/attacks/assassin_quick_strike.tres` (telegraph 0.28 s, active 0.12 s, recovery
+    0.35 s, lunge 6 m/s); the other three `.tres` state `disengage_distance = 0.0`.
+  - **Scene**: `scenes/enemies/basic_assassin_enemy.tscn` — slim, dark, a pale blade, the melee's
+    hitbox; no shadow to extract, the melee's loot.
+
+  **`tests/enemies/assassin_archetype_test`** (39) — configuration against the melee and the tank, the
+  same script and attack, the others' 0s; spawn; detection; the approach beside a melee (on the player
+  0.88 s sooner); the telegraph (0.28 s, crouching, teal), the strike (18, once), the lunge (0.80 m along
+  the locked facing), recovery, the disengage (out to 4.74 m, facing the player) and the re-engage (1.92
+  s later); its back to a wall; the i-frames and a step aside; a 3 m lunge stopped by a wall; the light
+  combo (Light 3 staggers it), the heavy, a stagger in the telegraph and in ACTIVE, no stun-lock; the
+  heavy's push against a tank's (1.62 m / 0.15 m), a push mid-chase; a critical and its hit stop
+  mid-telegraph; the lock through its darting in and out; death in the telegraph and while backing
+  off (30 XP once); the player and a shadow in one strike, the loop run on a shadow; three assassins;
+  the four archetypes and the shadow against the player's whole kit; twelve at once; no tick moving it
+  further than its speed allows. **`tests/core/m12_assassin_run.gd`** (15) — the real game: its loop
+  beside room one's melee (18 a strike, out to 4.2 m, back in), a strike dodged through, the lock held
+  as it darts out and in, a critical heavy bringing it down (30 XP once), the shadow's kill (21 / 9),
+  the boss, leaving the dungeon with one mid-disengage (nothing of it survives), a second dungeon the
+  same, no listener doubled; hub, nothing orphaned.
+
+  **2224 assertions across 63 suites, zero failures, zero runtime errors, zero
+  exit-time leaks** (`tests/run_all.gd`). The 61 existing suites keep M12.4's 2170; the two new ones add
+  54. Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M12.6 and later: support and elite archetypes; a lateral disengage and one after being hit;
+  placing the new archetypes in the dungeon (M18); group coordination; the Boss Framework.
 
 - **M12.4 — Tank Archetype 2.0** (Completed). The question first: could a tank be the melee, tuned?
   Every trait asked for already had a field — health, speed, reach, stagger resistance and duration,
@@ -2015,7 +2064,7 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 ## In Progress
 
 Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 to
-M12.4 are done, M12.5 is next.
+M12.5 are done, M12.6 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —

@@ -430,6 +430,15 @@ and cancels a wind-up. Pushes barely move it — a heavy that throws a melee a m
 hand's breadth. Dodging out of the blow or through it avoids it entirely. Like the ranged, it is not
 in the dungeon yet.
 
+**M12.5 added the assassin.** Fast and fragile — **60** health, running almost as fast as the player
+— it closes in quickly, crouches and flashes for a short **0.28 s**, and lunges into a strike of
+**18**; then it backs off to about **4.5 m** and waits, only to come straight back in when it can
+strike again. It is hard to keep at a distance but easy to hurt: Light 3 or a heavy staggers it, a
+heavy throws it well back, and its short wind-up still leaves time to dodge — its lunge goes where it
+was aimed, so stepping aside or rolling through it avoids it. Staggering it again and again does not
+work for long: like every enemy, it cannot be staggered again for a moment after a stagger. Like the
+others, it is not in the dungeon yet.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="1_attack"]
+
+[resource]
+script = ExtResource("1_attack")
+id = &"assassin_quick_strike"
+damage_multiplier = 1.0
+windup = 0.28
+active = 0.12
+recovery = 0.35
+stagger_power = 0.0
+knockback_force = 0.0
+lunge_speed = 6.0
+debug_color = Color(0.3, 1, 0.9, 0.4)

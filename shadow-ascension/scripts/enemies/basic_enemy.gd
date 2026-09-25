@@ -29,6 +29,9 @@ extends RoomCombatant
 ## the `preferred_combat_distance` ring and hold there; attack from anywhere
 ## between `minimum_combat_distance` and `attack_range`; nearer than the minimum,
 ## step back to the ring (REPOSITION). A melee's ring is 1.6 m, a ranged's 7 m.
+## An archetype with a `disengage_distance` (the assassin, M12.5) keeps that wider
+## ring instead while its attack cools down: it strikes, backs off, and comes
+## back in when it may strike again.
 ##
 ## The states, and what moves between them:
 ##
@@ -131,6 +134,7 @@ var attack_range: float
 var preferred_combat_distance: float
 var minimum_combat_distance: float
 var enemy_spacing_radius: float
+var disengage_distance: float
 
 var max_attack_facing_angle: float
 
@@ -244,6 +248,7 @@ func _apply_stats() -> void:
 	preferred_combat_distance = source.preferred_combat_distance
 	minimum_combat_distance = source.minimum_combat_distance
 	enemy_spacing_radius = source.enemy_spacing_radius
+	disengage_distance = source.disengage_distance
 
 	max_attack_facing_angle = source.max_attack_facing_angle
 	attack.configure(source)
@@ -470,9 +475,10 @@ func _update_chase(delta: float) -> void:
 	# On the ring but unable to see the target — a wall between them — holding
 	# there would wait for ever: it closes in on the target itself, down to the
 	# minimum distance, until it sees it again.
-	var blind: bool = dist <= preferred_combat_distance and not _target_in_sight()
+	var ring: float = _ring_distance()
+	var blind: bool = dist <= ring and not _target_in_sight()
 	var point: Vector3 = targeting.get_target_position() if blind else _combat_slot_position()
-	var stop_at: float = minimum_combat_distance if blind else preferred_combat_distance
+	var stop_at: float = minimum_combat_distance if blind else ring
 	_update_nav_target(delta, point)
 	var dir: Vector3 = _path_direction()
 	# Spacing: brake on the way in and hold on the ring, rather than grinding
@@ -494,8 +500,23 @@ func _arrival_speed(remaining: float) -> float:
 	return minf(movement_speed, sqrt(2.0 * acceleration * remaining))
 
 
+## The ring it keeps now: its preferred distance — or, while it disengages, its
+## disengage distance.
+func _ring_distance() -> float:
+	return disengage_distance if is_disengaging() else preferred_combat_distance
+
+
+## Whether it is keeping its distance between two attacks (M12.5): an archetype
+## that disengages, with its attack cooling down. The cooldown is the one record
+## of "it has just attacked" — nothing else is kept for it.
+func is_disengaging() -> bool:
+	return disengage_distance > 0.0 and attack.get_cooldown_remaining() > 0.0
+
+
 func _needs_reposition(dist: float) -> bool:
 	if dist < minimum_combat_distance:
+		return true
+	if is_disengaging() and dist < disengage_distance - reposition_arrive_tolerance:
 		return true
 	if dist <= attack_range and _facing_error_to(targeting.get_target()) > deg_to_rad(max_attack_facing_angle):
 		return true
@@ -520,11 +541,17 @@ func _update_reposition(delta: float) -> void:
 		return
 
 	var slot: Vector3 = _combat_slot_position()
+	var arrived: bool = global_position.distance_to(slot) < reposition_arrive_tolerance
+	if arrived and is_disengaging():
+		# Backed off to its disengage ring: CHASE holds it there until the
+		# cooldown ends, then brings it back in.
+		_change_state(State.CHASE)
+		return
 	_update_nav_target(delta, slot)
 	var dir: Vector3 = _path_direction()
 	var speed: float = movement_speed * reposition_speed_fraction
 	var in_band: bool = dist >= minimum_combat_distance and dist <= attack_range
-	if in_band and global_position.distance_to(slot) < reposition_arrive_tolerance:
+	if in_band and arrived:
 		speed = 0.0
 	_drive(_accelerate_toward(dir * speed, delta), delta)
 
@@ -538,7 +565,15 @@ func _update_reposition(delta: float) -> void:
 ## was aimed. Over, it goes back to chasing, where the next one waits for the
 ## cooldown — or, if the attack was withheld, where it moves to be able to.
 func _update_attack(delta: float) -> void:
-	_hold_position(delta)
+	var lunge: float = attack.get_lunge_speed()
+	if lunge > 0.0:
+		# A lunge (M12.5): along the facing, locked since before ACTIVE, through
+		# the physics — walls and bodies stop it — and past no avoidance pass that
+		# could bend it after anyone.
+		_desired_horizontal = _facing_direction() * lunge
+		_apply_motion(_desired_horizontal, delta)
+	else:
+		_hold_position(delta)
 	var turn: float = attack.get_turn_factor()
 	if turn > 0.0:
 		_rotate_toward_target(delta, rotation_speed * turn)
@@ -688,8 +723,9 @@ func _has_navigation() -> bool:
 	return not _navigation_missing
 
 
-## The point this instance wants to occupy: on the preferred-distance ring around
-## the target, biased by combat_angle_offset_degrees so instances do not stack.
+## The point this instance wants to occupy: on its ring around the target (the
+## preferred distance, or the disengage distance while it disengages), biased by
+## combat_angle_offset_degrees so instances do not stack.
 func _combat_slot_position() -> Vector3:
 	var center: Vector3 = targeting.get_target_position()
 	var from_target: Vector3 = global_position - center
@@ -697,7 +733,7 @@ func _combat_slot_position() -> Vector3:
 	if from_target.length_squared() < 0.0001:
 		from_target = Vector3.BACK
 	var dir: Vector3 = from_target.normalized().rotated(Vector3.UP, deg_to_rad(combat_angle_offset_degrees))
-	return center + dir * preferred_combat_distance
+	return center + dir * _ring_distance()
 
 
 # --- facing ---------------------------------------------------------------------------
@@ -714,6 +750,13 @@ func _rotate_toward_target(delta: float, speed: float) -> void:
 	if to_target.length_squared() < 0.0001:
 		return
 	_rotate_visual_toward(to_target.normalized(), delta, speed)
+
+
+## Where the enemy faces, flat and of length 1.
+func _facing_direction() -> Vector3:
+	var forward: Vector3 = -visual_root.global_basis.z
+	forward.y = 0.0
+	return forward.normalized() if forward.length_squared() > 0.0001 else Vector3.ZERO
 
 
 ## How far, in radians, the enemy's facing is off `target`, flat. 0 with no target.

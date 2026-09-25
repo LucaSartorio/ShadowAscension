@@ -155,6 +155,12 @@ func get_turn_factor() -> float:
 	return 0.0
 
 
+## How fast the attack carries the enemy forward now: the attack's lunge_speed
+## during ACTIVE (M12.5), nothing in any other phase or for an attack without one.
+func get_lunge_speed() -> float:
+	return _attack.lunge_speed if _phase == Phase.ACTIVE and _attack != null else 0.0
+
+
 ## How many attacks this enemy has started — telegraphs shown.
 func get_swing_count() -> int:
 	return _started

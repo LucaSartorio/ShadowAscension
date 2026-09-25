@@ -140,8 +140,8 @@ An enemy's AI (M12.1) is its state machine in `BasicEnemy` (`BasicMeleeEnemy` un
 components: **`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), the one owner of whom it
 fights, and an **`EnemyAttack`** (`scripts/enemies/enemy_attack.gd`, M12.2, a base since M12.3), the one
 owner of what it attacks with and of the attack under way — **`EnemyMeleeAttack`** for the melee
-archetype (and the tank, a melee tuned by data, M12.4), **`EnemyRangedAttack`** for the ranged. See
-*Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)* and *Tank archetype (M12.4)*.
+archetype (and the tank and the assassin, melee tuned by data, M12.4–M12.5), **`EnemyRangedAttack`** for
+the ranged. See *Enemy AI (M12.1)* and the archetype sections, M12.2 to M12.5.
 
 - **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
@@ -213,14 +213,14 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 
 | Resource | Responsible for | Main fields | Read by | Must NOT contain |
 | --- | --- | --- | --- | --- |
-| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4), `basic_assassin_enemy.tres` (M12.5) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance, and the disengage distance (M12.5) — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3), the tank's `tank_heavy_swing.tres` (M12.4) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3), the tank's `tank_heavy_swing.tres` (M12.4), the assassin's `assassin_quick_strike.tres` (M12.5) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3), an enemy attack's lunge speed (M12.5) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -328,7 +328,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
 **49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
-(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**, all clean. Since M11.9 a hit stop holds the
+(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**; at M12.5, **63 suites and 2224 assertions**, all clean. Since M11.9 a hit stop holds the
 game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
 in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
@@ -1911,7 +1911,7 @@ in range but facing away), kept because the behaviour needs it.
 | `ALERT` | stops; starts `alert_duration`; starts the per-instance attack desync (`initial_attack_delay`, the attack's hold-off) | holds still, turns toward the target; target lost -> `IDLE`; duration over -> `CHASE`. At 0 s — the basic enemy's — IDLE's update runs it in the same tick, so noticing costs no time | — |
 | `CHASE` | asks for a path on its first tick | target lost -> `IDLE`; can swing -> `ATTACK`; too close or facing away -> `REPOSITION`; else paths to its slot beside the target, braking on the way in and holding on the ring (M12.2), turning with its movement (or to the target once there) | — |
 | `REPOSITION` | starts its timeout; asks for a path | target lost -> `IDLE`; timed out -> `CHASE` (and blocks re-entry for `reposition_cooldown`); can swing -> `ATTACK`; else steps round to its slot, always facing the target | — |
-| `ATTACK` | starts the swing the attack selects: TELEGRAPH | holds still; turns slowly early in the telegraph only; advances the swing; over -> `CHASE` | cuts off a swing still under way (hitbox shut, telegraph undone) |
+| `ATTACK` | starts the swing the attack selects: TELEGRAPH | holds still — or, in ACTIVE, lunges along its facing if the attack has a `lunge_speed` (M12.5); turns slowly early in the telegraph only; advances the swing; over -> `CHASE` | cuts off a swing still under way (hitbox shut, telegraph undone) |
 | `STAGGERED` | starts `stagger_duration`; stops the AI's own speed | no decision, no turning, no path: the body moves only if pushed; over -> `CHASE` with a target and combat on, else `IDLE` | starts the immunity, releases the lean |
 | `DEAD` | clears the reactions, lets the target go, stops the navigation (path to where it lies, out of avoidance), turns its collision off, topples | nothing: `_physics_process` returns first | never left |
 
@@ -1981,6 +1981,13 @@ When it cannot — a wall or a pillar between them — CHASE closes in on the ta
 its slot, down to `minimum_combat_distance`, until the cached line of sight says it is visible again.
 For a melee on a 1.6 m ring this is an edge case; for a ranged on a 7 m ring it is what walks it round
 a wall rather than waiting behind it for ever.
+
+**Disengaging (M12.5).** The ring an enemy keeps is its preferred distance — except, for an archetype
+with a `disengage_distance`, while its attack cools down: then it is the disengage distance, and CHASE
+hands the enemy to REPOSITION to back out to it; arriving there ends the REPOSITION, CHASE holds the ring,
+and when the cooldown ends the ring is the preferred one again and CHASE brings it back in. The
+cooldown is the only record of it (`is_disengaging()`): no flag, no state, no transition. Every
+archetype but the assassin has 0, and never leaves its preferred ring.
 
 **The last stretch (M12.2).** The agent calls a path finished `target_desired_distance` (0.25 m) short
 of its end, and from then on stops passing velocities to avoidance, whose answer is zero. Short of a
@@ -2055,8 +2062,9 @@ where the behaviour lives — a ranged enemy is a different attack component (wh
 swing does) and a different slot distance, not an `if enemy_type == RANGED` in the state machine;
 there is no enemy type anywhere in it. The transitions table is the place a new state (a retreat, a
 stun) is allowed in, with its enter, update and exit. M12.2 built the first archetype on it, the melee,
-M12.3 the second, the ranged, and M12.4 the third, the tank — a melee specialised by data alone — all
-on this one state machine; the rest is M12.5 onwards.
+M12.3 the second, the ranged, M12.4 the third, the tank — a melee specialised by data alone — and M12.5
+the fourth, the assassin — a melee with a disengage and a lunge, both data — all on this one state
+machine; the rest is M12.6 onwards.
 
 ## Melee archetype (M12.2)
 
@@ -2462,6 +2470,92 @@ its 7 m and shoots. Same state machine, same targeting, same reactions — three
 attack components. The shipped dungeon still holds melee only; `tank_archetype_test` and
 `m12_tank_run` bring their own. The tank has no shadow of its own to extract yet, and its loot is the
 melee's table.
+
+## Assassin archetype (M12.5)
+
+M12.5 (Assassin Archetype 2.0) added the fourth archetype: fast, fragile and mobile — in quickly, a
+short telegraph, a lunging strike, and out again before the player can answer, then back. It is the
+melee's state machine and melee attack once more, with its own data and scene — and, because "a melee
+with more speed" would not be an assassin, the two things that give it its rhythm, both added to the
+shared code as data every other archetype sets to 0:
+
+- **`EnemyData.disengage_distance`** — the ring it keeps while its attack cools down (see
+  *Disengaging (M12.5)* under *Enemy AI (M12.1)*): it strikes, backs out, and comes back when it may
+  strike again.
+- **`AttackData.lunge_speed`** — during ACTIVE the body moves along its facing at this speed
+  (`EnemyAttack.get_lunge_speed()`, applied in ATTACK's update through `_apply_motion()` and
+  `move_and_slide()`): walls and bodies stop it, no avoidance pass bends it, and the facing has been
+  locked since `telegraph_facing_lock` before — no homing.
+
+No assassin script, no archetype enum, no new state, no new transition.
+
+| | Assassin | Melee | Tank |
+| --- | --- | --- | --- |
+| Max Health | 60 | 100 | 260 |
+| Move Speed / acceleration / turn | 5.6 m/s / 24 / 11 rad/s | 3.8 / 12 / 7 | 2.4 / 8 / 4 |
+| ALERT | 0.15 s | 0 s | 0.4 s |
+| Attack range / ring / minimum | 2.3 / 1.8 / 1.0 m | 1.8 / 1.6 / 1.15 m | 2.3 / 2.0 / 1.4 m |
+| Disengage distance | 4.5 m | — | — |
+| Telegraph / Active / Recovery | 0.28 / 0.12 / 0.35 s | 0.35 / 0.15 / 0.65 s | 0.8 / 0.2 / 1.1 s |
+| Lunge | 6 m/s during ACTIVE (≈0.7 m) | — | — |
+| Cooldown | 1.3 s | 0.4 s | 1.2 s |
+| Damage | 18 (`assassin_quick_strike`, base 18 × 1.0) | 15 | 30 |
+| Telegraph tracking / facing lock / cone | 60% / 0.1 s / 30° | 30% / 0.1 s / 25° | 15% / 0.3 s / 20° |
+| Stagger resistance / duration / immunity | 20 / 0.35 s / 1.2 s | 25 / 0.5 s / 1.0 s | 45 / 0.4 s / 1.5 s |
+| Knockback multiplier | 1.2 | 1.0 | 0.35 |
+| Reposition timeout / block | 1.0 / 0.5 s | 1.5 / 0.6 s | 1.5 / 0.6 s |
+| XP | 30 | 25 | 50 |
+
+The scene, `basic_assassin_enemy.tscn`, is a slim dark body (0.35 m × 1.7 m) with a pale blade, the
+melee's hitbox, its avoidance radius 0.6 m (data), its lock anchor at 1.0 m and its health bar at 2.05 m.
+The player runs at 6 m/s: an assassin at 5.6 is hard to leave behind.
+
+### Combat loop
+
+```
+Approach (5.6 m/s) -> Telegraph (0.28 s: crouch, teal flash) -> Attack (0.12 s, lunge) -> Recovery (0.35 s)
+      ^                                                                                      |
+      +-- Re-engage (cooldown over: the ring is 1.8 m again) <- Disengage (REPOSITION to 4.5 m) <-+
+```
+
+In the tests: it winds up from 2.15 m, lunges 0.8 m into the strike, backs out to 4.2–4.7 m on the
+navigation facing the player, and is winding up again about 1.9 s after its recovery — one strike every
+2.6 s or so, never idle between them.
+
+### Reposition (the disengage)
+
+- **Trigger**: a completed attack — its cooldown running. Not after a stagger (a cut-off attack starts
+  no cooldown) nor after being hit: kept to one simple rule.
+- **Distance**: 4.5 m from the target — out of reach, not out of the fight.
+- **Direction**: straight back along the line from the target, biased by the instance's
+  `combat_angle_offset_degrees`, through the navigation — walls, obstacles and the navmesh respected,
+  never a teleport. A lateral step aside was not built.
+- **Completion**: arriving on the ring ends the REPOSITION; the cooldown ending mid-way turns the same
+  REPOSITION toward the preferred ring instead, and it strikes from there.
+- **Blocked**: with nowhere to back off to, the REPOSITION times out (1.0 s) into CHASE, which cannot
+  re-enter it for 0.5 s and holds; when the cooldown ends it strikes from where it stands. With its
+  back to a wall: two strikes in 7 transitions, never through the wall.
+
+### Resistance and the player
+
+- **Stagger** (20): Light 1 (10) and Light 2 (15) flinch it; Light 3 (30) and the heavy (60) stagger it
+  — a strike cancelled in the telegraph, or cut off in ACTIVE with the hitbox shut and the lunge
+  stopped. The stagger is short (0.35 s) and the immunity after it the usual one (1.2 s), so a light
+  combo cannot lock it down: Light 3 after Light 3 for 4 s lands 6 hits and 2 staggers.
+- **Knockback** (×1.2): a heavy throws it 1.62 m at 9.6 m/s — a melee 1.13 m, a tank 0.15 m.
+- **Dodge**: its strike can be dodged through (i-frames) or stepped out of after the facing locks —
+  the lunge goes straight on and misses.
+- **Critical**: damage only; a critical Light 1 is 30 and still does not stagger it.
+- **The lock** holds through its darting in and out; the ring follows it and the player turns after it.
+
+### Shadow, and all four together
+
+The policy is M12.1's: it fights the player; an assassin whose data lists the shadow's group runs the
+same loop on a shadow. Its strike hits a shadow in the hitbox like anyone (18), and a shadow's kill of
+it pays 70/30 (21 / 9 of its 30). Against the player together: the assassin strikes first, the melee
+next, the tank last (1.8 s after the assassin), and the ranged keeps its 7 m; the lock switches across
+all four. Twelve assassins at once cost 4.4 ms of physics a tick. The shipped dungeon still holds melee
+only; `assassin_archetype_test` and `m12_assassin_run` bring their own.
 
 ## Content pipeline (M13+)
 

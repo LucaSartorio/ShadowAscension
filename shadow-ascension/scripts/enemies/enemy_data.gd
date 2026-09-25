@@ -70,6 +70,11 @@ extends Resource
 @export_range(0.0, 10.0, 0.05, "or_greater") var attack_range: float = 1.8
 @export_range(0.0, 10.0, 0.05, "or_greater") var preferred_combat_distance: float = 1.6
 @export_range(0.0, 10.0, 0.05, "or_greater") var minimum_combat_distance: float = 1.15
+## Between two attacks — while its attack cools down — an archetype with this
+## above 0 keeps this wider ring instead of its preferred one: it backs off to it
+## after striking (REPOSITION) and comes back in when it may strike again (M12.5,
+## the assassin). 0 — every other archetype — holds its preferred ring.
+@export_range(0.0, 20.0, 0.05, "or_greater") var disengage_distance: float = 0.0
 ## Drives NavigationAgent3D.radius — the personal space honored by avoidance.
 @export_range(0.0, 5.0, 0.05, "or_greater") var enemy_spacing_radius: float = 0.8
 

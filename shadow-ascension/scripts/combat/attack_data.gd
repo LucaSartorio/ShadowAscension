@@ -77,6 +77,13 @@ extends Resource
 @export var camera_shake_strength: float = 0.0
 @export var camera_shake_duration: float = 0.0
 
+@export_group("Lunge")
+## How fast an enemy attack carries its attacker forward during ACTIVE, in m/s,
+## along the facing it locked before (M12.5: the assassin's strike). Through the
+## physics, so walls stop it. Read by EnemyAttack; 0 — every other attack — stands
+## still. The player's attacks move by movement_multiplier instead.
+@export_range(0.0, 30.0, 0.1, "or_greater") var lunge_speed: float = 0.0
+
 @export_group("Projectile")
 ## What a ranged attack fires (M12.3): the projectile scene — a Projectile — its
 ## speed in m/s, and the seconds it flies before it is gone if it hits nothing.
