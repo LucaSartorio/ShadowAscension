@@ -130,16 +130,20 @@ Systems are built from small, composable components attached to a scene root (e.
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
 - **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down, and returns whether it took the hit (M11.9). Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
-- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier, sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, then `hit_accepted(target, hit)` if the target took it (M11.9), and will not hit the same target twice within one activation.
+- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier (`use_attack(attack, base_damage)` stamps all but the critical from an `AttackData`, M12.3), sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, then `hit_accepted(target, hit)` if the target took it (M11.9), and will not hit the same target twice within one activation.
 - **`DamageModel`** (`scripts/combat/damage_model.gd`, static, M11.7) — the damage rules in one place: `attack_damage(base, multiplier)`, `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`. Stateless; see *Damage model and critical hits (M11.7)*.
-- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to; it returns whether the hit counted (M11.9).
+- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to; it returns whether the hit counted (M11.9). `get_center()` (M12.3) is the middle of its shape — where a ranged attack aims.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
 - **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2), its stagger power and push (M11.6), and its hit stop and camera shake (M11.9). Since M12.2 it is the melee enemy's attack too, which reads only its timing, damage and impact fields.
 
-The basic enemy's AI (M12.1) is its state machine in `BasicMeleeEnemy` plus two components:
-**`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), the one owner of whom it fights, and
-**`EnemyMeleeAttack`** (`scripts/enemies/enemy_melee_attack.gd`, M12.2), the one owner of what it
-swings and of the swing under way. See *Enemy AI (M12.1)* and *Melee archetype (M12.2)*.
+An enemy's AI (M12.1) is its state machine in `BasicEnemy` (`BasicMeleeEnemy` until M12.3) plus two
+components: **`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), the one owner of whom it
+fights, and an **`EnemyAttack`** (`scripts/enemies/enemy_attack.gd`, M12.2, a base since M12.3), the one
+owner of what it attacks with and of the attack under way — **`EnemyMeleeAttack`** for the melee
+archetype, **`EnemyRangedAttack`** for the ranged. See *Enemy AI (M12.1)*, *Melee archetype (M12.2)*
+and *Ranged archetype (M12.3)*.
+
+- **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
 The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); so are its target lock, **`PlayerTargeting`** (M11.8), the one owner of which enemy the player is locked onto, and **`PlayerCombatFeedback`** (M11.9), which plays the hit stop, the camera shake (`CameraRig.shake()`) and a critical's mark for the player's hits that count. See *Combat architecture (M11)*.
 
@@ -189,7 +193,7 @@ them is how shared state leaks between entities.
   starts from the configuration.
 
 An entity that needs per-instance values **copies them out of its asset once, in `_ready()`**, and
-works on the copies: `BasicMeleeEnemy`, `DungeonBoss` and `PlayerProgression` each seed their own
+works on the copies: `BasicEnemy`, `DungeonBoss` and `PlayerProgression` each seed their own
 fields in one apply function. Those fields carry **no literal values of their own** — until M10.3
 they carried a second copy of every number, and the boss's had already drifted (600 HP in the script
 and in its scene, 900 in its asset). With no asset assigned, the apply function warns and falls back
@@ -209,14 +213,14 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 
 | Resource | Responsible for | Main fields | Read by | Must NOT contain |
 | --- | --- | --- | --- | --- |
-| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1), spacing, the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicMeleeEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyMeleeAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -324,7 +328,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
 **49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
-(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**, all clean. Since M11.9 a hit stop holds the
+(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**, all clean. Since M11.9 a hit stop holds the
 game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
 in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
@@ -838,7 +842,9 @@ each other.
 There is no friendly-fire check anywhere, because the masks make it unrepresentable: the shadow's
 hitbox sees layer 16 only (enemy hurtboxes) and the player's hitbox likewise, so neither can reach
 the other's hurtbox. Enemy and boss hitboxes mask 320 (player hurtbox + shadow hurtbox), so their
-swings reach both.
+swings reach both. An enemy projectile's hitbox (M12.3) is on layer 32 and masks 321 — the same two
+hurtboxes, plus the world, which stops it: never an enemy's hurtbox or body, so there is no friendly
+fire and a shot cannot hit its own shooter, whatever it leaves from.
 
 ### Interaction ownership
 
@@ -1381,7 +1387,7 @@ the heavy interrupts it and throws it back three times as far. First values, not
 Hitbox -> Hurtbox.receive_hit(hit)        refused here in i-frames (M11.4), otherwise:
        -> HealthComponent.take_damage(hit) damage applied
             -> health 0: died             death, and nothing else: no flinch, no stagger, no push
-            -> otherwise: damaged(hit)    -> BasicMeleeEnemy._on_damaged(hit):
+            -> otherwise: damaged(hit)    -> BasicEnemy._on_damaged(hit):
                                                1. flinch
                                                2. stagger, if stagger_power >= stagger_resistance
                                                   and not already staggered or immune
@@ -1439,7 +1445,7 @@ they hit and nothing more; its AI is untouched, and its kills still pay 70/30.
 player does not listen to `damaged`. The `DamageInfo` fields are general, so when player reactions
 come they are a listener, not a new pipeline.
 
-**Debug**: `BasicMeleeEnemy.debug_log_reactions` (off by default) prints each hit's stagger power
+**Debug**: `BasicEnemy.debug_log_reactions` (off by default) prints each hit's stagger power
 against the resistance, whether it staggered, and the push it left.
 
 ### Damage model and critical hits (M11.7)
@@ -1523,7 +1529,7 @@ a sound, a flash — reads `DamageInfo.is_critical`; there is no floating-damage
 
 **Debug**: with `PlayerCombat.debug_log_enabled` on, each hit is logged — raw damage, base and
 multiplier, critical chance, whether it was critical, final damage; when off, nothing even listens.
-`BasicMeleeEnemy.debug_log_reactions` marks a critical hit too.
+`BasicEnemy.debug_log_reactions` marks a critical hit too.
 
 **Tests and randomness.** Criticals make a hit's damage random, so the suites that check exact damage
 (16 of them, found by running every suite with criticals forced on) switch criticals off for their
@@ -1805,7 +1811,7 @@ What exists at the close of M11, and who owns it:
 | Stamina, the dodge's cost | `PlayerCombat` → `PlayerStaminaHUD` | `PlayerCombatData` |
 | Damage rules and critical hits | `DamageModel` (static), rolled per hit by the `Hitbox` | `PlayerCombatData`, `AttackData.damage_multiplier` |
 | A hit | `Hitbox` → `DamageInfo` → `Hurtbox` → `HealthComponent` | — |
-| Hit reactions: flinch, stagger, knockback | `BasicMeleeEnemy`; the boss only flashes | `AttackData` impact, `EnemyData` hit reactions |
+| Hit reactions: flinch, stagger, knockback | `BasicEnemy`; the boss only flashes | `AttackData` impact, `EnemyData` hit reactions |
 | Target lock | `PlayerTargeting` → `TargetLockIndicator` | `PlayerTargetingData` |
 | Hit feedback: hit stop, camera shake, critical mark | `PlayerCombatFeedback`, `CameraRig.shake()` | `PlayerCombatFeedbackData`, `AttackData` feedback |
 
@@ -1852,7 +1858,7 @@ a chain, a dodge, a reset, a death.
 - **Targeting 2.0**: soft targeting (a light aim assist with no lock), a camera that frames the
   locked target, line of sight kept while a target is held, moving the lock to the next target when
   one dies — none built; see *Target lock (M11.8)*.
-- **An enemy could stall out of reach** (found at M11.4, fixed at M12.2): a `BasicMeleeEnemy`
+- **An enemy could stall out of reach** (found at M11.4, fixed at M12.2): a `BasicEnemy`
   chasing a player who stood still stopped about 1.83 m away — its navigation counted it arrived
   within 0.25 m of its slot on the 1.6 m ring, and 1.83 m is past its 1.8 m `attack_range`. See
   *Enemy AI (M12.1)*, *The last stretch (M12.2)*.
@@ -1874,14 +1880,15 @@ timer among the AI's own, and asked the navigation server for a path five times 
 not anything had moved.
 
 ```
-BasicMeleeEnemy (scenes/enemies/basic_melee_enemy.tscn)
+BasicEnemy (scripts/enemies/basic_enemy.gd — BasicMeleeEnemy until M12.3; scenes/enemies/basic_*_enemy.tscn)
 ├── Data        EnemyData (`stats`), copied into runtime fields once in _ready()
 ├── AI state    `_state`, changed only by _change_state(): exit -> enter -> state_changed
 ├── Target      EnemyTargeting (child node): the one reference to whom it fights
 ├── Movement    _hold_position(), _drive() -> NavigationAgent3D avoidance -> _apply_motion():
 │               the push, gravity, the one move_and_slide()
-├── Combat      _can_start_attack() decides WHEN; EnemyMeleeAttack (child node, M12.2) owns WHAT
-│               is swung and the swing under way: its phase, the hitbox, the cooldown, the telegraph
+├── Combat      _can_start_attack() decides WHEN; the `Attack` child — an EnemyAttack: EnemyMeleeAttack
+│               (M12.2) or EnemyRangedAttack (M12.3) — owns WHAT, and the attack under way: its
+│               phase, the cooldown, the telegraph, and what ACTIVE does (a hitbox, a shot)
 ├── Health      HealthComponent — the AI hears damaged and died, owns none of it
 └── Visual      the flinch, the stagger lean, the topple (placeholders until M14)
 ```
@@ -1893,7 +1900,7 @@ state machine.
 
 ### The state machine
 
-`BasicMeleeEnemy.State`: `IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`. `_state` is the
+`BasicEnemy.State`: `IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`. `_state` is the
 only record of it — no `is_attacking` / `is_chasing` flag beside it; `is_staggered()` and
 `get_state()` read it. REPOSITION is not new: it is the chase's own manoeuvre since M5 (too close, or
 in range but facing away), kept because the behaviour needs it.
@@ -1969,6 +1976,12 @@ The desired velocity goes through the agent's RVO avoidance to `_apply_motion()`
 body moves; with avoidance unavailable it moves anyway after ten ticks. Turning is smooth, at
 `rotation_speed` (and `telegraph_turn_fraction` of it early in the telegraph), never a snap.
 
+**Out of sight on the ring (M12.3).** Holding on the ring assumes the target can be seen from it.
+When it cannot — a wall or a pillar between them — CHASE closes in on the target itself instead of
+its slot, down to `minimum_combat_distance`, until the cached line of sight says it is visible again.
+For a melee on a 1.6 m ring this is an edge case; for a ranged on a 7 m ring it is what walks it round
+a wall rather than waiting behind it for ever.
+
 **The last stretch (M12.2).** The agent calls a path finished `target_desired_distance` (0.25 m) short
 of its end, and from then on stops passing velocities to avoidance, whose answer is zero. Short of a
 slot on the 1.6 m ring that is 1.85 m out — past the 1.8 m reach — and an enemy walking straight at a
@@ -1983,11 +1996,12 @@ than standing still in silence. Checked once, the first time a path is needed.
 
 ### The attack
 
-`_can_start_attack(distance)`: the attack ready (`EnemyMeleeAttack.is_ready()`: no swing under way,
-off cooldown, past the initial desync), inside the band `minimum_combat_distance`..`attack_range`
-(1.15–1.8 m), facing the target within `max_attack_facing_angle` (25°), and seeing it (a ray on
-`line_of_sight_mask`). The swing itself — TELEGRAPH -> ACTIVE -> RECOVERY, then the cooldown — is the
-melee archetype's since M12.2: see *Melee archetype (M12.2)*. No hysteresis is needed at the edge of
+`_can_start_attack(distance)`: the attack ready (`EnemyAttack.is_ready()`: none under way, off
+cooldown, past the initial desync), inside the band `minimum_combat_distance`..`attack_range` (a
+melee's 1.15–1.8 m) — or nearer than the minimum while *cornered* (M12.3: a REPOSITION just timed out)
+— facing the target within `max_attack_facing_angle`, and seeing it (a ray on `line_of_sight_mask`,
+cached for `line_of_sight_interval`, M12.3). The attack itself — TELEGRAPH -> ACTIVE -> RECOVERY, then
+the cooldown — is the archetype's: see *Melee archetype (M12.2)* and *Ranged archetype (M12.3)*. No hysteresis is needed at the edge of
 the range: every swing is a full, committed lifecycle followed by a cooldown, so CHASE and ATTACK
 cannot alternate tick by tick.
 
@@ -2040,8 +2054,8 @@ An archetype is data first: its numbers, its target groups, its ALERT. What diff
 where the behaviour lives — a ranged enemy is a different attack component (what "can start", what the
 swing does) and a different slot distance, not an `if enemy_type == RANGED` in the state machine;
 there is no enemy type anywhere in it. The transitions table is the place a new state (a retreat, a
-stun) is allowed in, with its enter, update and exit. M12.2 built the first archetype on it, the melee;
-the rest is M12.3 onwards.
+stun) is allowed in, with its enter, update and exit. M12.2 built the first archetype on it, the melee,
+and M12.3 the second, the ranged — both on this one state machine; the rest is M12.4 onwards.
 
 ## Melee archetype (M12.2)
 
@@ -2053,17 +2067,19 @@ not do before: its facing now **locks** just before the hit, and an enemy walkin
 standing still now **arrives** (see *Navigation*, *The last stretch*).
 
 An archetype is **not a type**: there is no enum, no `if archetype == MELEE`. The melee archetype is a
-composition — the state machine (`BasicMeleeEnemy`), `EnemyTargeting`, `EnemyMeleeAttack` — and the
+composition — the state machine (`BasicEnemy`), `EnemyTargeting`, `EnemyMeleeAttack` (an
+`EnemyAttack` since M12.3, which holds the lifecycle it shares with the ranged) — and the
 data that tunes it: an `EnemyData` and the `AttackData` it lists. A heavier melee is a new `.tres`
 pair, not code; `melee_archetype_test` builds one from data alone (a 2.2 m reach, a 0.6 s telegraph,
 ×2.0, a 1 s cooldown) and it behaves accordingly.
 
 ```
-BasicMeleeEnemy                      WHEN: the state machine decides to swing
+BasicEnemy                           WHEN: the state machine decides to swing
 ├── EnemyTargeting                   WHOM: the target (M12.1)
-└── EnemyMeleeAttack (MeleeAttack)   WHAT: the attack selected, the swing under way —
-        configure(EnemyData)             its phase, its clock, the hitbox, the cooldown,
-        setup(hitbox, visual, mesh)      the telegraph's look
+└── EnemyMeleeAttack (`Attack`)      WHAT: the attack selected, the swing under way —
+        configure(EnemyData)             its phase, its clock, the cooldown, the telegraph's
+        setup(enemy, targeting,          look (EnemyAttack's); the hitbox (`hitbox`, wired in
+              visual, mesh)              the scene), open for ACTIVE
 EnemyData ── attacks: [AttackData]   resources/enemies/basic_melee_enemy.tres
                                      resources/enemies/attacks/melee_basic_attack.tres
 ```
@@ -2085,7 +2101,7 @@ EnemyData ── attacks: [AttackData]   resources/enemies/basic_melee_enemy.tre
 
 ### Attack lifecycle
 
-`EnemyMeleeAttack.Phase`: `NONE, TELEGRAPH, ACTIVE, RECOVERY` — the one record of the swing. The
+`EnemyAttack.Phase`: `NONE, TELEGRAPH, ACTIVE, RECOVERY` — the one record of the swing. The
 enemy's `get_attack_phase()` reads it; nothing else keeps a phase or an "is attacking" flag.
 
 | Phase | Lasts (`AttackData`) | The hitbox | Facing | The telegraph (placeholder) |
@@ -2155,7 +2171,7 @@ and hits a shadow with the same swing — `melee_archetype_test` SH2.
 
 What the archetype reads, and where. Nothing here is written during play: the attack copies its part
 of `EnemyData` in `configure()` (a copy of the `attacks` list; the `AttackData` in it shared,
-read-only), and everything a swing is doing is `EnemyMeleeAttack`'s, one per enemy.
+read-only), and everything a swing is doing is the attack component's, one per enemy.
 
 | Resource | Fields the melee reads | Shipped |
 | --- | --- | --- |
@@ -2167,7 +2183,7 @@ hit stop and camera shake, `animation` — are not read for an enemy. Removed fr
 `attack_startup`, `attack_active`, `attack_recovery` (now the attack's `windup` / `active` /
 `recovery`) and `attack_startup_turn_fraction` (renamed `telegraph_turn_fraction`).
 
-`EnemyMeleeAttack.select_attack()` returns the first attack — the only one the basic melee has. It is
+`EnemyAttack.select_attack()` returns the first attack — the only one the basic melee has. It is
 where choosing between several (a heavier swing, a special) will go; M12.2 chooses nothing.
 
 ### Several at once
@@ -2183,6 +2199,183 @@ tick, no `load()` anywhere in the enemy's scripts.
 Not on the archetype. `DungeonBoss` keeps its own AI and its own `BossAttack`s; it shares the hitbox,
 `DamageInfo`, `HealthComponent` and the lock, and `m12_melee_run` fights it through to the dungeon's
 completion.
+
+## Ranged archetype (M12.3)
+
+M12.3 (Ranged Archetype 2.0) built the second archetype on the M12.1 state machine: an enemy that keeps
+its distance and fires a telegraphed projectile. It is not a second AI. It is the same `BasicEnemy`
+(renamed from `BasicMeleeEnemy`, which it no longer only was), the same `EnemyTargeting`, the same
+states and transitions, reactions and death, with two things of its own — its attack component and its
+data:
+
+```
+scenes/enemies/basic_ranged_enemy.tscn
+BasicEnemy                            the state machine — the melee's, line for line
+├── EnemyTargeting                    whom (M12.1)
+├── EnemyRangedAttack (`Attack`)      what: TELEGRAPH -> fire -> ACTIVE (release) -> RECOVERY -> cooldown
+│       projectile_spawn ────────────> VisualRoot/ProjectileSpawn (Marker3D)
+└── ...                               health, hurtbox, health bar, loot — as the melee's
+resources/enemies/basic_ranged_enemy.tres       its numbers: the range model, speed, cooldown...
+resources/enemies/attacks/ranged_basic_bolt.tres  its attack: timings, projectile scene, speed, lifetime
+scenes/enemies/enemy_projectile.tscn             the shot: a Projectile with a Hitbox
+```
+
+**Nothing in the state machine asks which archetype it is.** The shared lifecycle moved from
+`EnemyMeleeAttack` into a base, `EnemyAttack` (the phases, the clock, the cooldown, the desync, the
+facing rule, the telegraph's look); each archetype writes only what ACTIVE *is* — `_begin_active()`,
+`_end_active()`, `_cancel()`. The melee opens its hitbox; the ranged fires. Where the two differ in
+movement, the difference is data (their rings are 1.6 m and 7 m) plus two rules the state machine now
+applies to everyone, which matter for the ranged: *out of sight on the ring* and *cornered* (below).
+The attack component takes what it works with from the enemy in `setup(enemy, targeting, visual_root,
+mesh)`, and its own parts — the melee's hitbox, the ranged's spawn point — are wired to it in the
+scene, so the attack never reaches for a sibling and M13 can move them to a weapon without code. (A
+first version passed the enemy itself, typed; the two scripts then referenced each other, and Godot
+kept both alive at exit — `hit_reaction_test` reported the leak. Passing the parts ended the cycle.)
+
+### Range model
+
+The same three `EnemyData` distances as the melee, with ranged values:
+
+| | Field | Ranged | Melee |
+| --- | --- | --- | --- |
+| minimum range | `minimum_combat_distance` | 4 m | 1.15 m |
+| preferred range | `preferred_combat_distance` | 7 m | 1.6 m |
+| maximum attack range | `attack_range` | 10 m | 1.8 m |
+
+- **Beyond the maximum** it only closes in: no attack starts past `attack_range`.
+- **Between the preferred and the maximum** it closes in to the ring, and may attack on the way.
+- **Between the minimum and the preferred** it holds its ground and attacks: no approach, no backing
+  away (`ranged_archetype_test` PR1: no drift over two shots).
+- **Nearer than the minimum** it backs away (REPOSITION) — to its 7 m ring, not to 4 m. That is the
+  hysteresis: once it turns to back off it keeps going until it has room, or can attack from where it
+  is, so it does not flip between approaching and retreating on the 4 m edge.
+
+### Movement strategy
+
+- **Approach**: CHASE paths to its slot on the ring, braking on the way in (M12.2).
+- **Hold range**: on the ring and in sight, it stands and faces the target.
+- **Retreat**: REPOSITION paths to its slot on the ring — away from the target along the line from it
+  to the enemy, biased by `combat_angle_offset_degrees` — through the navigation, so walls, obstacles
+  and the edges of the navmesh are respected; never a teleport, never a straight line through a wall. It
+  faces the target throughout, at `reposition_speed_fraction` of its speed.
+- **Blocked retreat (cornered)**: when there is nowhere to go — a wall at its back, the navmesh ending,
+  a player pressing faster than it can back away — the REPOSITION times out (`reposition_timeout`,
+  1.5 s), and for `reposition_cooldown` (0.8 s) the enemy is *cornered*: `_can_start_attack()` accepts a
+  target nearer than the minimum, and it fights from where it stands. Then it may try to back away
+  again. No loop runs every frame and no retreat is retried for ever: `BR1` corners one against a wall,
+  2.8 m from the player — two tries, then shots from 2.75 m, nine transitions in all. A lateral step
+  aside was not built: simpler, and it cannot walk into a second wall.
+- **Out of sight**: see *Out of sight on the ring* under *Enemy AI (M12.1)*: it closes in on the
+  target until it can see it.
+
+### Attack lifecycle
+
+`EnemyRangedAttack`, on `ranged_basic_bolt.tres`:
+
+| Phase | Lasts | What happens |
+| --- | --- | --- |
+| `TELEGRAPH` | `windup` — 0.6 s | no projectile exists, nothing can hit; it tracks the target at 60% of its turn speed, then its facing locks for the last 0.15 s; the body rises and turns violet (placeholder) |
+| fire | the moment the telegraph ends | the shot is decided and, if clear, the projectile spawned — once |
+| `ACTIVE` | `active` — 0.1 s | the release; the projectile is on its own |
+| `RECOVERY` | `recovery` — 0.5 s | committed, standing |
+| cooldown | `attack_cooldown` — 1.6 s | no new telegraph; the enemy moves as the range model says |
+
+One shot every 2.8 s at most: readable, dodgeable, never a volley. With the projectile's travel (7 m at
+12 m/s, 0.6 s) the player has about 1.2 s from the first sign to the hit.
+
+**The fire moment** decides the shot, and nothing before it:
+- the target must still be the valid one `EnemyTargeting` holds;
+- the aim point is where the target is *now* — `EnemyTargeting.get_aim_point()`, the middle of its
+  hurtbox (`Hurtbox.get_center()`: the chest, not the feet) — with no prediction;
+- the direction is from the spawn point to that point, but never more than `max_attack_facing_angle`
+  (20°) off the facing: a target that got round the enemy during the telegraph gets a shot along the
+  edge of the cone, where it is not;
+- one ray, spawn point to aim point, against the world: blocked, no shot;
+- the aim point must be within the projectile's reach (speed × lifetime).
+If any fails the attack is **withheld**: it ends there, with no cooldown, and the enemy is free to move
+where it can shoot (`LS2`: the player slipping behind a wall mid-telegraph).
+
+### Projectile
+
+`Projectile` (`scripts/combat/projectile.gd`) on `scenes/enemies/enemy_projectile.tscn`: a glowing
+0.22 m sphere — a placeholder, big and bright enough to see coming — and a `Hitbox` child.
+
+- **Spawn**: instanced by the attack into the scene the enemy stands in (its parent), placed at the
+  `ProjectileSpawn` marker, then `launch(source, direction, attack, base_damage)`.
+- **Speed and lifetime**: the attack's — `projectile_speed` 12 m/s, `projectile_lifetime` 2.5 s — read
+  at launch; nothing about speed is in the AI.
+- **Flight**: straight, at constant speed, on `delta`: no homing, no gravity, no prediction. A player
+  who moves after the fire is simply missed (`MV1`: 0.00° of bend).
+- **Collision**: its hitbox's mask — the player's and the shadows' hurtboxes, and the world. A hurtbox
+  that takes the hit ends it (`"hit"`); the world ends it (`"world"`: walls, floor, doors); the
+  shooter and every other enemy are never in its mask.
+- **Damage**: the hitbox's `DamageInfo` — `DamageModel.attack_damage(attack_damage, multiplier)` (12),
+  `attack_id` `ranged_basic_bolt`, `source` the enemy — through `Hurtbox.receive_hit()`, the one damage
+  path. The projectile never asks whether the target is dodging.
+- **One hit**: the hitbox registry allows one hit per target, and a hit that counts ends the shot.
+- **A refused hit** (i-frames) does not end it: the body was not there to be hit, and the shot flies on
+  through it — and cannot hit it again.
+- **Lifetime and cleanup**: past its lifetime it ends (`"lifetime"`); ending, it emits
+  `finished(reason)` and frees itself. It lives under the scene it was fired into, so a scene change
+  frees it with everything else (`m12_ranged_run` O1: a shot in the air as the player leaves — nothing
+  of it in the hub). Nothing global refers to it; no pool.
+- **Its runtime is its own**: position, direction, remaining life, whom it hit. The `AttackData` is only
+  read. It keeps the source only as its hitbox's `source`, cleared when the source leaves the scene, so
+  a shot outliving its shooter lands with no source rather than a dangling one (`DE3`).
+
+### Line of sight
+
+Checked where a decision needs it, never scanned:
+- **to start an attack** and **to hold on the ring**: `BasicEnemy._target_in_sight()`, eye to eye, one
+  ray at most every `line_of_sight_interval` (0.2 s) — for every archetype;
+- **at the fire moment**: a fresh ray, spawn point to aim point.
+Blocked at the start, no telegraph begins and the enemy closes in (`LS1`: it walks 5.9 m round a wall,
+then shoots and hits). Blocked at the fire, the shot is withheld (above). A shot fired in an edge case
+that still meets a wall ends against it (`WL1`).
+
+### Dodge
+
+The player's two answers, both tested: **moving** — the shot keeps its line, and a step or a dodge to
+the side takes the player out of it (`DG1`, `MV1`: no contact at all); **the i-frames** — a shot that
+reaches the player during a dodge's invulnerability is refused by the hurtbox, deals nothing, and flies
+on (`IF1`). Either way the dodge costs its stamina, because the cost is the dodge's, not the attack's.
+
+### Stagger, knockback, death
+
+- **Before the fire**: a stagger or a death takes the enemy out of ATTACK; ATTACK's exit interrupts the
+  attack, and the attack only fires from ATTACK's update — so no projectile. On the very tick the
+  telegraph would end, the order is fixed: a hit lands before the enemy runs that tick, and the
+  stagger wins (`ST2`).
+- **After the fire**: the projectile is independent — a stagger or death of the enemy does not recall
+  it (`ST3`, `DE2`); the kill is paid once, by the usual path.
+- **Knockback**: the push moves the body as for any enemy; after the stagger the range model is
+  re-evaluated from where it landed — it fires from there if in band, it does not walk back to the old
+  spot (`KB1`).
+- Light hits flinch it, criticals and the hit stop reach it like any enemy; the hit stop holds its
+  telegraph with the game (`HS1`).
+
+### Player and shadow targeting
+
+M12.1's policy, unchanged: the basic ranged fights the player (`target_groups` `[player]`); an
+archetype that lists the shadow's group targets a shadow the same way, and its shots hit it (`SH2`). A
+shadow standing in the line of a shot at the player takes it (`SH1`): collisions decide, not the
+target. Enemy projectiles do not hurt enemies (the mask), and no faction combat exists.
+
+### Melee compatibility
+
+Both archetypes share the state machine, the target lifecycle, health, damage reception, stagger,
+knockback and death; they differ in their attack component and their numbers. The melee's behaviour is
+M12.2's: every melee suite and flow passes unchanged in what it checks. The two rules added to the
+shared state machine for the ranged — out of sight on the ring, cornered — only change what a melee
+does in those edge cases (a melee cornered 1.15 m from the player now swings instead of standing still).
+The boss keeps its own AI and `BossAttack`s. No coordinator: several ranged, or ranged and melee
+together, each keep their own state, cooldown, target and projectiles (`MU1`, `MX1`).
+
+### Where it is in the game
+
+The shipped dungeon is unchanged — its five enemies are melee. Placing ranged enemies in rooms is
+content, M18's; `m12_ranged_run` brings its own into the real dungeon instead. The ranged has no shadow
+of its own to extract yet (no `ShadowSource`); its loot is the melee's table.
 
 ## Content pipeline (M13+)
 

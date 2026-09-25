@@ -110,7 +110,7 @@ func _phase_hub() -> void:
 		"15) the debug damage zone is gone from the hub")
 	var hostiles: int = 0
 	for child in current_scene.get_children():
-		if child is BasicMeleeEnemy:
+		if child is BasicEnemy:
 			hostiles += 1
 	_record(hostiles == 0, "16) and no loose enemies wander it (%d)" % hostiles)
 

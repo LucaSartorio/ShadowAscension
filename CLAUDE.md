@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M11 complete; M12 in progress (M12.1–M12.2 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M11 complete; M12 in progress (M12.1–M12.3 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -29,17 +29,22 @@ hit rolls its own critical (`DamageInfo.is_critical`). Since M11.8 the player ca
 `PlayerTargeting` owns the locked target, `TargetLockIndicator` shows it. Since M11.9 a player hit
 that counts (`Hitbox.hit_accepted`) is felt — a hit stop, a camera shake, a critical's mark — through
 `PlayerCombatFeedback`, the only writer of `Engine.time_scale`, which always restores it. M11 — Combat
-System 2.0 is closed. Since M12.1 the enemy's AI is an explicit state machine in `BasicMeleeEnemy`
+System 2.0 is closed. Since M12.1 the enemy's AI is an explicit state machine in `BasicEnemy` (named `BasicMeleeEnemy` until M12.3)
 (`_change_state()` is the only writer of its state; `TRANSITIONS` lists what is legal) and its target
 has one owner, `EnemyTargeting`, choosing from `EnemyData.target_groups`; the boss keeps its own AI.
 Since M12.2 its swing is the melee archetype: `EnemyMeleeAttack` owns the attack (an `AttackData` listed
 in `EnemyData.attacks`) and the swing's one phase record — telegraph, active, recovery, then a cooldown.
+Since M12.3 that lifecycle is the base `EnemyAttack`, and the ranged archetype (`EnemyRangedAttack`,
+`basic_ranged_enemy.tscn`) runs on the same state machine: it keeps its distance (minimum / preferred /
+maximum in `EnemyData`) and fires a `Projectile` that flies straight and hits through the existing
+`Hitbox` / `DamageInfo` path.
 Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.3 (M12.1–M12.2 are complete). See
+Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.4 (M12.1–M12.3 are complete). See
 `shadow-ascension/docs/ROADMAP.md` for the M12–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today, and
-*Enemy AI (M12.1)* for the enemy AI foundation and *Melee archetype (M12.2)* for the melee archetype.
+*Enemy AI (M12.1)* for the enemy AI foundation, *Melee archetype (M12.2)* and *Ranged archetype (M12.3)*
+for the two archetypes.
 
 ---
 

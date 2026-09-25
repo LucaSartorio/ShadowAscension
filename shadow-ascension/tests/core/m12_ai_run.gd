@@ -86,9 +86,9 @@ func _phase_into_dungeon(run: int) -> void:
 	var clean: bool = true
 	var listeners: Dictionary = {}
 	for enemy in _basic_enemies(dungeon):
-		clean = clean and enemy.get_state() == BasicMeleeEnemy.State.IDLE and enemy.get_target() == null \
-			and not enemy.combat_enabled and enemy.get_attack_phase() == EnemyMeleeAttack.Phase.NONE \
-			and enemy.melee_attack.get_cooldown_remaining() == 0.0
+		clean = clean and enemy.get_state() == BasicEnemy.State.IDLE and enemy.get_target() == null \
+			and not enemy.combat_enabled and enemy.get_attack_phase() == EnemyAttack.Phase.NONE \
+			and enemy.attack.get_cooldown_remaining() == 0.0
 		listeners[String(enemy.get_path())] = [enemy.state_changed.get_connections().size(),
 			enemy.targeting.target_changed.get_connections().size(),
 			enemy.health_component.died.get_connections().size(),
@@ -112,23 +112,23 @@ func _phase_room_one(run: int) -> void:
 	var p: Player = dungeon.get_player()
 	p.hurtbox.set_invulnerable(true)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var enemies: Array[BasicMeleeEnemy] = []
+	var enemies: Array[BasicEnemy] = []
 	for combatant in room.get_enemies():
-		enemies.append(combatant as BasicMeleeEnemy)
+		enemies.append(combatant as BasicEnemy)
 	var start: Array[float] = []
 	p.global_position = ROOM_ANCHORS[0]
 	await _frames(2)
 	for enemy in enemies:
 		start.append(_flat(enemy.global_position - p.global_position).length())
 	var noticed: bool = await _until(func() -> bool:
-		return enemies.all(func(e: BasicMeleeEnemy) -> bool: return e.get_state() != BasicMeleeEnemy.State.IDLE), 2.0)
+		return enemies.all(func(e: BasicEnemy) -> bool: return e.get_state() != BasicEnemy.State.IDLE), 2.0)
 	var same_tick: bool = true
 	for enemy in enemies:
 		var seen: Array = _transitions[enemy]
 		same_tick = same_tick and seen.size() >= 2 and seen[0] == "IDLE>ALERT" and seen[1] == "ALERT>CHASE"
 	# They come to the player, and swing at it.
 	var arrived: bool = await _until(func() -> bool:
-		return enemies.any(func(e: BasicMeleeEnemy) -> bool: return e.get_state() == BasicMeleeEnemy.State.ATTACK), 8.0)
+		return enemies.any(func(e: BasicEnemy) -> bool: return e.get_state() == BasicEnemy.State.ATTACK), 8.0)
 	var closed: bool = true
 	for i in enemies.size():
 		closed = closed and _flat(enemies[i].global_position - p.global_position).length() < start[i]
@@ -143,7 +143,7 @@ func _phase_room_one(run: int) -> void:
 	for enemy in enemies:
 		var seen: Array = _transitions[enemy]
 		ended = ended and enemy.has_died() and seen[-1].ends_with(">DEAD") and enemy.get_target() == null \
-			and enemy.get_state() == BasicMeleeEnemy.State.DEAD
+			and enemy.get_state() == BasicEnemy.State.DEAD
 	var reward: int = 0
 	for enemy in enemies:
 		reward += enemy.get_xp_reward()
@@ -158,24 +158,24 @@ func _phase_room_two() -> void:
 	var p: Player = dungeon.get_player()
 	var shadow: BasicMeleeShadow = p.shadow_summoner.get_active_node()
 	var room: RoomController = dungeon.get_rooms()[1]
-	var enemies: Array[BasicMeleeEnemy] = []
+	var enemies: Array[BasicEnemy] = []
 	for combatant in room.get_enemies():
-		enemies.append(combatant as BasicMeleeEnemy)
+		enemies.append(combatant as BasicEnemy)
 	p.global_position = ROOM_ANCHORS[1]
 	shadow.global_position = ROOM_ANCHORS[1] + Vector3(1.5, 0, 0)
 	p.shadow_commander.set_mode(BasicMeleeShadow.CommandMode.AGGRESSIVE)
 	var armed: bool = await _until(func() -> bool: return room.get_state() == RoomController.RoomState.ACTIVE, 2.0)
 	await _until(func() -> bool:
-		return enemies.all(func(e: BasicMeleeEnemy) -> bool: return e.get_target() != null), 3.0)
+		return enemies.all(func(e: BasicEnemy) -> bool: return e.get_target() != null), 3.0)
 	var player_xp: int = p.progression.get_total_xp()
 	var shadow_xp: int = _shadow_total_xp(shadow.instance)
 	# The shadow is sent at one, nearly finished; the player takes the other two.
-	var shadows_own: BasicMeleeEnemy = enemies[1]
+	var shadows_own: BasicEnemy = enemies[1]
 	shadows_own.health_component.current_health = 20.0
 	shadow.set_manual_target(shadows_own)
 	var elapsed: float = 0.0
-	while elapsed < 30.0 and not enemies.all(func(e: BasicMeleeEnemy) -> bool: return e.has_died()):
-		var mine: BasicMeleeEnemy = null
+	while elapsed < 30.0 and not enemies.all(func(e: BasicEnemy) -> bool: return e.has_died()):
+		var mine: BasicEnemy = null
 		for enemy in enemies:
 			if not enemy.has_died() and enemy != shadows_own:
 				mine = enemy
@@ -204,7 +204,7 @@ func _phase_room_two() -> void:
 			expected_player += reward - cut
 	var player_gain: int = p.progression.get_total_xp() - player_xp
 	var shadow_gain: int = _shadow_total_xp(shadow.instance) - shadow_xp
-	_record(armed and enemies.all(func(e: BasicMeleeEnemy) -> bool: return e.has_died()) and room.is_cleared()
+	_record(armed and enemies.all(func(e: BasicEnemy) -> bool: return e.has_died()) and room.is_cleared()
 			and by_player + by_shadow == 3 and by_shadow >= 1 and by_player >= 1
 			and player_gain == expected_player and shadow_gain == expected_shadow,
 		"PS1) the player and the shadow clear three: %d kills the player's, %d the shadow's — XP to whoever made it, a shadow's split 70/30 (player +%d, shadow +%d)" % [
@@ -218,7 +218,7 @@ func _phase_room_two() -> void:
 		steady = steady and not taken.is_empty() and taken.size() <= 4
 	_record(only_player and steady,
 		"PS2) with the shadow among them, every enemy fought the player — the shipped policy — and took a target at most twice (%s)" % [
-			enemies.map(func(e: BasicMeleeEnemy) -> Array: return _targets[e])])
+			enemies.map(func(e: BasicEnemy) -> Array: return _targets[e])])
 	p.shadow_commander.set_mode(BasicMeleeShadow.CommandMode.FOLLOW)
 
 
@@ -261,20 +261,20 @@ func _phase_out_to_hub() -> void:
 
 # --- helpers ------------------------------------------------------------------------------------------
 
-func _watch(enemy: BasicMeleeEnemy) -> void:
+func _watch(enemy: BasicEnemy) -> void:
 	_transitions[enemy] = []
 	_targets[enemy] = []
-	enemy.state_changed.connect(func(from: BasicMeleeEnemy.State, to: BasicMeleeEnemy.State) -> void:
-		(_transitions[enemy] as Array).append("%s>%s" % [BasicMeleeEnemy.State.keys()[from], BasicMeleeEnemy.State.keys()[to]]))
+	enemy.state_changed.connect(func(from: BasicEnemy.State, to: BasicEnemy.State) -> void:
+		(_transitions[enemy] as Array).append("%s>%s" % [BasicEnemy.State.keys()[from], BasicEnemy.State.keys()[to]]))
 	enemy.targeting.target_changed.connect(func(target: Node3D) -> void:
 		(_targets[enemy] as Array).append(String(target.name) if target != null else "-"))
 
 
-func _basic_enemies(dungeon: DungeonController) -> Array[BasicMeleeEnemy]:
-	var out: Array[BasicMeleeEnemy] = []
+func _basic_enemies(dungeon: DungeonController) -> Array[BasicEnemy]:
+	var out: Array[BasicEnemy] = []
 	for room in dungeon.get_rooms():
 		for combatant in room.get_enemies():
-			var enemy: BasicMeleeEnemy = combatant as BasicMeleeEnemy
+			var enemy: BasicEnemy = combatant as BasicEnemy
 			if enemy != null:
 				out.append(enemy)
 	return out

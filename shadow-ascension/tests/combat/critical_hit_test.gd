@@ -18,9 +18,9 @@ const ENEMY_HITBOX_LAYER: int = 32
 const ENEMY_HITBOX_MASK: int = 320
 
 @onready var _player: Player = $Player
-@onready var _a: BasicMeleeEnemy = $EnemyA
-@onready var _b: BasicMeleeEnemy = $EnemyB
-@onready var _c: BasicMeleeEnemy = $EnemyC
+@onready var _a: BasicEnemy = $EnemyA
+@onready var _b: BasicEnemy = $EnemyB
+@onready var _c: BasicEnemy = $EnemyC
 @onready var _boss: DungeonBoss = $Boss
 
 var _combat: PlayerCombat = null
@@ -375,7 +375,7 @@ func _receiver_tests() -> void:
 
 func _on_player_hit(target: Node, info: DamageInfo) -> void:
 	var entry: Dictionary = {"target": target, "amount": info.amount, "critical": info.is_critical}
-	var enemy: BasicMeleeEnemy = target as BasicMeleeEnemy
+	var enemy: BasicEnemy = target as BasicEnemy
 	if enemy != null:
 		entry["staggered"] = enemy.is_staggered()
 		entry["push"] = enemy.get_knockback_velocity().length()
@@ -393,9 +393,9 @@ func _line_up() -> void:
 
 ## Parks `enemy` at `at`, whole, with nothing of a previous hit left — and,
 ## unless `keep_others`, the other two back out of the way.
-func _fresh(enemy: BasicMeleeEnemy, at: Vector3, reset_player: bool = true, keep_others: bool = false) -> void:
+func _fresh(enemy: BasicEnemy, at: Vector3, reset_player: bool = true, keep_others: bool = false) -> void:
 	if not keep_others:
-		var enemies: Array[BasicMeleeEnemy] = [_a, _b, _c]
+		var enemies: Array[BasicEnemy] = [_a, _b, _c]
 		for i in enemies.size():
 			if enemies[i] != enemy:
 				enemies[i].set_combat_enabled(false)
@@ -422,7 +422,7 @@ func _swing(chain: Array[AttackData], index: int, aim: bool = true) -> void:
 	await _frames_until_state(PlayerCombat.State.IDLE)
 
 
-func _bar(enemy: BasicMeleeEnemy) -> EnemyHealthBar3D:
+func _bar(enemy: BasicEnemy) -> EnemyHealthBar3D:
 	return enemy.get_node("EnemyHealthBar3D") as EnemyHealthBar3D
 
 

@@ -17,8 +17,8 @@ phase, is complete. **M11 — Combat System 2.0** is complete: M11.1 (the combat
 (stamina), M11.6 (hit reactions, stagger and knockback), M11.7 (critical hits and the damage model),
 M11.8 (target lock) and M11.9 (combat feedback — hit stop, camera shake — and the closure of M11).
 **M12 — Enemy AI 2.0 & Boss Framework** is in progress: M12.1 (the enemy AI foundation — a state
-machine and a target owner) and M12.2 (the melee archetype — a telegraphed swing as data) are done; the
-phase runs to Alpha 1 at M20.
+machine and a target owner), M12.2 (the melee archetype — a telegraphed swing as data) and M12.3 (the
+ranged archetype — distance kept, a telegraphed projectile) are done; the phase runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub

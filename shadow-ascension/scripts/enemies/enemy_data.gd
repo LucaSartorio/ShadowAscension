@@ -5,7 +5,7 @@ extends Resource
 ## any one of them is doing. Instances live under `resources/enemies/` as `.tres`,
 ## one per archetype, and every enemy of that archetype shares the same asset.
 ##
-## Configuration, never runtime state. BasicMeleeEnemy seeds its own fields from
+## Configuration, never runtime state. BasicEnemy seeds its own fields from
 ## this on _ready() and works on those, so a per-instance change — a debug tweak,
 ## a test holding one enemy still, a future buff — never writes back into the
 ## asset its siblings are reading. Current health is the HealthComponent's, not
@@ -50,11 +50,22 @@ extends Resource
 @export var eye_height: float = 1.2
 ## Physics layers that block line of sight (world geometry only).
 @export_flags_3d_physics var line_of_sight_mask: int = 1
+## Seconds a line-of-sight answer is trusted before another ray is cast (M12.3):
+## deciding every tick costs one ray an interval, not one a tick. A ranged shot
+## checks its own line again, freshly, the moment it fires.
+@export_range(0.01, 2.0, 0.01, "or_greater") var line_of_sight_interval: float = 0.2
 ## Seconds between noticing a target and going after it (ALERT): the enemy
 ## stands and turns to face it. 0: noticed and chased in the same tick.
 @export_range(0.0, 5.0, 0.05, "or_greater") var alert_duration: float = 0.0
 
 @export_group("Combat Spacing")
+## The range model, the same for every archetype (M12.3 names it): an attack can
+## start anywhere from minimum_combat_distance out to attack_range — the maximum
+## attack range, flat; beyond it the enemy only closes in. It closes in to the
+## preferred_combat_distance ring and holds there; nearer than the minimum it
+## steps back to the ring (REPOSITION). A melee's are 1.15 / 1.6 / 1.8 m, a
+## ranged's 4 / 7 / 10 m. Stepping back to the ring, not to the minimum, is the
+## hysteresis: it will not turn round again until pressed past the minimum.
 @export_range(0.0, 10.0, 0.05, "or_greater") var attack_range: float = 1.8
 @export_range(0.0, 10.0, 0.05, "or_greater") var preferred_combat_distance: float = 1.6
 @export_range(0.0, 10.0, 0.05, "or_greater") var minimum_combat_distance: float = 1.15
@@ -62,16 +73,17 @@ extends Resource
 @export_range(0.0, 5.0, 0.05, "or_greater") var enemy_spacing_radius: float = 0.8
 
 @export_group("Attack")
-## What the archetype swings (M12.2): AttackData, the same resource as the
+## What the archetype attacks with (M12.2): AttackData, the same resource as the
 ## player's attacks — each its id, its damage multiplier and its telegraph
-## (windup) / active / recovery timing. The first is its basic attack, and for
-## now the only one it chooses.
+## (windup) / active / recovery timing, and for a ranged attack its projectile.
+## The first is its basic attack, and for now the only one it chooses.
 @export var attacks: Array[AttackData] = []
 ## The archetype's base damage: each attack's damage_multiplier scales it.
 @export_range(0.0, 1000.0, 0.5, "or_greater") var attack_damage: float = 15.0
-## Seconds after a swing's recovery before the next may start.
+## Seconds after an attack's recovery before the next may start.
 @export_range(0.0, 10.0, 0.01, "or_greater") var attack_cooldown: float = 0.4
-## An attack cannot start while the target is outside this cone.
+## An attack cannot start while the target is outside this cone, and a ranged
+## shot never goes further off the facing than this.
 @export_range(0.0, 180.0, 1.0) var max_attack_facing_angle: float = 25.0
 ## Share of rotation_speed the enemy may turn at while telegraphing: below 1.0
 ## the swing cannot track a target perfectly.
@@ -95,8 +107,12 @@ extends Resource
 @export_range(0.1, 200.0, 0.5, "or_greater") var knockback_deceleration: float = 30.0
 
 @export_group("Reposition")
+## Seconds a REPOSITION may take before it is given up — for a ranged enemy
+## backing away, the sign it is cornered (M12.3).
 @export_range(0.0, 10.0, 0.05, "or_greater") var reposition_timeout: float = 1.5
-## Blocks re-entry to REPOSITION after a timeout, preventing CHASE/REPOSITION ping-pong.
+## Blocks re-entry to REPOSITION after a timeout, preventing CHASE/REPOSITION
+## ping-pong. While it runs the enemy is cornered, and may attack from nearer
+## than minimum_combat_distance (M12.3).
 @export_range(0.0, 10.0, 0.05, "or_greater") var reposition_cooldown: float = 0.6
 @export_range(0.0, 1.0) var reposition_speed_fraction: float = 0.8
 @export_range(0.0, 5.0, 0.05, "or_greater") var reposition_arrive_tolerance: float = 0.35

@@ -6,7 +6,7 @@ extends CharacterBody3D
 ##
 ## Its own state logic, not the enemy's — it shares the components (health,
 ## hurtbox, hitbox, navigation) and none of the AI, the same split
-## BasicMeleeEnemy and DungeonBoss already have.
+## BasicEnemy and DungeonBoss already have.
 ##
 ## Health and damage come from the ShadowInstance's level, so a level-up changes
 ## what it does without any stat system of its own. It knows which instance it

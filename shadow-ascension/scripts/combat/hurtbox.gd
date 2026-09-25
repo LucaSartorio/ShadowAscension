@@ -16,6 +16,8 @@ var is_invulnerable: bool:
 ## Why this body is refusing hits right now: a set, so one system ending its own
 ## invulnerability — a dodge's i-frames running out — can never end another's.
 var _invulnerable_reasons: Dictionary[StringName, bool] = {}
+## Its own shape, found once: what get_center() reads.
+var _shape: CollisionShape3D = null
 
 
 func _ready() -> void:
@@ -26,6 +28,17 @@ func _ready() -> void:
 		health_component = sibling as HealthComponent
 	if owner_entity == null:
 		owner_entity = get_parent()
+	for child in get_children():
+		if child is CollisionShape3D:
+			_shape = child as CollisionShape3D
+			break
+
+
+## The middle of what this body is hit through — where a ranged attack aims
+## (M12.3), so a shot goes at the chest rather than the feet, and follows the
+## hurtbox wherever M13's model puts it.
+func get_center() -> Vector3:
+	return _shape.global_position if _shape != null else global_position
 
 
 func set_invulnerable(value: bool, reason: StringName = DEFAULT_REASON) -> void:

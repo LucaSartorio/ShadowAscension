@@ -120,7 +120,7 @@ func _phase_deaths() -> void:
 	p.hurtbox.set_invulnerable(true)
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
-	var enemy: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicMeleeEnemy
+	var enemy: BasicEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicEnemy
 	for other in dungeon.get_rooms()[0].get_enemies():
 		_park(other, other.global_position + Vector3(0, 0, -6))
 	p.global_position = ROOM_ANCHORS[0]
@@ -171,8 +171,8 @@ func _phase_room_one() -> void:
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var a: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var b: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var a: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var b: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	p.global_position = ROOM_ANCHORS[0]
 	p.camera_rig.rotation.y = 0.0
 	_park(a, _at(p, 0.0, 1.5))
@@ -274,8 +274,8 @@ func _phase_room_two() -> void:
 	var enemies: Array = room.get_enemies()
 	# Tough enough to outlast the measurement: the kill comes after it.
 	for enemy in enemies:
-		(enemy as BasicMeleeEnemy).health_component.set_max_health(1000.0)
-		(enemy as BasicMeleeEnemy).health_component.current_health = 1000.0
+		(enemy as BasicEnemy).health_component.set_max_health(1000.0)
+		(enemy as BasicEnemy).health_component.current_health = 1000.0
 	node.global_position = p.global_position + Vector3(1.5, 0, 0)
 	node.set_manual_target(enemies[1])
 
@@ -298,7 +298,7 @@ func _phase_room_two() -> void:
 			RATE_TICKS, wall, RATE_TICKS * DT, average * 1000.0, worst * 1000.0])
 
 	# The race: the player and the shadow on one enemy with little left.
-	var target: BasicMeleeEnemy = enemies[0] as BasicMeleeEnemy
+	var target: BasicEnemy = enemies[0] as BasicEnemy
 	for other in enemies:
 		if other != target:
 			_park(other, other.global_position + Vector3(10, 0, 0))
@@ -428,8 +428,8 @@ func _phase_second_run() -> void:
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var a: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var b: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var a: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var b: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	p.global_position = ROOM_ANCHORS[0]
 	p.camera_rig.rotation.y = 0.0
 	_park(a, _at(p, -20.0, 1.4))

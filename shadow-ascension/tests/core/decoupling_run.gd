@@ -68,12 +68,12 @@ func _phase_scenes_in_isolation() -> void:
 	p.queue_free()
 	await _frames(2)
 
-	var enemy: BasicMeleeEnemy = (load(ENEMY_SCENE) as PackedScene).instantiate() as BasicMeleeEnemy
+	var enemy: BasicEnemy = (load(ENEMY_SCENE) as PackedScene).instantiate() as BasicEnemy
 	root.add_child(enemy)
 	var start: Vector3 = enemy.global_position
 	await _frames(30)
 	_record(is_instance_valid(enemy) and enemy.get_target() == null
-			and enemy._state == BasicMeleeEnemy.State.IDLE,
+			and enemy._state == BasicEnemy.State.IDLE,
 		"3) an enemy with no player anywhere stays idle instead of failing")
 	# There is no floor out here, so it falls; what matters is that it goes
 	# nowhere sideways — there is nobody to chase.

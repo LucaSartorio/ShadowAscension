@@ -92,16 +92,16 @@ func _phase_dodge() -> void:
 	var p: Player = dungeon.get_player()
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
-	var enemy: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicMeleeEnemy
+	var enemy: BasicEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicEnemy
 	_park_other(dungeon.get_rooms()[0], enemy)
 	var in_iframes: Array[int] = [0]
 	var on_landed: Callable = func(target: Node, _info: DamageInfo) -> void:
 		if target == p and p.combat.get_dodge_phase() == PlayerCombat.DodgePhase.INVULNERABLE:
 			in_iframes[0] += 1
-	enemy.hitbox.hit_landed.connect(on_landed)
+	enemy.attack.hitbox.hit_landed.connect(on_landed)
 	var coming: bool = await _until(func() -> bool:
 		_step_in(p, enemy)
-		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() <= DODGE_LEAD, 10.0)
+		return enemy.get_attack_phase() == EnemyAttack.Phase.TELEGRAPH and enemy.attack.get_phase_remaining() <= DODGE_LEAD, 10.0)
 	var speed: float = p.effective_dodge_speed
 	p.effective_dodge_speed = 0.0
 	var hp: float = p.health_component.current_health
@@ -110,7 +110,7 @@ func _phase_dodge() -> void:
 	var paid: float = stamina - p.combat.get_stamina()
 	await _until(func() -> bool: return not p.combat.is_dodging(), 1.0)
 	p.effective_dodge_speed = speed
-	enemy.hitbox.hit_landed.disconnect(on_landed)
+	enemy.attack.hitbox.hit_landed.disconnect(on_landed)
 	_record(coming and in_iframes[0] >= 1 and p.health_component.current_health == hp and paid == 25.0,
 		"D1) an enemy swing met in the i-frames: it connects and takes nothing; the dodge cost 25 stamina")
 	_park(enemy, enemy.global_position)
@@ -125,8 +125,8 @@ func _phase_room_one() -> void:
 	var p: Player = dungeon.get_player()
 	p.hurtbox.set_invulnerable(true)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var first_enemy: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var second_enemy: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var first_enemy: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var second_enemy: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	var bar: EnemyHealthBar3D = first_enemy.get_node("EnemyHealthBar3D") as EnemyHealthBar3D
 	var xp_before: int = p.progression.get_total_xp()
 	_park(second_enemy, ROOM_ANCHORS[0] + Vector3(6, 0, -1.5))
@@ -187,7 +187,7 @@ func _phase_room_two_and_shadow() -> void:
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[1]
 	var c: RoomCombatant = room.get_enemies()[0]
-	var d: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var d: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	_park(c, ROOM_ANCHORS[1] + Vector3(0, 0, -1.5))
 	await _pause(0.2)
 	p.global_position = ROOM_ANCHORS[1]
@@ -324,7 +324,7 @@ func _phase_shipped_chance() -> void:
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var enemy: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
+	var enemy: BasicEnemy = room.get_enemies()[0] as BasicEnemy
 	_park(room.get_enemies()[1], ROOM_ANCHORS[0] + Vector3(6, 0, -1.5))
 	var first: int = _hits.size()
 	var consistent: bool = true
@@ -361,7 +361,7 @@ func _phase_shipped_chance() -> void:
 
 func _on_player_hit(target: Node, info: DamageInfo) -> void:
 	var entry: Dictionary = {"target": target, "info": info, "amount": info.amount, "critical": info.is_critical}
-	var enemy: BasicMeleeEnemy = target as BasicMeleeEnemy
+	var enemy: BasicEnemy = target as BasicEnemy
 	if enemy != null:
 		entry["staggered"] = enemy.is_staggered()
 		entry["push"] = enemy.get_knockback_velocity().length()

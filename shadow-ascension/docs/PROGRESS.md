@@ -8,16 +8,18 @@
 
 **M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
-**M12.1 — Enemy AI 2.0 Foundation** and **M12.2 — Melee Archetype 2.0** are complete. The basic
-enemy's AI is an explicit state machine (`IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`)
-with one writer of its state and a table of legal transitions; its target has one owner,
-`EnemyTargeting`, choosing from the target groups its data names — the player's alone, as before; and
-since M12.2 its swing is the first reusable archetype, the melee: an `AttackData` (the player's
-resource) listed in its `EnemyData`, run by `EnemyMeleeAttack` — telegraph, active, recovery, then a
-cooldown — with the facing locked just before the hit. The numbers are the ones M11 shipped; the boss
-keeps its own AI. M12.3 is next; the other archetypes, the target choice between player and shadow,
-group combat and the Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`, *Enemy
-AI (M12.1)* and *Melee archetype (M12.2)*; the deliverables are in `ROADMAP.md`.
+**M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0** and **M12.3 — Ranged
+Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
+ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`), with one writer of its state and a table of legal
+transitions; its target has one owner, `EnemyTargeting`, choosing from the target groups its data
+names — the player's alone, as before. An archetype is an attack component and its data: the melee
+(M12.2) swings through a hitbox; the ranged (M12.3) keeps 4–10 m from its target, 7 m by preference,
+and fires a telegraphed `Projectile` that flies straight — both on one `EnemyAttack` lifecycle
+(telegraph, active, recovery, then a cooldown) and `AttackData`, the player's resource. The boss keeps
+its own AI; the shipped dungeon still holds melee only. M12.4 is next; the other archetypes, the target
+choice between player and shadow, group combat and the Boss Framework are not built yet. The
+architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee archetype (M12.2)* and *Ranged
+archetype (M12.3)*; the deliverables are in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -35,7 +37,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.2 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.3 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -51,6 +53,68 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.3 — Ranged Archetype 2.0** (Completed). What existed was read first: no projectile, no ranged
+  code anywhere; the damage path a projectile needs already whole in `Hitbox` (source filtering, one
+  hit per target, `DamageInfo`, `hit_landed` / `hit_accepted`); the state machine's distance rule (close
+  to a ring, hold, step back inside a minimum) already the shape a ranged enemy needs, with three
+  numbers; and the enemy's script named for the melee alone, with the melee's hitbox read in it. Then:
+  - **One state machine for every archetype**: `BasicMeleeEnemy` became `BasicEnemy`
+    (`scripts/enemies/basic_enemy.gd`), its attack a generic `Attack` child, its hitbox the melee's own.
+    No `if ranged` anywhere in it.
+  - **`EnemyAttack`** (`scripts/enemies/enemy_attack.gd`): the lifecycle M12.2 wrote for the melee —
+    phases, clock, cooldown, desync, facing rule, telegraph look — as a base; `EnemyMeleeAttack` keeps
+    only its hitbox (wired in the scene), **`EnemyRangedAttack`** (`enemy_ranged_attack.gd`) only its
+    shot: decided at the fire moment — the target still valid, aimed at `EnemyTargeting.get_aim_point()`
+    (the target's `Hurtbox.get_center()`) with no prediction and within the facing cone, one ray clear of
+    the world, within reach — else withheld with no cooldown.
+  - **`Projectile`** (`scripts/combat/projectile.gd`, `scenes/enemies/enemy_projectile.tscn`): flies
+    straight on `delta`; its hit is a `Hitbox` child's, through `Hitbox.use_attack()` (new, shared with
+    the melee); a counted hit, the world or its lifetime end it; a refused hit (i-frames) lets it through;
+    its source cleared if the shooter leaves the scene; freed with the scene it was fired into.
+  - **Data**: `basic_ranged_enemy.tres` (minimum 4 m, preferred 7 m, maximum attack 10 m, 70 HP, 12
+    damage, 1.6 s cooldown, alert 0.3 s) and `ranged_basic_bolt.tres` (telegraph 0.6 s, release 0.1 s,
+    recovery 0.5 s, projectile at 12 m/s for 2.5 s); `AttackData` gained `projectile_scene`,
+    `projectile_speed`, `projectile_lifetime`; `EnemyData` `line_of_sight_interval`. The scene,
+    `basic_ranged_enemy.tscn`, carries a `ProjectileSpawn` marker under `VisualRoot`.
+  - **Two rules in the shared state machine**: line of sight cached for decisions (one ray per 0.2 s),
+    and on the ring but out of sight, closing in on the target until it is seen; and *cornered* — a
+    REPOSITION that times out lets the enemy attack from inside its minimum until it may try again.
+  - **A leak found and avoided**: a first version handed the attack its enemy typed as `BasicEnemy`; the
+    two scripts then referenced each other and were kept alive at exit — `hit_reaction_test` reported
+    "2 resources still in use". The attack now takes its parts (`setup(enemy, targeting, visual_root,
+    mesh)`), and the cycle is gone.
+  - **Not touched**: the boss, the shadow, the player's combat, the shipped dungeon (ranged placement is
+    content, M18), every melee number.
+
+  Twenty-two existing suites followed the rename and the generic attack with mechanical edits
+  (`BasicMeleeEnemy` → `BasicEnemy`, `melee_attack` → `attack`, `EnemyMeleeAttack.Phase` →
+  `EnemyAttack.Phase`, the melee's hitbox as `attack.hitbox`). **`tests/enemies/ranged_archetype_test`**
+  (43) — configuration and spawn; detection with its ALERT; too far (closing in, no attack past 10 m,
+  then holding at 7 m); the band (no drift over two shots); too close (backing away, shooting only from
+  outside 4 m; pressed again, backing off to the ring); cornered against a wall (two tries, then shots
+  from 2.75 m); the telegraph (no projectile, no damage), the fire (one projectile, from the spawn
+  point, aimed within 0.1°), the hit (12, once, freed), recovery and cooldown; the i-frames, a dodge to
+  the side, a step aside after the fire (no bend); a wall behind the player, a player hidden behind a
+  wall, a player slipping behind one mid-telegraph (withheld); lifetime; its shooter and a fellow enemy
+  never hit; stagger in the telegraph, on the fire tick, after the fire; death before and after the fire,
+  and its shooter freed mid-flight; three ranged; a melee and a ranged against the player's whole kit;
+  a shadow in the line, and a ranged hunting a shadow; the lock and its ring through REPOSITION, ATTACK
+  and STAGGERED; knockback; a critical and its hit stop mid-telegraph; eight at once; every tick's
+  invariants. **`tests/core/m12_ranged_run.gd`** (15) — the real game with a ranged brought into the
+  dungeon: beside room one's melee (it keeps 7 m, its shots 12 each, once), a shot dodged through, a
+  critical heavy through the lock and its ring (25 XP once), the room clearing; the shadow's kill paid
+  70/30; the boss; a shot in the air as the player leaves (gone with the dungeon); a second dungeon the
+  same, no listener doubled; hub, no projectile, nothing orphaned.
+
+  **2117 assertions across 59 suites, zero failures, zero runtime errors, zero
+  exit-time leaks** (`tests/run_all.gd`). The 57 existing suites keep M12.2's 2059; the two new ones add
+  58. Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M12.4 and later: tank, assassin, support and elite archetypes; placing ranged enemies in the
+  dungeon (M18); choosing between several attacks; the target choice between player and shadow; group
+  combat and coordination; strafing and cover; a ranged shadow to extract; the Boss Framework.
 
 - **M12.2 — Melee Archetype 2.0** (Completed). What M12.1 left was read first: the swing lived in the
   enemy script — its phase enum, its timers, its telegraph tweens and the hitbox's numbers beside the
@@ -1905,8 +1969,8 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 and
-M12.2 are done, M12.3 is next.
+Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 to
+M12.3 are done, M12.4 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —

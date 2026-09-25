@@ -105,8 +105,8 @@ func _phase_room_one() -> void:
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var first_enemy: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var second_enemy: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var first_enemy: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var second_enemy: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	p.global_position = ROOM_ANCHORS[0]
 	p.camera_rig.rotation.y = 0.0
 	_park(first_enemy, _at(p, -15.0, 5.0))
@@ -193,8 +193,8 @@ func _phase_room_two_and_shadow() -> void:
 	p.global_position = ROOM_ANCHORS[1]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[1]
-	var c: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var d: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var c: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var d: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	for extra in room.get_enemies().slice(2):
 		_park(extra, extra.global_position + Vector3(8, 0, 0))
 	p.global_position = ROOM_ANCHORS[1]
@@ -327,8 +327,8 @@ func _phase_second_run() -> void:
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var first_enemy: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var second_enemy: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var first_enemy: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var second_enemy: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	p.global_position = ROOM_ANCHORS[0]
 	p.camera_rig.rotation.y = 0.0
 	_park(first_enemy, _at(p, 35.0, 5.0))
@@ -363,7 +363,7 @@ func _phase_second_run() -> void:
 
 func _on_player_hit(target: Node, info: DamageInfo) -> void:
 	var entry: Dictionary = {"target": target, "amount": info.amount, "critical": info.is_critical}
-	var enemy: BasicMeleeEnemy = target as BasicMeleeEnemy
+	var enemy: BasicEnemy = target as BasicEnemy
 	if enemy != null:
 		entry["staggered"] = enemy.is_staggered()
 	_hits.append(entry)

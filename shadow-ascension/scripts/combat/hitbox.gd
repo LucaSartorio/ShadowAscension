@@ -66,6 +66,17 @@ func set_debug_color(color: Color) -> void:
 	mat.albedo_color = color
 
 
+## Takes on `attack`'s hit: its damage — `base_damage` scaled by the attack's
+## multiplier — its name and its impact. For an attacker that deals a whole
+## AttackData at once: an enemy's swing, a projectile (M12.3).
+func use_attack(attack: AttackData, base_damage: float) -> void:
+	damage = DamageModel.attack_damage(base_damage, attack.damage_multiplier)
+	attack_id = attack.id
+	stagger_power = attack.stagger_power
+	knockback_force = attack.knockback_force
+	set_debug_color(attack.debug_color)
+
+
 func activate() -> void:
 	if _active:
 		return

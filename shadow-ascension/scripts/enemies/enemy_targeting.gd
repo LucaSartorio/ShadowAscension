@@ -33,6 +33,9 @@ const CANDIDATE_REFRESH_INTERVAL: float = 1.0
 ## The property through which a candidate exposes its health — Player and the
 ## shadow both do. Anything without one cannot be hurt, so it is no target.
 const HEALTH_PROPERTY: StringName = &"health_component"
+## The property through which a target exposes what it is hit through — Player
+## and the shadow both do — whose middle a ranged attack aims at.
+const HURTBOX_PROPERTY: StringName = &"hurtbox"
 
 ## Handed over by the enemy in setup().
 var _body: Node3D = null
@@ -40,6 +43,7 @@ var _groups: Array[StringName] = []
 
 var _target: Node3D = null
 var _target_health: HealthComponent = null
+var _target_hurtbox: Hurtbox = null
 ## Untyped on purpose: a candidate freed between two refreshes must not break
 ## the cache; it is skipped by the validity check instead.
 var _candidates: Array = []
@@ -62,6 +66,7 @@ func _exit_tree() -> void:
 	_disconnect_target()
 	_target = null
 	_target_health = null
+	_target_hurtbox = null
 
 
 # --- queries ---------------------------------------------------------------------
@@ -78,6 +83,17 @@ func has_target() -> bool:
 func get_target_position() -> Vector3:
 	if _target == null:
 		return _body.global_position if _body != null else Vector3.ZERO
+	return _target.global_position
+
+
+## Where to aim at the target (M12.3): the middle of its hurtbox — the chest of
+## a body, not its feet — or its origin if it has none; the enemy's own position
+## while there is no target.
+func get_aim_point() -> Vector3:
+	if _target == null:
+		return get_target_position()
+	if _target_hurtbox != null and is_instance_valid(_target_hurtbox):
+		return _target_hurtbox.get_center()
 	return _target.global_position
 
 
@@ -179,6 +195,7 @@ func _set_target(target: Node3D) -> void:
 	_disconnect_target()
 	_target = target
 	_target_health = _health_of(target) if target != null else null
+	_target_hurtbox = target.get(HURTBOX_PROPERTY) as Hurtbox if target != null else null
 	_out_of_range_elapsed = 0.0
 	if _target != null:
 		_target.tree_exiting.connect(_on_target_gone)

@@ -17,6 +17,7 @@ lose_target_range = 14.0
 lose_target_delay = 1.0
 eye_height = 1.2
 line_of_sight_mask = 1
+line_of_sight_interval = 0.2
 alert_duration = 0.0
 attack_range = 1.8
 preferred_combat_distance = 1.6

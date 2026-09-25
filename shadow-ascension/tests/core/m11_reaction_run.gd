@@ -101,13 +101,13 @@ func _phase_interrupt_and_dodge() -> void:
 	var p: Player = dungeon.get_player()
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
-	var enemy: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicMeleeEnemy
+	var enemy: BasicEnemy = dungeon.get_rooms()[0].get_enemies()[0] as BasicEnemy
 	_park_other(dungeon.get_rooms()[0], enemy)
 
 	# Staggered out of its windup by Light 3.
 	var winding: bool = await _until(func() -> bool:
 		_step_in(p, enemy)
-		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() > 0.25, 10.0)
+		return enemy.get_attack_phase() == EnemyAttack.Phase.TELEGRAPH and enemy.attack.get_phase_remaining() > 0.25, 10.0)
 	var hp: float = p.health_component.current_health
 	var first: int = _hits.size()
 	_aim(p, enemy)
@@ -116,13 +116,13 @@ func _phase_interrupt_and_dodge() -> void:
 	var hit: Dictionary = _hits[first] if _hits.size() > first else {}
 	await _until(func() -> bool: return not enemy.is_staggered(), 2.0)
 	var untouched: bool = p.health_component.current_health == hp
-	var awake: Array[BasicMeleeEnemy.State] = [
-		BasicMeleeEnemy.State.CHASE, BasicMeleeEnemy.State.ATTACK, BasicMeleeEnemy.State.REPOSITION]
+	var awake: Array[BasicEnemy.State] = [
+		BasicEnemy.State.CHASE, BasicEnemy.State.ATTACK, BasicEnemy.State.REPOSITION]
 	await _until(func() -> bool: return enemy._state in awake, 1.0)
 	_record(winding and hit.get("staggered", false) and hit.get("attack_cut", false) and untouched,
 		"E1) an enemy winding up, hit by Light 3: STAGGERED, its swing cut off before it lands — the player keeps %.0f HP" % hp)
-	_record(enemy._state != BasicMeleeEnemy.State.STAGGERED and enemy._state != BasicMeleeEnemy.State.IDLE,
-		"E2) the stagger over, it is back on its AI (%s)" % BasicMeleeEnemy.State.keys()[enemy._state])
+	_record(enemy._state != BasicEnemy.State.STAGGERED and enemy._state != BasicEnemy.State.IDLE,
+		"E2) the stagger over, it is back on its AI (%s)" % BasicEnemy.State.keys()[enemy._state])
 
 	# Its next swing, dodged in the i-frames, in place.
 	await _until(func() -> bool: return p.combat.can_dodge() and p.combat.get_stamina() == p.combat.get_max_stamina(), 5.0)
@@ -133,10 +133,10 @@ func _phase_interrupt_and_dodge() -> void:
 			landed[0] += 1
 			if p.combat.get_dodge_phase() == PlayerCombat.DodgePhase.INVULNERABLE:
 				in_iframes[0] += 1
-	enemy.hitbox.hit_landed.connect(on_landed)
+	enemy.attack.hitbox.hit_landed.connect(on_landed)
 	var coming: bool = await _until(func() -> bool:
 		_step_in(p, enemy)
-		return enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and enemy.melee_attack.get_phase_remaining() <= DODGE_LEAD, 10.0)
+		return enemy.get_attack_phase() == EnemyAttack.Phase.TELEGRAPH and enemy.attack.get_phase_remaining() <= DODGE_LEAD, 10.0)
 	var speed: float = p.effective_dodge_speed
 	p.effective_dodge_speed = 0.0
 	hp = p.health_component.current_health
@@ -145,7 +145,7 @@ func _phase_interrupt_and_dodge() -> void:
 	var paid: float = stamina - p.combat.get_stamina()
 	await _until(func() -> bool: return not p.combat.is_dodging(), 1.0)
 	p.effective_dodge_speed = speed
-	enemy.hitbox.hit_landed.disconnect(on_landed)
+	enemy.attack.hitbox.hit_landed.disconnect(on_landed)
 	_record(coming and in_iframes[0] >= 1 and p.health_component.current_health == hp
 			and is_equal_approx(paid, p.combat.data.dodge_stamina_cost),
 		"D1) its next swing, dodged: it connects in the i-frames (%d) and takes nothing; the dodge cost %.0f stamina, once" % [in_iframes[0], paid])
@@ -162,8 +162,8 @@ func _phase_combo_and_heavy() -> void:
 	var p: Player = dungeon.get_player()
 	p.hurtbox.set_invulnerable(true)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var first_enemy: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var second_enemy: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var first_enemy: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var second_enemy: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	var xp_before: int = p.progression.get_total_xp()
 
 	_park(first_enemy, ROOM_ANCHORS[0] + Vector3(0, 0, -1.5))
@@ -217,7 +217,7 @@ func _phase_room_two_and_shadow() -> void:
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[1]
 	var c: RoomCombatant = room.get_enemies()[0]
-	var d: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var d: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	_park(c, ROOM_ANCHORS[1] + Vector3(0, 0, -1.5))
 	await _pause(0.2)
 	p.global_position = ROOM_ANCHORS[1]
@@ -373,8 +373,8 @@ func _phase_second_run() -> void:
 	p.global_position = ROOM_ANCHORS[0]
 	await _pause(0.8)
 	var room: RoomController = dungeon.get_rooms()[0]
-	var enemy: BasicMeleeEnemy = room.get_enemies()[0] as BasicMeleeEnemy
-	var other: BasicMeleeEnemy = room.get_enemies()[1] as BasicMeleeEnemy
+	var enemy: BasicEnemy = room.get_enemies()[0] as BasicEnemy
+	var other: BasicEnemy = room.get_enemies()[1] as BasicEnemy
 	_park(other, ROOM_ANCHORS[0] + Vector3(6, 0, -1.5))
 	_park(enemy, ROOM_ANCHORS[0] + Vector3(0, 0, -1.5))
 	await _pause(0.3)
@@ -412,20 +412,20 @@ func _phase_second_run() -> void:
 
 func _on_player_hit(target: Node, info: DamageInfo) -> void:
 	var entry: Dictionary = {"target": target, "info": info, "amount": info.amount}
-	var enemy: BasicMeleeEnemy = target as BasicMeleeEnemy
+	var enemy: BasicEnemy = target as BasicEnemy
 	if enemy != null:
 		entry["staggered"] = enemy.is_staggered()
 		entry["push"] = enemy.get_knockback_velocity().length()
-		entry["attack_cut"] = enemy.get_attack_phase() == EnemyMeleeAttack.Phase.NONE and not enemy.hitbox.is_active()
+		entry["attack_cut"] = enemy.get_attack_phase() == EnemyAttack.Phase.NONE and not enemy.attack.hitbox.is_active()
 	_hits.append(entry)
 
 
-func _enemies(dungeon: DungeonController) -> Array[BasicMeleeEnemy]:
-	var found: Array[BasicMeleeEnemy] = []
+func _enemies(dungeon: DungeonController) -> Array[BasicEnemy]:
+	var found: Array[BasicEnemy] = []
 	for room in dungeon.get_rooms():
 		for combatant in room.get_enemies():
-			if combatant is BasicMeleeEnemy:
-				found.append(combatant as BasicMeleeEnemy)
+			if combatant is BasicEnemy:
+				found.append(combatant as BasicEnemy)
 	return found
 
 

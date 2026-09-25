@@ -3,7 +3,7 @@ extends CharacterBody3D
 
 ## The contract a RoomController drives: park it, wake it, hear about its death.
 ##
-## Deliberately behaviourless. BasicMeleeEnemy and DungeonBoss implement their AI
+## Deliberately behaviourless. BasicEnemy and DungeonBoss implement their AI
 ## independently — this exists so a room can hold either without knowing which,
 ## and without one inheriting the other's logic.
 

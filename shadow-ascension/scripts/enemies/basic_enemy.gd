@@ -1,10 +1,12 @@
-class_name BasicMeleeEnemy
+class_name BasicEnemy
 extends RoomCombatant
 
-## The melee archetype (M12.2), on the enemy AI foundation (M12.1): the state
-## machine every melee enemy runs, whatever its data. A melee variant is an
-## EnemyData — its numbers, its target groups, its attacks — not a new script;
-## `basic_melee_enemy.tres` is the first. Nothing here asks which variant it is.
+## An enemy on the AI foundation (M12.1): the state machine every enemy
+## archetype runs — the melee (M12.2), the ranged (M12.3). Named BasicMeleeEnemy
+## until M12.3, when it stopped being the melee's alone. Nothing here asks which
+## archetype it is: an archetype is the attack component its scene gives it (the
+## `Attack` node: EnemyMeleeAttack, EnemyRangedAttack) and the EnemyData that
+## tunes it — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres`.
 ##
 ## Its parts, each with one owner:
 ##
@@ -16,12 +18,17 @@ extends RoomCombatant
 ##     Movement    this script's movement section: navigation, avoidance, the
 ##                 push, the one move_and_slide(). The states say where to go;
 ##                 the movement goes there.
-##     Combat      EnemyMeleeAttack (child node): the archetype's attacks, the
-##                 swing under way — telegraph, active, recovery — its hitbox and
-##                 its cooldown. The state machine decides when to swing; the
-##                 attack decides what the swing is.
+##     Combat      EnemyAttack (child node `Attack`): the archetype's attacks and
+##                 the attack under way — telegraph, active, recovery — and its
+##                 cooldown. The state machine decides when to attack; the
+##                 attack decides what the attack is.
 ##     Health      HealthComponent: the AI hears `damaged` and `died`, owns none.
 ##     Visual      the hit reactions' placeholder poses (the telegraph is the attack's).
+##
+## The distance it keeps is data, the same rule for every archetype: close in to
+## the `preferred_combat_distance` ring and hold there; attack from anywhere
+## between `minimum_combat_distance` and `attack_range`; nearer than the minimum,
+## step back to the ring (REPOSITION). A melee's ring is 1.6 m, a ranged's 7 m.
 ##
 ## The states, and what moves between them:
 ##
@@ -117,6 +124,7 @@ var lose_target_range: float
 var lose_target_delay: float
 var eye_height: float
 var line_of_sight_mask: int
+var line_of_sight_interval: float
 var alert_duration: float
 
 var attack_range: float
@@ -146,10 +154,8 @@ var target_update_interval: float
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var hurtbox_collision: CollisionShape3D = $Hurtbox/CollisionShape3D
 @onready var body_collision: CollisionShape3D = $CollisionShape3D
-@onready var attack_origin: Node3D = $VisualRoot/AttackOrigin
-@onready var hitbox: Hitbox = $VisualRoot/AttackOrigin/Hitbox
 @onready var targeting: EnemyTargeting = $EnemyTargeting
-@onready var melee_attack: EnemyMeleeAttack = $MeleeAttack
+@onready var attack: EnemyAttack = $Attack
 
 ## The AI state: the one source of truth, written only by _change_state().
 var _state: State = State.IDLE
@@ -181,6 +187,11 @@ var _last_nav_point: Vector3 = Vector3.INF
 var _navigation_checked: bool = false
 var _navigation_missing: bool = false
 
+# Perception: the last answer to "is the target in sight?", and how old it is.
+# INF until the first ray, and again whenever the target changes.
+var _in_sight: bool = false
+var _sight_age: float = INF
+
 var _debug_label: Label3D = null
 
 
@@ -189,8 +200,7 @@ func _ready() -> void:
 	# reset_to rather than a bare write: this component filled itself from the
 	# scene's placeholder in its own _ready(), before this one ran.
 	health_component.reset_to(max_health)
-	hitbox.source = self
-	melee_attack.setup(hitbox, visual_root, mesh_instance)
+	attack.setup(self, targeting, visual_root, mesh_instance)
 	health_component.damaged.connect(_on_damaged)
 	health_component.died.connect(_on_died)
 	targeting.setup(self, target_groups)
@@ -227,6 +237,7 @@ func _apply_stats() -> void:
 	lose_target_delay = source.lose_target_delay
 	eye_height = source.eye_height
 	line_of_sight_mask = source.line_of_sight_mask
+	line_of_sight_interval = source.line_of_sight_interval
 	alert_duration = source.alert_duration
 
 	attack_range = source.attack_range
@@ -235,7 +246,7 @@ func _apply_stats() -> void:
 	enemy_spacing_radius = source.enemy_spacing_radius
 
 	max_attack_facing_angle = source.max_attack_facing_angle
-	melee_attack.configure(source)
+	attack.configure(source)
 
 	stagger_resistance = source.stagger_resistance
 	stagger_duration = source.stagger_duration
@@ -265,9 +276,9 @@ func get_state() -> State:
 	return _state
 
 
-## Where the swing under way is — EnemyMeleeAttack's answer.
-func get_attack_phase() -> EnemyMeleeAttack.Phase:
-	return melee_attack.get_phase()
+## Where the attack under way is — EnemyAttack's answer.
+func get_attack_phase() -> EnemyAttack.Phase:
+	return attack.get_phase()
 
 
 ## Whom this enemy is fighting, or null. EnemyTargeting's answer.
@@ -307,7 +318,8 @@ func set_combat_enabled(enabled: bool) -> void:
 		return
 	_change_state(State.IDLE)
 	_clear_reactions()
-	melee_attack.reset()
+	attack.reset()
+	_sight_age = INF
 	velocity = Vector3.ZERO
 	_refresh_engaged()
 
@@ -389,7 +401,7 @@ func _enter_state(state: State) -> void:
 			_desired_horizontal = Vector3.ZERO
 			_alert_timer = alert_duration
 			# The moment a fight is picked up is when a group's swings desync.
-			melee_attack.hold_off(initial_attack_delay)
+			attack.hold_off(initial_attack_delay)
 		State.CHASE:
 			# Ask for a path on the first tick rather than one interval in.
 			_target_update_accum = target_update_interval
@@ -400,7 +412,7 @@ func _enter_state(state: State) -> void:
 			_last_nav_point = Vector3.INF
 		State.ATTACK:
 			_desired_horizontal = Vector3.ZERO
-			melee_attack.start(melee_attack.select_attack(), attack_cooldown_variation)
+			attack.start(attack.select_attack(), attack_cooldown_variation)
 		State.STAGGERED:
 			_stagger_timer = stagger_duration
 			# The AI's own speed goes; a push already under way stays — that is
@@ -413,10 +425,10 @@ func _enter_state(state: State) -> void:
 func _exit_state(state: State) -> void:
 	match state:
 		State.ATTACK:
-			# A finished swing has already ended; anything else is cut off here,
-			# so no hit window outlives the state.
-			if melee_attack.is_attacking():
-				melee_attack.interrupt()
+			# A finished attack has already ended; anything else is cut off here,
+			# so no hit window outlives the state and no shot is fired after it.
+			if attack.is_attacking():
+				attack.interrupt()
 		State.STAGGERED:
 			_stagger_timer = 0.0
 			_stagger_immunity_timer = stagger_immunity_time
@@ -455,11 +467,17 @@ func _update_chase(delta: float) -> void:
 		_change_state(State.REPOSITION)
 		return
 
-	_update_nav_target(delta, _combat_slot_position())
+	# On the ring but unable to see the target — a wall between them — holding
+	# there would wait for ever: it closes in on the target itself, down to the
+	# minimum distance, until it sees it again.
+	var blind: bool = dist <= preferred_combat_distance and not _target_in_sight()
+	var point: Vector3 = targeting.get_target_position() if blind else _combat_slot_position()
+	var stop_at: float = minimum_combat_distance if blind else preferred_combat_distance
+	_update_nav_target(delta, point)
 	var dir: Vector3 = _path_direction()
 	# Spacing: brake on the way in and hold on the ring, rather than grinding
 	# into the target or sliding past the ring on the deceleration.
-	var speed: float = _arrival_speed(dist - preferred_combat_distance)
+	var speed: float = _arrival_speed(dist - stop_at)
 	_drive(_accelerate_toward(dir * speed, delta), delta)
 
 	if speed > 0.0 and dir.length_squared() > 0.001:
@@ -514,17 +532,17 @@ func _update_reposition(delta: float) -> void:
 	_rotate_toward_target(delta, rotation_speed)
 
 
-## One swing, start to end, standing still — navigation does not pull it along.
+## One attack, start to end, standing still — navigation does not pull it along.
 ## It turns only as the attack allows: slowly early in the telegraph, not at all
-## from telegraph_facing_lock before the hit, so the swing commits to where it
-## was aimed and a step aside makes it miss. Over, it goes back to chasing,
-## where the next one waits for the cooldown.
+## from telegraph_facing_lock before ACTIVE, so the attack commits to where it
+## was aimed. Over, it goes back to chasing, where the next one waits for the
+## cooldown — or, if the attack was withheld, where it moves to be able to.
 func _update_attack(delta: float) -> void:
 	_hold_position(delta)
-	var turn: float = melee_attack.get_turn_factor()
+	var turn: float = attack.get_turn_factor()
 	if turn > 0.0:
 		_rotate_toward_target(delta, rotation_speed * turn)
-	if melee_attack.advance(delta):
+	if attack.advance(delta):
 		_change_state(State.CHASE)
 
 
@@ -549,7 +567,8 @@ func _end_stagger() -> void:
 
 
 func _tick_timers(delta: float) -> void:
-	melee_attack.tick(delta)
+	attack.tick(delta)
+	_sight_age += delta
 	if _reposition_block_timer > 0.0:
 		_reposition_block_timer = maxf(0.0, _reposition_block_timer - delta)
 
@@ -557,6 +576,7 @@ func _tick_timers(delta: float) -> void:
 ## The target is gone — dead, freed, out of reach too long. A fighting state
 ## stops fighting; a stagger ends on its own time and finds nobody to chase.
 func _on_target_changed(target: Node3D) -> void:
+	_sight_age = INF
 	if target != null:
 		_log_ai("target %s at %.1f m" % [target.name, targeting.get_distance()])
 		return
@@ -713,6 +733,16 @@ func _facing_error_to(target: Node3D) -> float:
 
 # --- perception -----------------------------------------------------------------------
 
+## Whether the target is in sight, from a ray at most line_of_sight_interval old:
+## asked every tick, it costs one ray an interval, not one a tick.
+func _target_in_sight() -> bool:
+	if _sight_age >= line_of_sight_interval:
+		_sight_age = 0.0
+		var target: Node3D = targeting.get_target()
+		_in_sight = target != null and _has_line_of_sight(target)
+	return _in_sight
+
+
 func _has_line_of_sight(target: Node3D) -> bool:
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	var from_point: Vector3 = global_position + Vector3.UP * eye_height
@@ -725,23 +755,36 @@ func _has_line_of_sight(target: Node3D) -> bool:
 	return space.intersect_ray(query).is_empty()
 
 
-# --- when to swing -----------------------------------------------------------------------
+# --- when to attack -----------------------------------------------------------------------
 #
-# The swing itself is EnemyMeleeAttack's; what the state machine judges is
-# whether one may start from here.
+# The attack itself is the archetype's (EnemyAttack); what the state machine
+# judges is whether one may start from here.
 
-## Whether a swing may start now, `dist` away from the target: the attack ready
+## Whether an attack may start now, `dist` away from the target: the attack ready
 ## (none under way, off cooldown, past the desync), inside the attack band,
 ## facing the target, and seeing it.
+##
+## Nearer than the minimum is no place to attack from — the enemy steps back
+## first (REPOSITION) — unless stepping back has just failed: a REPOSITION that
+## timed out (a wall behind it, a target pressing it faster than it can back
+## away) leaves it cornered for reposition_cooldown, and a cornered enemy fights
+## from where it stands rather than trying the same retreat for ever.
 func _can_start_attack(dist: float) -> bool:
-	if not melee_attack.is_ready():
+	if not attack.is_ready():
 		return false
-	if dist > attack_range or dist < minimum_combat_distance:
+	if dist > attack_range:
+		return false
+	if dist < minimum_combat_distance and not is_cornered():
 		return false
 	var target: Node3D = targeting.get_target()
 	if target == null or _facing_error_to(target) > deg_to_rad(max_attack_facing_angle):
 		return false
-	return _has_line_of_sight(target)
+	return _target_in_sight()
+
+
+## A retreat has just timed out, and the next may not start yet.
+func is_cornered() -> bool:
+	return _reposition_block_timer > 0.0
 
 
 # --- damage, reactions, death ------------------------------------------------------------
@@ -909,7 +952,7 @@ func _process(_delta: float) -> void:
 	var navigation: String = "no path" if nav_agent.is_navigation_finished() else "pathing"
 	if _navigation_missing:
 		navigation = "NO NAVIGATION"
-	var phase: EnemyMeleeAttack.Phase = melee_attack.get_phase()
+	var phase: EnemyAttack.Phase = attack.get_phase()
 	_debug_label.text = "%s%s\n%s %s" % [State.keys()[_state],
-		" (%s)" % EnemyMeleeAttack.Phase.keys()[phase] if phase != EnemyMeleeAttack.Phase.NONE else "",
+		" (%s)" % EnemyAttack.Phase.keys()[phase] if phase != EnemyAttack.Phase.NONE else "",
 		"%s %.1fm" % [target.name, targeting.get_distance()] if target != null else "no target", navigation]

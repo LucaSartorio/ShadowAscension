@@ -14,11 +14,11 @@ extends Resource
 ## player: nothing here changes in play, and nothing of a running attack — its
 ## timers, its place in the chain, whom it hit — is kept here.
 ##
-## Enemy attacks are AttackData too (M12.2): EnemyMeleeAttack runs the same
-## windup (its telegraph) / active / recovery and reads the id, the damage
-## multiplier, the stagger and push and the debug colour. The combo and cancel
-## windows, the movement multiplier, the feedback and the animation are the
-## player's and not read for an enemy.
+## Enemy attacks are AttackData too (M12.2): EnemyAttack runs the same windup
+## (its telegraph) / active / recovery and reads the id, the damage multiplier,
+## the stagger and push and the debug colour — and a ranged attack its projectile
+## (M12.3). The combo and cancel windows, the movement multiplier, the feedback
+## and the animation are the player's and not read for an enemy.
 
 ## Names the attack wherever it is reported: every hit it lands carries it.
 @export var id: StringName = &""
@@ -31,9 +31,10 @@ extends Resource
 @export var damage_multiplier: float = 1.0
 
 @export_group("Timing")
-## Seconds before the hitbox opens.
+## Seconds before the hitbox opens — an enemy's telegraph; for a ranged attack,
+## the seconds before it fires.
 @export var windup: float = 0.15
-## Seconds the hitbox stays open.
+## Seconds the hitbox stays open; for a ranged attack, the release after it fires.
 @export var active: float = 0.15
 ## Seconds after it closes before the owner is free again.
 @export var recovery: float = 0.25
@@ -75,6 +76,15 @@ extends Resource
 ## takes to settle, in seconds.
 @export var camera_shake_strength: float = 0.0
 @export var camera_shake_duration: float = 0.0
+
+@export_group("Projectile")
+## What a ranged attack fires (M12.3): the projectile scene — a Projectile — its
+## speed in m/s, and the seconds it flies before it is gone if it hits nothing.
+## Read by EnemyRangedAttack only; a melee attack and the player's leave them
+## empty.
+@export var projectile_scene: PackedScene = null
+@export_range(0.0, 200.0, 0.1, "or_greater") var projectile_speed: float = 0.0
+@export_range(0.0, 30.0, 0.05, "or_greater") var projectile_lifetime: float = 0.0
 
 @export_group("Debug")
 ## Colour of the hitbox's debug mesh while it is open.

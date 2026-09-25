@@ -2,7 +2,7 @@ class_name DungeonBoss
 extends RoomCombatant
 
 ## The dungeon's boss. It shares the room contract, the damage pipeline and the
-## navigation approach with BasicMeleeEnemy, but none of its AI: this is its own
+## navigation approach with BasicEnemy, but none of its AI: this is its own
 ## state logic with a three-attack decision layer.
 
 ## Carries what a health bar needs without the boss knowing a UI exists.

@@ -82,8 +82,8 @@ func _phase_assets() -> void:
 func _phase_enemies_share_configuration_only() -> void:
 	var dungeon: DungeonController = current_scene as DungeonController
 	var enemies: Array[RoomCombatant] = dungeon.get_rooms()[0].get_enemies()
-	var a: BasicMeleeEnemy = enemies[0] as BasicMeleeEnemy
-	var b: BasicMeleeEnemy = enemies[1] as BasicMeleeEnemy
+	var a: BasicEnemy = enemies[0] as BasicEnemy
+	var b: BasicEnemy = enemies[1] as BasicEnemy
 	_record(is_same(a.stats, _enemy_data) and is_same(b.stats, _enemy_data),
 		"7) both enemies in room 1 read the same EnemyData — configuration is shared by design")
 	_record(_seeded_from(a, _enemy_data) and _seeded_from(b, _enemy_data),
@@ -102,16 +102,16 @@ func _phase_enemies_share_configuration_only() -> void:
 		"12) A's health bar reads A's runtime health (ratio %.2f)" % bar.get_ratio())
 
 	var speed: float = a.movement_speed
-	var damage: float = a.melee_attack.attack_damage
+	var damage: float = a.attack.attack_damage
 	a.movement_speed = 0.0
-	a.melee_attack.attack_damage = 99.0
-	_record(is_equal_approx(b.movement_speed, 3.8) and is_equal_approx(b.melee_attack.attack_damage, 15.0),
+	a.attack.attack_damage = 99.0
+	_record(is_equal_approx(b.movement_speed, 3.8) and is_equal_approx(b.attack.attack_damage, 15.0),
 		"13) retuning A in play leaves B at 3.8 speed and 15 damage")
 	_record(is_equal_approx(_enemy_data.movement_speed, 3.8)
 			and is_equal_approx(_enemy_data.attack_damage, 15.0),
 		"14) and leaves the asset untouched too")
 	a.movement_speed = speed
-	a.melee_attack.attack_damage = damage
+	a.attack.attack_damage = damage
 
 
 # --- 15-17. the boss is seeded from BossStats, not from its scene ------------------------
@@ -164,7 +164,7 @@ func _phase_editing_the_asset() -> void:
 	variant.attack_damage = 40.0
 	variant.xp_reward = 99
 	variant.movement_speed = 5.0
-	var enemy: BasicMeleeEnemy = (load(ENEMY_SCENE) as PackedScene).instantiate() as BasicMeleeEnemy
+	var enemy: BasicEnemy = (load(ENEMY_SCENE) as PackedScene).instantiate() as BasicEnemy
 	enemy.stats = variant
 	enemy.combat_enabled = false
 	current_scene.add_child(enemy)
@@ -173,13 +173,13 @@ func _phase_editing_the_asset() -> void:
 	_record(is_equal_approx(enemy.health_component.max_health, 250.0)
 			and is_equal_approx(enemy.health_component.current_health, 250.0),
 		"21) an enemy given a 250 HP asset starts at 250 / 250")
-	_record(is_equal_approx(enemy.hitbox.damage, 40.0) and enemy.get_xp_reward() == 99
+	_record(is_equal_approx(enemy.attack.hitbox.damage, 40.0) and enemy.get_xp_reward() == 99
 			and is_equal_approx(enemy.nav_agent.max_speed, 5.0),
 		"22) hits for 40, is worth 99 XP and moves at 5.0 — all from the asset")
 	_record(is_equal_approx(_enemy_data.max_health, 100.0) and _enemy_data.xp_reward == 25,
 		"23) the archetype it was copied from is unchanged")
 	var dungeon: DungeonController = current_scene as DungeonController
-	var b: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[1] as BasicMeleeEnemy
+	var b: BasicEnemy = dungeon.get_rooms()[0].get_enemies()[1] as BasicEnemy
 	_record(is_equal_approx(b.health_component.max_health, 100.0),
 		"24) and the dungeon's own enemies still read 100")
 	enemy.queue_free()
@@ -227,7 +227,7 @@ func _phase_reward_comes_from_the_asset() -> void:
 	p.hurtbox.set_invulnerable(true)
 	p.global_position = ROOM1_ANCHOR
 	await _pause(0.8)
-	var b: BasicMeleeEnemy = dungeon.get_rooms()[0].get_enemies()[1] as BasicMeleeEnemy
+	var b: BasicEnemy = dungeon.get_rooms()[0].get_enemies()[1] as BasicEnemy
 	var before: int = p.progression.get_total_xp()
 	await _kill(p, b)
 	await _pause(0.4)
@@ -237,18 +237,18 @@ func _phase_reward_comes_from_the_asset() -> void:
 
 # --- helpers ----------------------------------------------------------------------------------
 
-func _seeded_from(enemy: BasicMeleeEnemy, data: EnemyData) -> bool:
+func _seeded_from(enemy: BasicEnemy, data: EnemyData) -> bool:
 	return is_equal_approx(enemy.max_health, data.max_health) \
 		and is_equal_approx(enemy.health_component.max_health, data.max_health) \
 		and is_equal_approx(enemy.health_component.current_health, data.max_health) \
-		and is_equal_approx(enemy.hitbox.damage, data.attack_damage) \
+		and is_equal_approx(enemy.attack.hitbox.damage, data.attack_damage) \
 		and enemy.get_xp_reward() == data.xp_reward \
 		and is_equal_approx(enemy.movement_speed, data.movement_speed) \
 		and is_equal_approx(enemy.detection_range, data.detection_range) \
 		and is_equal_approx(enemy.attack_range, data.attack_range) \
 		and is_equal_approx(enemy.nav_agent.max_speed, data.movement_speed) \
 		and is_equal_approx(enemy.nav_agent.radius, data.enemy_spacing_radius) \
-		and enemy.melee_attack.telegraph_color == data.telegraph_color
+		and enemy.attack.telegraph_color == data.telegraph_color
 
 
 func _kill(player: Player, target: RoomCombatant, budget: float = 40.0) -> void:

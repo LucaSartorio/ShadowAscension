@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_data.gd" id="1_stats"]
+[ext_resource type="Resource" path="res://resources/enemies/attacks/ranged_basic_bolt.tres" id="2_bolt"]
+
+[resource]
+script = ExtResource("1_stats")
+xp_reward = 25
+max_health = 70.0
+movement_speed = 3.4
+acceleration = 12.0
+rotation_speed = 6.0
+gravity = 20.0
+target_groups = Array[StringName]([&"player"])
+detection_range = 12.0
+lose_target_range = 16.0
+lose_target_delay = 1.0
+eye_height = 1.2
+line_of_sight_mask = 1
+line_of_sight_interval = 0.2
+alert_duration = 0.3
+attack_range = 10.0
+preferred_combat_distance = 7.0
+minimum_combat_distance = 4.0
+enemy_spacing_radius = 0.8
+attacks = Array[Resource]([ExtResource("2_bolt")])
+attack_damage = 12.0
+attack_cooldown = 1.6
+max_attack_facing_angle = 20.0
+telegraph_turn_fraction = 0.6
+telegraph_facing_lock = 0.15
+stagger_resistance = 25.0
+stagger_duration = 0.6
+stagger_immunity_time = 1.0
+knockback_multiplier = 1.2
+knockback_deceleration = 30.0
+reposition_timeout = 1.5
+reposition_cooldown = 0.8
+reposition_speed_fraction = 0.85
+reposition_arrive_tolerance = 0.5
+telegraph_color = Color(0.8, 0.45, 1, 1)
+active_color = Color(1, 0.85, 1, 1)
+startup_scale = Vector3(0.92, 1.15, 0.92)
+active_scale = Vector3(1.1, 0.92, 1.1)
+target_update_interval = 0.2

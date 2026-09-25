@@ -1,0 +1,35 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/projectile.gd" id="1_projectile"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
+
+[sub_resource type="SphereShape3D" id="shot_shape"]
+radius = 0.22
+
+[sub_resource type="SphereMesh" id="shot_mesh"]
+radius = 0.22
+height = 0.44
+radial_segments = 16
+rings = 8
+
+[sub_resource type="StandardMaterial3D" id="shot_mat"]
+shading_mode = 0
+albedo_color = Color(0.8, 0.45, 1, 1)
+
+[node name="EnemyProjectile" type="Node3D"]
+script = ExtResource("1_projectile")
+
+[node name="Hitbox" type="Area3D" parent="."]
+collision_layer = 32
+collision_mask = 321
+monitoring = false
+monitorable = true
+script = ExtResource("2_hitbox")
+damage = 0.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hitbox"]
+shape = SubResource("shot_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("shot_mesh")
+material_override = SubResource("shot_mat")

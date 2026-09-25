@@ -134,12 +134,12 @@ func _dungeon_tests() -> void:
 	_record(all_parked, "7) every room's enemies start dormant")
 
 	# 26) dormant enemies really do nothing: park the player right next to one
-	var r1_enemy: BasicMeleeEnemy = _room1.get_enemies()[0] as BasicMeleeEnemy
+	var r1_enemy: BasicEnemy = _room1.get_enemies()[0] as BasicEnemy
 	var enemy_pos: Vector3 = r1_enemy.global_position
 	_player.global_position = enemy_pos + Vector3(1.2, 0, 0)
 	var hp_before: float = _player.health_component.current_health
 	await _wait(1.5)
-	var idle_state: bool = r1_enemy._state == BasicMeleeEnemy.State.IDLE
+	var idle_state: bool = r1_enemy._state == BasicEnemy.State.IDLE
 	var no_damage: bool = _player.health_component.current_health == hp_before
 	var no_drift: bool = r1_enemy.global_position.distance_to(enemy_pos) < 0.1
 	_record(idle_state and no_damage and no_drift,
@@ -177,7 +177,7 @@ func _dungeon_tests() -> void:
 	_record(later_parked, "27) rooms 2 and boss stay dormant while room 1 fights")
 
 	# 11/30) player combat inside the dungeon
-	var target: BasicMeleeEnemy = _room1.get_enemies()[0] as BasicMeleeEnemy
+	var target: BasicEnemy = _room1.get_enemies()[0] as BasicEnemy
 	_player.global_position = target.global_position + Vector3(0, 0, 1.4)
 	_player.camera_rig.rotation.y = 0.0
 	_player.visual_root.rotation.y = 0.0

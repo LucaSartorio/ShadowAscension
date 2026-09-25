@@ -1,46 +1,42 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/basic_enemy.gd" id="1_enemy"]
-[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="3_hurtbox"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="4_health"]
-[ext_resource type="Resource" path="res://resources/enemies/basic_melee_enemy.tres" id="5_stats"]
+[ext_resource type="Resource" path="res://resources/enemies/basic_ranged_enemy.tres" id="5_stats"]
 [ext_resource type="PackedScene" path="res://scenes/ui/enemy_health_bar_3d.tscn" id="20_bar"]
 [ext_resource type="Script" path="res://scripts/items/loot_dropper.gd" id="21_loot"]
 [ext_resource type="Resource" path="res://resources/items/loot/basic_melee_enemy_loot.tres" id="22_table"]
 [ext_resource type="PackedScene" path="res://scenes/items/world_item.tscn" id="23_worlditem"]
-[ext_resource type="Script" path="res://scripts/shadows/shadow_source.gd" id="30_shadow"]
-[ext_resource type="Resource" path="res://resources/shadows/basic_melee_shadow.tres" id="31_shadowdata"]
-[ext_resource type="PackedScene" path="res://scenes/shadows/shadow_remnant.tscn" id="32_remnant"]
 [ext_resource type="Script" path="res://scripts/enemies/enemy_targeting.gd" id="40_targeting"]
-[ext_resource type="Script" path="res://scripts/enemies/enemy_melee_attack.gd" id="41_melee"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_ranged_attack.gd" id="41_ranged"]
 
 [sub_resource type="CapsuleShape3D" id="body_shape"]
 radius = 0.45
 height = 1.9
 
 [sub_resource type="CapsuleMesh" id="body_mesh"]
-radius = 0.45
-height = 1.9
+radius = 0.4
+height = 1.85
 
 [sub_resource type="StandardMaterial3D" id="body_mat"]
-albedo_color = Color(0.7, 0.25, 0.25, 1)
+albedo_color = Color(0.35, 0.3, 0.7, 1)
+
+[sub_resource type="SphereMesh" id="orb_mesh"]
+radius = 0.14
+height = 0.28
+radial_segments = 12
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="orb_mat"]
+shading_mode = 0
+albedo_color = Color(0.8, 0.45, 1, 1)
 
 [sub_resource type="CapsuleShape3D" id="hurtbox_shape"]
 radius = 0.55
 height = 2.0
 
-[sub_resource type="BoxShape3D" id="hitbox_shape"]
-size = Vector3(1.4, 1.4, 1.6)
-
-[sub_resource type="BoxMesh" id="hitbox_mesh"]
-size = Vector3(1.4, 1.4, 1.6)
-
-[sub_resource type="StandardMaterial3D" id="hitbox_mat"]
-transparency = 1
-albedo_color = Color(1, 0.4, 0.2, 0.35)
-
-[node name="BasicMeleeEnemy" type="CharacterBody3D" node_paths=PackedStringArray("target_anchor")]
+[node name="BasicRangedEnemy" type="CharacterBody3D" node_paths=PackedStringArray("target_anchor")]
 collision_layer = 4
 collision_mask = 7
 script = ExtResource("1_enemy")
@@ -58,24 +54,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
 mesh = SubResource("body_mesh")
 surface_material_override/0 = SubResource("body_mat")
 
-[node name="AttackOrigin" type="Node3D" parent="VisualRoot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.2)
+[node name="ProjectileSpawn" type="Marker3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, -0.6)
 
-[node name="Hitbox" type="Area3D" parent="VisualRoot/AttackOrigin"]
-collision_layer = 32
-collision_mask = 320
-monitoring = false
-monitorable = true
-script = ExtResource("2_hitbox")
-damage = 15.0
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigin/Hitbox"]
-shape = SubResource("hitbox_shape")
-
-[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackOrigin/Hitbox"]
-mesh = SubResource("hitbox_mesh")
-material_override = SubResource("hitbox_mat")
-visible = false
+[node name="Orb" type="MeshInstance3D" parent="VisualRoot/ProjectileSpawn"]
+mesh = SubResource("orb_mesh")
+material_override = SubResource("orb_mat")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 path_desired_distance = 0.4
@@ -88,7 +72,7 @@ neighbor_distance = 4.0
 max_neighbors = 6
 time_horizon_agents = 1.0
 time_horizon_obstacles = 0.5
-max_speed = 3.8
+max_speed = 3.4
 use_3d_avoidance = false
 avoidance_layers = 1
 avoidance_mask = 1
@@ -99,9 +83,9 @@ script = ExtResource("4_health")
 [node name="EnemyTargeting" type="Node" parent="."]
 script = ExtResource("40_targeting")
 
-[node name="Attack" type="Node" parent="." node_paths=PackedStringArray("hitbox")]
-script = ExtResource("41_melee")
-hitbox = NodePath("../VisualRoot/AttackOrigin/Hitbox")
+[node name="Attack" type="Node" parent="." node_paths=PackedStringArray("projectile_spawn")]
+script = ExtResource("41_ranged")
+projectile_spawn = NodePath("../VisualRoot/ProjectileSpawn")
 
 [node name="Hurtbox" type="Area3D" parent="."]
 collision_layer = 16
@@ -120,12 +104,6 @@ shape = SubResource("hurtbox_shape")
 script = ExtResource("21_loot")
 loot_table = ExtResource("22_table")
 world_item_scene = ExtResource("23_worlditem")
-
-[node name="ShadowSource" type="Node" parent="."]
-script = ExtResource("30_shadow")
-shadow_extractable = true
-shadow_data = ExtResource("31_shadowdata")
-remnant_scene = ExtResource("32_remnant")
 
 [node name="TargetAnchor" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)

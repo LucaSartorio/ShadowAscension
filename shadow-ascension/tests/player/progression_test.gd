@@ -200,7 +200,7 @@ func _dungeon_reward_tests() -> void:
 	var swings: int = await _kill_with_combo(first)
 	await _wait(0.3)
 	_record(first.has_died() and _prog.current_xp == 25,
-		"9) killing one BasicMeleeEnemy with the combo awards 25 XP (%d swings, %d XP)" % [
+		"9) killing one BasicEnemy with the combo awards 25 XP (%d swings, %d XP)" % [
 			swings, _prog.current_xp])
 	_record(_hud.get_xp_text() == "25 / 100" and is_equal_approx(_hud.get_xp_ratio(), 0.25),
 		"19) the XP bar follows: '%s' (%.2f)" % [_hud.get_xp_text(), _hud.get_xp_ratio()])

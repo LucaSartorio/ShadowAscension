@@ -3,7 +3,7 @@ extends Node3D
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/basic_melee_enemy.tscn")
 
 @onready var _player: Player = $Player
-@onready var _enemy: BasicMeleeEnemy = $BasicMeleeEnemy
+@onready var _enemy: BasicEnemy = $BasicMeleeEnemy
 @onready var _nav_region: NavigationRegion3D = $NavigationRegion3D
 
 var _pass: int = 0
@@ -89,14 +89,14 @@ func _reset_enemy(pos: Vector3) -> void:
 	if _enemy.mesh_instance != null:
 		_enemy.mesh_instance.scale = Vector3.ONE
 	_enemy.velocity = Vector3.ZERO
-	_enemy._state = BasicMeleeEnemy.State.IDLE
-	_enemy.melee_attack.reset()
+	_enemy._state = BasicEnemy.State.IDLE
+	_enemy.attack.reset()
 	_enemy.targeting.release()
 	_enemy._reposition_timer = 0.0
 	_enemy._reposition_block_timer = 0.0
 	_enemy._desired_horizontal = Vector3.ZERO
-	if _enemy.hitbox != null and _enemy.hitbox.is_active():
-		_enemy.hitbox.deactivate()
+	if _enemy.attack.hitbox != null and _enemy.attack.hitbox.is_active():
+		_enemy.attack.hitbox.deactivate()
 	if _enemy.health_component != null:
 		_enemy.health_component.current_health = _enemy.health_component.max_health
 		_enemy.health_component.is_dead = false
@@ -118,7 +118,7 @@ func _test_idle_when_far() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 20))  # > detection_range=10
 	await _wait(0.3)
-	var ok: bool = _enemy._state == BasicMeleeEnemy.State.IDLE
+	var ok: bool = _enemy._state == BasicEnemy.State.IDLE
 	_record(ok, "1) enemy IDLE when player far (state=%d)" % _enemy._state)
 
 
@@ -126,7 +126,7 @@ func _test_chase_on_detection() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 6))  # < detection_range
 	await _wait(0.1)
-	var ok: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
+	var ok: bool = _enemy._state == BasicEnemy.State.CHASE
 	var dist_start: float = _enemy.global_position.distance_to(_player.global_position)
 	await _wait(0.6)
 	var dist_end: float = _enemy.global_position.distance_to(_player.global_position)
@@ -138,7 +138,7 @@ func _test_attack_at_range() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 1.5))  # < attack_range=1.8
 	await _wait(0.1)
-	var ok: bool = _enemy._state == BasicMeleeEnemy.State.ATTACK
+	var ok: bool = _enemy._state == BasicEnemy.State.ATTACK
 	_record(ok, "3) enemy ATTACK when player in attack range (state=%d)" % _enemy._state)
 	# let this attack finish so following tests start clean
 	await _wait(1.4)
@@ -148,14 +148,14 @@ func _test_attack_phases_and_hitbox_gating() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	await _wait(0.18)  # deep in STARTUP (0.35s)
-	var startup_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH and not _enemy.hitbox.is_active()
+	var startup_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.TELEGRAPH and not _enemy.attack.hitbox.is_active()
 	var telegraph_ok: bool = _enemy.visual_root.scale.distance_to(Vector3.ONE) > 0.05
 	# wait into ACTIVE window
 	await _wait(0.25)
-	var active_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.ACTIVE and _enemy.hitbox.is_active()
+	var active_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.ACTIVE and _enemy.attack.hitbox.is_active()
 	# wait into RECOVERY
 	await _wait(0.17)
-	var recovery_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.RECOVERY and not _enemy.hitbox.is_active()
+	var recovery_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.RECOVERY and not _enemy.attack.hitbox.is_active()
 	_record(startup_ok and telegraph_ok and active_ok and recovery_ok, "4) attack phases: startup_off=%s telegraph=%s active_on=%s recovery_off=%s" % [startup_ok, telegraph_ok, active_ok, recovery_ok])
 	await _wait(0.8)
 
@@ -191,10 +191,10 @@ func _test_attack_cooldown() -> void:
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	# Attack cycle: 0.35 + 0.15 + 0.65 = 1.15s + ~2 frames.
 	await _wait(1.3)  # attack done, cooldown active
-	var in_cooldown: bool = _enemy.melee_attack.get_cooldown_remaining() > 0.0
-	var chase_state: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
+	var in_cooldown: bool = _enemy.attack.get_cooldown_remaining() > 0.0
+	var chase_state: bool = _enemy._state == BasicEnemy.State.CHASE
 	await _wait(0.55)  # past cooldown (0.4s)
-	var attacking_after_cd: bool = _enemy._state == BasicMeleeEnemy.State.ATTACK
+	var attacking_after_cd: bool = _enemy._state == BasicEnemy.State.ATTACK
 	_record(in_cooldown and chase_state and attacking_after_cd, "7) attack cooldown respected (cd_active=%s chase=%s after_cd_attacking=%s)" % [in_cooldown, chase_state, attacking_after_cd])
 	await _wait(1.4)
 
@@ -203,14 +203,14 @@ func _test_return_to_idle_on_lose_target() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 6))  # inside detection_range
 	await _wait(0.1)
-	var chased: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
+	var chased: bool = _enemy._state == BasicEnemy.State.CHASE
 	# move the PLAYER out of range and let the enemy drop the target by itself
 	_player.global_position = Vector3(0, 0.1, -30)
 	await _wait(0.3)
 	# lose_target_delay (1.0s) must still be holding the target here
-	var still_engaged: bool = _enemy._state != BasicMeleeEnemy.State.IDLE
+	var still_engaged: bool = _enemy._state != BasicEnemy.State.IDLE
 	await _wait(1.0)
-	var idle_ok: bool = _enemy._state == BasicMeleeEnemy.State.IDLE
+	var idle_ok: bool = _enemy._state == BasicEnemy.State.IDLE
 	_record(chased and still_engaged and idle_ok, "8) CHASE -> IDLE after lose_target_delay (chased=%s held=%s idle=%s)" % [chased, still_engaged, idle_ok])
 	_reset_player()
 	await _wait(0.2)
@@ -252,8 +252,8 @@ func _test_enemy_dies_and_disables_everything() -> void:
 	# force lethal damage direct through hurtbox pipeline
 	_enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, self))
 	await _wait(0.1)
-	var dead_state: bool = _enemy._state == BasicMeleeEnemy.State.DEAD
-	var hitbox_off: bool = not _enemy.hitbox.is_active()
+	var dead_state: bool = _enemy._state == BasicEnemy.State.DEAD
+	var hitbox_off: bool = not _enemy.attack.hitbox.is_active()
 	# check deferred disables after a frame
 	await get_tree().physics_frame
 	await get_tree().physics_frame
@@ -269,15 +269,15 @@ func _test_enemy_dies_and_disables_everything() -> void:
 	var hp_before: float = _player.health_component.current_health
 	await _wait(1.5)
 	var no_damage: bool = _player.health_component.current_health == hp_before
-	var stays_dead: bool = _enemy._state == BasicMeleeEnemy.State.DEAD
+	var stays_dead: bool = _enemy._state == BasicEnemy.State.DEAD
 	_record(no_damage and stays_dead, "12) dead enemy doesn't attack (player_dmg=%.0f state=%d)" % [hp_before - _player.health_component.current_health, _enemy._state])
 
 
 func _test_multi_enemy_operates_concurrently() -> void:
 	# spawn 3 fresh enemies and verify all reach CHASE independently
-	var extras: Array[BasicMeleeEnemy] = []
+	var extras: Array[BasicEnemy] = []
 	for i in 3:
-		var e: BasicMeleeEnemy = ENEMY_SCENE.instantiate() as BasicMeleeEnemy
+		var e: BasicEnemy = ENEMY_SCENE.instantiate() as BasicEnemy
 		add_child(e)
 		e.global_position = Vector3(-4 + i * 4, 0.1, 5)
 		extras.append(e)
@@ -285,7 +285,7 @@ func _test_multi_enemy_operates_concurrently() -> void:
 	await _wait(0.3)
 	var all_chasing: bool = true
 	for e in extras:
-		if e._state != BasicMeleeEnemy.State.CHASE:
+		if e._state != BasicEnemy.State.CHASE:
 			all_chasing = false
 			break
 	_record(all_chasing, "13) 3 concurrent enemies all CHASE")
@@ -347,7 +347,7 @@ func _test_player_avoids_by_moving_during_startup() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	await _wait(0.15)  # inside STARTUP (0.35s)
-	var startup_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.TELEGRAPH
+	var startup_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.TELEGRAPH
 	_player.global_position = Vector3(0, 0.1, -8.0)  # step out of the telegraphed swing
 	var hp_before: float = _player.health_component.current_health
 	await _wait(0.6)  # through the whole ACTIVE window
@@ -362,11 +362,11 @@ func _test_recovery_commitment() -> void:
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	# startup 0.35 + active 0.15 -> RECOVERY spans ~[0.50, 1.15]
 	await _wait(0.60)
-	var early_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
+	var early_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.RECOVERY and _enemy._state == BasicEnemy.State.ATTACK and not _enemy.attack.hitbox.is_active()
 	await _wait(0.45)  # still inside recovery (~1.05)
-	var late_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.RECOVERY and _enemy._state == BasicMeleeEnemy.State.ATTACK and not _enemy.hitbox.is_active()
+	var late_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.RECOVERY and _enemy._state == BasicEnemy.State.ATTACK and not _enemy.attack.hitbox.is_active()
 	await _wait(0.25)  # recovery finished (~1.30)
-	var ended_ok: bool = _enemy.get_attack_phase() == EnemyMeleeAttack.Phase.NONE
+	var ended_ok: bool = _enemy.get_attack_phase() == EnemyAttack.Phase.NONE
 	_record(early_ok and late_ok and ended_ok, "17) enemy stays committed for full recovery (early=%s late=%s ended=%s)" % [early_ok, late_ok, ended_ok])
 	await _wait(1.3)
 
@@ -375,10 +375,10 @@ func _test_returns_to_chase_when_player_leaves_range() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 1.5))
 	await _wait(0.15)
-	var attacking: bool = _enemy._state == BasicMeleeEnemy.State.ATTACK
+	var attacking: bool = _enemy._state == BasicEnemy.State.ATTACK
 	_player.global_position = Vector3(0, 0.1, -6.0)  # out of attack_range, still inside detection_range
 	await _wait(1.25)  # full attack cycle (1.15s) elapsed
-	var chase_ok: bool = _enemy._state == BasicMeleeEnemy.State.CHASE
+	var chase_ok: bool = _enemy._state == BasicEnemy.State.CHASE
 	_record(attacking and chase_ok, "18) enemy returns to CHASE when player leaves attack range (attacked=%s chase=%s)" % [attacking, chase_ok])
 	_reset_player()
 	await _wait(0.2)
@@ -422,7 +422,7 @@ func _test_enemy_is_resource_driven() -> void:
 	var st: EnemyData = _enemy.stats
 	var has_resource: bool = st != null
 	var from_asset: bool = has_resource and st.resource_path.begins_with("res://resources/enemies/")
-	var seeded: bool = has_resource and is_equal_approx(_enemy.melee_attack.attack_damage, st.attack_damage) \
+	var seeded: bool = has_resource and is_equal_approx(_enemy.attack.attack_damage, st.attack_damage) \
 		and is_equal_approx(_enemy.detection_range, st.detection_range) \
 		and is_equal_approx(_enemy.attack_range, st.attack_range) \
 		and is_equal_approx(_enemy.health_component.max_health, st.max_health)
@@ -440,7 +440,7 @@ func _test_death_drop_hook() -> void:
 	_reset_player()
 	_reset_enemy(Vector3(0, 0.1, 20))
 	var payloads: Array[Node] = []
-	var listener: Callable = func(enemy: BasicMeleeEnemy) -> void:
+	var listener: Callable = func(enemy: BasicEnemy) -> void:
 		payloads.append(enemy)
 	_enemy.enemy_died.connect(listener)
 	_enemy.hurtbox.receive_hit(DamageInfo.new(1000.0, self))

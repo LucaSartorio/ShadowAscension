@@ -25,9 +25,9 @@ const SHADOW_HITBOX_LAYER: int = 512
 const TEST_REASON: StringName = &"feedback_test"
 
 @onready var _player: Player = $Player
-@onready var _a: BasicMeleeEnemy = $EnemyA
-@onready var _b: BasicMeleeEnemy = $EnemyB
-@onready var _c: BasicMeleeEnemy = $EnemyC
+@onready var _a: BasicEnemy = $EnemyA
+@onready var _b: BasicEnemy = $EnemyB
+@onready var _c: BasicEnemy = $EnemyC
 @onready var _boss: DungeonBoss = $Boss
 
 var _combat: PlayerCombat = null
@@ -705,9 +705,9 @@ func _line_up() -> void:
 
 ## Parks `enemy` at `at`, whole, with nothing of a previous hit left — and,
 ## unless `keep_others`, the other two back out of the way.
-func _fresh(enemy: BasicMeleeEnemy, at: Vector3, reset_player: bool = true, keep_others: bool = false) -> void:
+func _fresh(enemy: BasicEnemy, at: Vector3, reset_player: bool = true, keep_others: bool = false) -> void:
 	if not keep_others:
-		var enemies: Array[BasicMeleeEnemy] = [_a, _b, _c]
+		var enemies: Array[BasicEnemy] = [_a, _b, _c]
 		for i in enemies.size():
 			if enemies[i] != enemy:
 				_park(enemies[i], PARKED[i])
@@ -720,7 +720,7 @@ func _fresh(enemy: BasicMeleeEnemy, at: Vector3, reset_player: bool = true, keep
 	await _frames(3)
 
 
-func _park(enemy: BasicMeleeEnemy, at: Vector3) -> void:
+func _park(enemy: BasicEnemy, at: Vector3) -> void:
 	enemy.set_combat_enabled(false)
 	enemy._clear_reactions()
 	enemy.global_position = at

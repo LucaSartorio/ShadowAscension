@@ -98,7 +98,7 @@ func _health_bar_tests() -> void:
 	var enemies: Array[RoomCombatant] = room1.get_enemies()
 	var bar: EnemyHealthBar3D = _bar_of(enemies[0])
 
-	_record(bar != null, "A0) every BasicMeleeEnemy carries a health bar")
+	_record(bar != null, "A0) every BasicEnemy carries a health bar")
 	_record(not bar.is_bar_visible(),
 		"1) at full health and out of combat the bar stays hidden")
 

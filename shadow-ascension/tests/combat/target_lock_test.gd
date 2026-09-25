@@ -23,11 +23,11 @@ const PROP_PARKED: Vector3 = Vector3(0, 0.1, 50)
 var _no_crits: PlayerCombatData = preload("res://resources/characters/player_combat.tres")
 
 @onready var _player: Player = $Player
-@onready var _a: BasicMeleeEnemy = $EnemyA
-@onready var _b: BasicMeleeEnemy = $EnemyB
-@onready var _c: BasicMeleeEnemy = $EnemyC
-@onready var _d: BasicMeleeEnemy = $EnemyD
-@onready var _e: BasicMeleeEnemy = $EnemyE
+@onready var _a: BasicEnemy = $EnemyA
+@onready var _b: BasicEnemy = $EnemyB
+@onready var _c: BasicEnemy = $EnemyC
+@onready var _d: BasicEnemy = $EnemyD
+@onready var _e: BasicEnemy = $EnemyE
 @onready var _boss: DungeonBoss = $Boss
 @onready var _prop: CharacterBody3D = $EnemyLayerProp
 @onready var _indicator: TargetLockIndicator = $TargetLockIndicator
@@ -497,8 +497,8 @@ func _fresh(at: Vector3 = Vector3(0, 0.1, 0), park: bool = true) -> void:
 		# Untyped: one of them is freed on purpose, and a typed array refuses it.
 		var enemies: Array = [_a, _b, _c, _d, _e]
 		for i in enemies.size():
-			if is_instance_valid(enemies[i]) and not (enemies[i] as BasicMeleeEnemy).has_died():
-				_place(enemies[i] as BasicMeleeEnemy, PARKED[i], false)
+			if is_instance_valid(enemies[i]) and not (enemies[i] as BasicEnemy).has_died():
+				_place(enemies[i] as BasicEnemy, PARKED[i], false)
 		if not _boss.has_died():
 			_boss.global_position = BOSS_PARKED
 	await _frames(3)
@@ -506,7 +506,7 @@ func _fresh(at: Vector3 = Vector3(0, 0.1, 0), park: bool = true) -> void:
 
 
 ## Parks `enemy` at `at`, whole and still.
-func _place(enemy: BasicMeleeEnemy, at: Vector3, face: bool = true) -> void:
+func _place(enemy: BasicEnemy, at: Vector3, face: bool = true) -> void:
 	enemy.set_combat_enabled(false)
 	enemy.global_position = at
 	enemy.velocity = Vector3.ZERO

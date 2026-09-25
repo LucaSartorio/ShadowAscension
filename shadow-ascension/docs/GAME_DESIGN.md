@@ -409,6 +409,18 @@ wind-up or the blow cancels the swing outright; a lighter hit or a push does not
 changed; what did is that an enemy walking at a player standing still no longer stops just out of
 reach.
 
+**M12.3 added the ranged enemy.** It keeps its distance: it comes to about **7 m** and stays there,
+fires from anywhere within **10 m**, and backs away when the player gets inside **4 m** — all the way
+back to its 7 m, so it does not dither at the edge. Cornered — a wall at its back, or a player faster
+than it — it gives up backing away after a moment and shoots from where it is. Every shot is
+announced: for **0.6 s** it rises and glows violet; then a bright bolt leaves its orb at **12 m/s**,
+aimed at where the player is at that instant, and flies straight — it never turns. Stepping out of its
+line, or dodging through it, avoids it; a hit costs **12**. Then it needs **2.2 s** before it can shoot
+again. It will not shoot at a wall: with the player out of sight it walks until it can see them, and a
+player who ducks behind cover mid-wind-up makes it hold its fire. Staggering it before it shoots
+cancels the shot; a bolt already in the air flies on. A shadow in the line takes the bolt. It is not
+in the dungeon yet: placing it is part of the dungeon content to come.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that
