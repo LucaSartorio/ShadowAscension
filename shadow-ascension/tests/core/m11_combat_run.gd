@@ -111,9 +111,9 @@ func _phase_leave_mid_swing() -> void:
 	_record(fresh.combat.get_state() == PlayerCombat.State.IDLE and not fresh.attack_hitbox.is_active()
 			and fresh.combat.data.light_combo[0].active < 1.0,
 		"T4) the dungeon's player starts IDLE, hitbox shut, on the shipped data")
-	_record(fresh.combat.attack_started.get_connections().size() == 1
+	_record(fresh.combat.attack_started.get_connections().size() == 2
 			and _stale_connections(fresh) == 0,
-		"T5) its combat has its one listener, and no signal of its combat parts reaches a freed node")
+		"T5) its combat has its two listeners — the presentation and the hit feedback — and no signal of its combat parts reaches a freed node")
 	_record(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) == 0,
 		"T6) and nothing was left orphaned by leaving mid-swing")
 
@@ -344,7 +344,8 @@ func _first_hit(player: Player, target: RoomCombatant) -> DamageInfo:
 func _stale_connections(player: Player) -> int:
 	var stale: int = 0
 	for combat_signal in [player.combat.attack_started, player.attack_hitbox.hit_landed,
-			player.health_component.died, player.health_component.health_changed]:
+			player.attack_hitbox.hit_accepted, player.health_component.died,
+			player.health_component.health_changed]:
 		for connection in (combat_signal as Signal).get_connections():
 			if not is_instance_valid((connection["callable"] as Callable).get_object()):
 				stale += 1

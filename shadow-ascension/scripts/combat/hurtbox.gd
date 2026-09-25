@@ -39,12 +39,16 @@ func set_invulnerable(value: bool, reason: StringName = DEFAULT_REASON) -> void:
 ## hit counts. Whoever sent it — player, shadow, enemy, boss — makes no
 ## difference here, and the attacker never asks: a refused hit is simply not
 ## applied, so health does not change and nothing downstream hears of it.
-func receive_hit(hit: DamageInfo) -> void:
+##
+## True when the hit counted: not refused, and the health took it. What the
+## attacker does with that is presentation only — the hitbox reports it
+## (Hitbox.hit_accepted) for feedback to show; no attacker decides anything on it.
+func receive_hit(hit: DamageInfo) -> bool:
 	if is_invulnerable:
-		return
+		return false
 	if health_component == null:
-		return
-	health_component.take_damage(hit)
+		return false
+	return health_component.take_damage(hit)
 
 
 func get_owner_entity() -> Node:

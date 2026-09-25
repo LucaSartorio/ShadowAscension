@@ -46,6 +46,7 @@ const RUNTIME_STATE_NODE: String = "PlayerRuntimeState"
 @onready var shadow_commander: PlayerShadowCommander = $PlayerShadowCommander
 @onready var combat: PlayerCombat = $PlayerCombat
 @onready var targeting: PlayerTargeting = $PlayerTargeting
+@onready var combat_feedback: PlayerCombatFeedback = $PlayerCombatFeedback
 
 ## What the controller actually uses. Recomputed from the base values whenever
 ## the stats change — never from the previous effective value.
@@ -99,6 +100,8 @@ func _wire_components() -> void:
 		shadow_commander.setup(self, shadow_summoner)
 	combat.setup(attack_hitbox, hurtbox, health_component, progression)
 	targeting.setup(self, camera_rig, health_component)
+	if combat_feedback != null:
+		combat_feedback.setup(combat, attack_hitbox, camera_rig, health_component)
 
 
 ## The session's persistent player state, or null where there is none.

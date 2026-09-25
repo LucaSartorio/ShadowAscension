@@ -129,14 +129,14 @@ Systems are built from small, composable components attached to a scene root (e.
 
 **Components that exist** (`scripts/combat/`), shared by the player, enemies, bosses and shadows:
 
-- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down. Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
-- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier, sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, and will not hit the same target twice within one activation.
+- **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down, and returns whether it took the hit (M11.9). Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`.
+- **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier, sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, then `hit_accepted(target, hit)` if the target took it (M11.9), and will not hit the same target twice within one activation.
 - **`DamageModel`** (`scripts/combat/damage_model.gd`, static, M11.7) — the damage rules in one place: `attack_damage(base, multiplier)`, `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`. Stateless; see *Damage model and critical hits (M11.7)*.
-- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to.
+- **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to; it returns whether the hit counted (M11.9).
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
-- **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, and the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2).
+- **`AttackData`** (`Resource`) — one attack as data: windup / active / recovery, damage multiplier, combo and dodge-cancel windows, movement multiplier, the name of its animation (M11.1, replacing `AttackStep`; one asset per attack since M11.2), its stagger power and push (M11.6), and its hit stop and camera shake (M11.9).
 
-The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); so is its target lock, **`PlayerTargeting`** (M11.8), the one owner of which enemy the player is locked onto. See *Combat architecture (M11)*.
+The player's combat controller, **`PlayerCombat`**, is a player component (`scripts/player/`); so are its target lock, **`PlayerTargeting`** (M11.8), the one owner of which enemy the player is locked onto, and **`PlayerCombatFeedback`** (M11.9), which plays the hit stop, the camera shake (`CameraRig.shake()`) and a critical's mark for the player's hits that count. See *Combat architecture (M11)*.
 
 Progression stats live in `scripts/player/` (`PlayerProgression`, `ProgressionStats`) rather than in a generic stats component, because so far only the player has allocatable stats.
 
@@ -209,8 +209,9 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
+| `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, debug colour | `PlayerCombat`; the presentation reads `animation` | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres` | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -251,6 +252,11 @@ Forbidden uses of autoload:
 **The project has exactly one autoload today: `PlayerRuntimeState`**, documented in full below. It is the deliberate edge of the rule above: a scene change destroys the player, so the values that belong to the *session* rather than to any one scene — level, XP, allocated stats, current health, inventory, equipment, the shadow collection — have to live somewhere that outlives it. It is a store, not a manager: it holds and returns data and owns no formula. M10 formalises this as the **Persistent Player State** category (see *Direction for M10+*).
 
 Every autoload is documented (what it owns, its public API, its lifetime) at introduction.
+
+The engine's own globals get the same care. **`Engine.time_scale`** has exactly one writer,
+`PlayerCombatFeedback` (M11.9, the hit stop): a scene-owned player component, not an autoload, which
+puts it back to 1.0 whenever it stops holding — the stop over, its player dead, the tree paused, the
+node leaving the tree. Nothing else in the project writes it.
 
 ---
 
@@ -312,7 +318,10 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 1506 assertions**; at M11.2, **39 suites and 1565 assertions**;
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
-**49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**, all clean. Since M11.7 a player hit can be critical at
+**49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
+(M11.9), **53 suites and 1963 assertions**, all clean. Since M11.9 a hit stop holds the
+game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
+in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
 its script), and the critical suites test them deterministically.
 
@@ -464,6 +473,9 @@ moved down 14 px to make room; `vertical_slice_run` includes the bar in its over
 ring on the locked target plus the `[Tab] Sblocca bersaglio` / `[Z] [X] Cambia bersaglio` hint,
 bottom-left, both only while a lock holds. It hears `PlayerTargeting.target_changed` and nothing else;
 see *Target lock (M11.8)*.
+
+The critical mark (M11.9) is not a HUD panel: it is a label in the world, over the target, and takes
+no screen corner; see *Combat feedback (M11.9)*.
 
 **`DungeonObjectiveUI`** shows `default_text` when there is no `DungeonController` above it, which
 is how the hub says "Entra nel Gate" without a second UI doing the same job in a different place.
@@ -951,11 +963,13 @@ the combo a real chain on that foundation, M11.3 (Heavy Attack & Attack Variants
 attack type on the same controller, M11.4 (Dodge & I-Frames) made the dodge's phases and its
 invulnerability explicit, M11.5 (Stamina & Combat Resource Management) made the dodge cost
 stamina, M11.6 (Hit Reactions, Stagger & Knockback) made enemies answer the hits they take, M11.7
-(Critical Hits & Damage Model 2.0) put the damage rules in one place and added critical hits, and
-M11.8 (Target Lock & Combat Targeting) let the player lock onto an enemy: see *Light attack combo
-(M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina (M11.5)*, *Hit reactions,
-stagger and knockback (M11.6)*, *Damage model and critical hits (M11.7)* and *Target lock (M11.8)*
-below.
+(Critical Hits & Damage Model 2.0) put the damage rules in one place and added critical hits,
+M11.8 (Target Lock & Combat Targeting) let the player lock onto an enemy, and M11.9 (Combat Feedback &
+M11 Closure) made the player's hits felt — hit stop, camera shake, a critical's mark — and closed M11:
+see *Light attack combo (M11.2)*, *Attack types (M11.3)*, *Dodge and i-frames (M11.4)*, *Stamina
+(M11.5)*, *Hit reactions, stagger and knockback (M11.6)*, *Damage model and critical hits (M11.7)*,
+*Target lock (M11.8)* and *Combat feedback (M11.9)* below, and *Combat System 2.0 at the close of M11*
+for the whole.
 
 ```
 Input          CameraRig (attack_light, attack_heavy — only while the mouse is captured) and
@@ -980,6 +994,8 @@ Damage         PlayerCombat.calculate_damage() when the window opens -> Hitbox.d
    |             and the Hitbox sends a DamageInfo(amount, source, attack_id, is_critical,
    |             stagger_power, knockback_force, direction)
    |             -> Hurtbox.receive_hit(hit) -> HealthComponent.take_damage(hit)
+   |             hit_landed(target, hit) for every hit that reached a hurtbox;
+   |             hit_accepted(target, hit) right after, only if it counted
    v
 Health         health_changed -> health bars;  damaged(hit) -> the target's hit reaction
    |             (flinch, stagger, knockback) — only for a hit it survives;
@@ -989,6 +1005,8 @@ Health         health_changed -> health bars;  damaged(hit) -> the target's hit 
 
 Presentation   attack_started(attack) -> Player faces the aim (the locked target, else the
                  camera's forward) and plays the placeholder
+Feedback       hit_accepted -> PlayerCombatFeedback: the hit stop (Engine.time_scale), the
+                 camera shake (CameraRig.shake()), a critical's mark — one per swing
 ```
 
 | Part | Lives in | Does not know about |
@@ -1000,11 +1018,12 @@ Presentation   attack_started(attack) -> Player faces the aim (the locked target
 | Damage resolution | `PlayerCombat.calculate_damage()` (outgoing); `HealthComponent.take_damage()` (incoming) | each other: the hit crosses as a `DamageInfo` |
 | Presentation | `Player` (`_on_attack_started`, `_play_attack_animation`, `_play_dodge_visual`) | timing: it is told an attack started and shows it |
 | Targeting | `PlayerTargeting` (`scripts/player/player_targeting.gd`) | attacks, hits, damage, the UI: it holds a target, others read it |
+| Hit feedback | `PlayerCombatFeedback` (`scripts/player/player_combat_feedback.gd`), `CameraRig.shake()` | damage, timing, targeting: it shows a hit that counted, and nothing reads it back |
 
 `PlayerCombat` is wired by the player like every other component —
 `Player._wire_components()` hands it the attack hitbox, the hurtbox (for i-frames), the health
 component (to hear its own death) and the progression (to scale damage). It reads progression; it
-owns none of it.
+owns none of it. `PlayerTargeting` and `PlayerCombatFeedback` are wired there too.
 
 ### Combat state
 
@@ -1021,7 +1040,7 @@ One enum, `PlayerCombat.State`, instead of an attack state beside an `_is_dodgin
 
 Only what the current combat needs is built. There is no `STUNNED` — the player is not staggered by
 anything yet (M11.6 staggers enemies; see below) — and no separate `ATTACKING`: the three phases are the
-attack, whichever chain it belongs to. `is_attacking()`, `is_dodging()`, `get_current_attack()`,
+attack, whichever chain it belongs to. `is_attacking()`, `is_dodging()`, `has_iframes()`, `get_current_attack()`,
 `get_combo_index()`, `is_running_chain()`, `get_queued_attack()` and `has_buffered_attack()` are the
 queries; `allows_turning()` and `get_movement_multiplier()` are what the player's movement asks. The
 attack-press column above is for a press of the *running* chain; a press of another chain is ignored
@@ -1590,6 +1609,103 @@ moved there from `ActiveShadowHUD`, which now uses it too.
 a signal (its listeners are leaving too), and every new player starts unlocked. Nothing of a lock
 survives a gate, the exit, a death or a New Game.
 
+### Combat feedback (M11.9)
+
+What a hit of the player's feels like: the game holds for a moment (**hit stop**), the camera is
+thrown and settles (**camera shake**), and a critical leaves a mark above its target.
+**`PlayerCombatFeedback`** (`scripts/player/player_combat_feedback.gd`), a player component wired in
+`Player._wire_components()`, plays all three. Its rules are `PlayerCombatFeedbackData`
+(`resources/characters/player_combat_feedback.tres`); each attack's own values are the *Feedback*
+group of its `AttackData`. It is presentation only — nothing reads anything back from it — so damage,
+criticals, stamina, stagger, knockback, the target lock and every timeline are the same with it or
+without it (`combat_feedback_test` turns it off and compares).
+
+**A hit that counted.** Feedback plays for a hit its target took, and for nothing else.
+`HealthComponent.take_damage()` and `Hurtbox.receive_hit()` return whether the hit counted — false
+when it was refused (i-frames), found the target dead, or carried no damage. The `Hitbox` emits
+`hit_landed` for every hit that reached a hurtbox, as before, and right after it **`hit_accepted`**
+only for one that counted. That is the one event the feedback hears — one common event for light,
+heavy and critical hits rather than a signal per kind: the attack is combat's current one
+(`PlayerCombat.get_current_attack()`, whose hit window is open) and whether it was critical is on the
+hit. The attacker still decides nothing on it. A miss, a hit into i-frames, a hit on a corpse and a
+target already hit by this swing (refused by the hitbox's registry before any hurtbox) are felt as
+nothing.
+
+**Hit stop.** The whole game holds: `Engine.time_scale` drops to `hit_stop_time_scale` — 0, the game
+stands still — and every timeline that runs on `delta` holds with it: the player's attack and its
+input buffer, the dodge and its i-frames, stamina and its delay, every enemy with its stagger and its
+push, the boss, the shadow, every tween. Nothing gets ahead of anything else, and each carries on
+from exactly where it was: a push resumes and goes exactly as far, a stagger lasts its 0.5 s of game
+time, an attack its windup + active + recovery — only the wall clock grows. Input is not held: a
+press during a stop is buffered or queued as it would have been, and the buffer does not age while
+the game is held. The stop is timed in physics ticks, which keep coming at 60 a second whatever the
+time scale. The tick the hit lands in still runs at full speed — its time scale was read before the
+hit — so a stop of *d* seconds holds the next ⌈*d* × 60⌉ ticks.
+
+| Attack | Hit stop | Ticks held | Shake | Settles in |
+| --- | --- | --- | --- | --- |
+| Light 1 | 0.025 s | 2 | 0.03 m | 0.10 s |
+| Light 2 | 0.030 s | 2 | 0.045 m | 0.12 s |
+| Light 3 | 0.040 s | 3 | 0.07 m | 0.16 s |
+| Heavy | 0.065 s | 4 | 0.12 m | 0.22 s |
+| a critical | + 0.015 s | + 1 | × 1.35 | the same |
+
+**Light versus heavy.** The light combo builds — each hit held a little longer and shaken a little
+harder, the finisher most — and the heavy is plainly the biggest hit of the set, on top of its slower
+windup and its stronger placeholder roll. The damage, the stagger and the push are the attack's own
+and none of this touches them.
+
+**One stop per swing.** The first hit of a swing that counts starts the stop; another target of the
+same swing can only lengthen it to its own length (a critical among them), never add to it; once the
+swing's stop is over, the rest of the swing starts no other. A heavy through three enemies is one
+stop of 4 ticks, not three. Every stop is clamped to `max_hit_stop_duration` (0.1 s): ten requests in
+one tick are one stop.
+
+**Time scale safety.** `PlayerCombatFeedback` is the only writer of `Engine.time_scale` in the
+project, and puts it back to 1.0 when the stop runs out; when the player dies (a death is never held:
+the death, the restart delay and the fade run at full speed); when the tree pauses
+(`NOTIFICATION_PAUSED` — a menu never opens on a held game); and when it leaves the tree — a scene
+change, a restart, a quit. It never starts a stop while the tree is paused. That is the boss's case:
+its killing blow completes the dungeon, which opens the run summary, which pauses the tree — all
+before the hit is reported — so the boss dies with no stop, no shake, no mark and no slow motion (and,
+by design, no cinematic). `combat_feedback_test` checks at every tick that the time scale is down
+exactly while a stop holds.
+
+**Camera shake** is `CameraRig`'s (`shake(strength, duration)`, `stop_shake()`): the camera is thrown
+through the `Camera3D`'s own `h_offset` / `v_offset` — two sines of unrelated frequencies
+(`shake_frequency`, 19 Hz), easing out — so the picture moves and no node does. The rig's rotation,
+which is what "forward" means to movement, aiming and the target lock, is never touched: a shake
+cannot turn the player, bend an attack, or move a lock or its bearing. One shake at a time: one at
+least as strong as what is left of the current one replaces it, a weaker one is ignored, nothing
+adds up, and the feedback clamps strength (0.2 m) and duration (0.35 s). The shake runs on the clock,
+not on game time, so it plays through a hit stop; a pause ends it and none starts while paused. This
+is the camera's one feedback controller: there is no second camera system.
+
+**The critical mark** — PLACEHOLDER until damage numbers exist: a critical hit pops `CRITICO!` 0.5 m
+above the target's anchor, rising 0.6 m and fading over 0.5 s before it frees itself; at most
+`max_critical_labels` (4) at once. The labels are the feedback node's children — a plain `Node`, so
+they stay where they were put in the world — and go with the player at a scene change. With the
+longer stop and the harder shake, that is all a critical adds: its damage is the model's (M11.7).
+
+**Enemies and the boss** keep their own answer to a hit: the enemy's squash, stagger lean and push
+(M11.6), the boss's white tint pulse. Nothing of theirs changed.
+
+**Shadow feedback policy.** Only the player's own hits are felt this way. A shadow's hit — like an
+enemy's or the boss's — goes through a hitbox the feedback never listens to: its target reacts as it
+always has, and the clock and the camera stay still, so an army of shadows (M15) can never stutter
+the game or shake the screen. If shadows are ever given feedback of their own, it goes through this
+component, rate-limited — never a second system.
+
+**Accessibility (preparation).** `camera_shake_scale` and `hit_stop_scale` (0..1, 1.0 by default)
+scale every shake and every stop; 0 turns either off, and at 0 the time scale is never touched. The
+defaults are in the data; the values in use are the component's (`set_camera_shake_scale()`,
+`set_hit_stop_scale()`), which is where a settings screen (M19) will write. There is no settings UI.
+
+**Cost.** Nothing runs while nothing happens: the feedback's `_physics_process` runs only while a stop
+holds, the rig's `_process` only while it shakes. A hit costs a few assignments; a critical, one
+`Label3D` and its tween. `m11_feedback_run` measures the whole: 120 ticks of the player, the shadow
+and three enemies fighting take their 2.0 s, at about 2–3 ms of physics a tick headless.
+
 ### Damage flow
 
 - **Outgoing**: `PlayerCombat.calculate_damage(attack)` is the one place a player swing's raw damage
@@ -1600,10 +1716,11 @@ survives a gate, the exit, a death or a New Game.
   unchanged; whether a finisher should scale the weapon too is tuning for later in M11.
 - **In transit**: the hitbox builds one `DamageInfo` per target — `amount` (the final damage),
   `source`, `attack_id`, since M11.6 `stagger_power`, `knockback_force` and `direction`, and since
-  M11.7 `is_critical` — and emits it on `hit_landed`.
+  M11.7 `is_critical` — and emits it on `hit_landed`, then, if it counted, on `hit_accepted` (M11.9).
 - **Incoming**: `Hurtbox.receive_hit(hit)` (i-frames) → `HealthComponent.take_damage(hit)`, the only
   way health goes down. It records the hit as `last_damage`, then emits `died` for a killing blow or
-  `damaged(hit)` for one survived — where an enemy's reaction starts. Enemies, the boss and the
+  `damaged(hit)` for one survived — where an enemy's reaction starts. Both return whether the hit
+  counted. Enemies, the boss and the
   shadow go through the same two calls: the receiving side never asks who hit it.
 - **Death and reward** are unchanged: the combatant passes `last_damage_source` to
   `report_death()`, `PlayerProgression` reads `get_killer()`, the player keeps its own kills and the
@@ -1652,6 +1769,9 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
   leaves the hub with the hit window open, and `m11_dodge_run` leaves the hub and the dungeon in the
   i-frames, and each checks that nothing survives it. `m11_stamina_run` leaves them mid-dodge with
   stamina spent: the next player is full, with one listener on `stamina_changed` (its bar).
+- **In a hit stop**: a death, a pause or a scene change gives the game back at full speed at once
+  (*Combat feedback (M11.9)*); `m11_feedback_run` dies locked on, mid-heavy, inside a stop, and dies
+  again mid-dodge, and the dungeon restarts clean both times.
 
 ### Debug and input actions
 
@@ -1666,7 +1786,45 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
 - `PlayerTargeting.debug_log_enabled` (off by default) prints each lock, switch and release with the
   target, its distance and bearing, and how many candidates the search found.
 
-### Left for the next M11 steps
+### Combat System 2.0 at the close of M11
+
+What exists at the close of M11, and who owns it:
+
+| System | Owner | Tuning |
+| --- | --- | --- |
+| Combat state, attack timelines, chains, input buffer, hit window | `PlayerCombat` | `PlayerCombatData`, `AttackData` |
+| Light combo (three hits) and heavy attack | `PlayerCombat`: two chains | `light_combo`, `heavy_combo` |
+| Dodge: phases, i-frames, cooldown, cancel windows | `PlayerCombat`; the `Hurtbox` refuses hits by reason | `PlayerCombatData`, `AttackData.dodge_cancel_recovery_fraction` |
+| Stamina, the dodge's cost | `PlayerCombat` → `PlayerStaminaHUD` | `PlayerCombatData` |
+| Damage rules and critical hits | `DamageModel` (static), rolled per hit by the `Hitbox` | `PlayerCombatData`, `AttackData.damage_multiplier` |
+| A hit | `Hitbox` → `DamageInfo` → `Hurtbox` → `HealthComponent` | — |
+| Hit reactions: flinch, stagger, knockback | `BasicMeleeEnemy`; the boss only flashes | `AttackData` impact, `EnemyData` hit reactions |
+| Target lock | `PlayerTargeting` → `TargetLockIndicator` | `PlayerTargetingData` |
+| Hit feedback: hit stop, camera shake, critical mark | `PlayerCombatFeedback`, `CameraRig.shake()` | `PlayerCombatFeedbackData`, `AttackData` feedback |
+
+Each is one component with one owner of its state; its tuning is a resource never written in play;
+they talk by signals and by the queries of whoever owns the answer. The combat input actions are
+`attack_light`, `attack_heavy`, `dodge`, `target_lock`, `target_switch_left` and
+`target_switch_right`, each read in one place.
+
+**The M11.9 audit** removed `PlayerCombat._iframes_active` — a flag kept beside the dodge phase that
+always equalled `phase == INVULNERABLE`, now the query `has_iframes()` — `PlayerTargeting.get_candidates()`,
+which nothing called, and the training dummy's print on every hit. It found no duplicated formula, no
+second owner of any state, no older system running beside a newer one, no unused combat state and no
+unread `AttackData` or `DamageInfo` field (`attack_id` names the attack in logs and tests;
+`is_critical` is read by the feedback). The input buffer is cleared wherever a chain ends — the end of
+a chain, a dodge, a reset, a death.
+
+**What M12 inherits** — constraints, not a design:
+- Enemy and boss attacks still run their own timelines in their scripts (`startup` / active /
+  recovery) and send the same `DamageInfo`; they carry no critical chance, stagger power or push.
+- The player has no hit reaction of its own: nothing listens to its `damaged`.
+- Enemies acquire their target through `Player.GROUP`; nothing chooses between the player and a
+  shadow.
+- An enemy can stall out of reach of a still player (below).
+- Only the player's hits have feedback; any other source goes through `PlayerCombatFeedback`.
+
+### Not built in M11
 
 - **Sprint**, when it exists: a drain per second through `try_spend_stamina()`, stopping at 0.
 - **A changing stamina ceiling** (M16): a `set_max_stamina()` on `PlayerCombat`.
@@ -1680,7 +1838,9 @@ dies inside the window takes its one hit, and the next swing finds its hurtbox g
   launchers and wall slams — none of which exist.
 - **Defense and mitigation**: on the receiving side, in `Hurtbox.receive_hit()` before the health
   (see *Damage model and critical hits (M11.7)*); armour penetration travels in `DamageInfo`.
-- **Critical feedback**: damage numbers, sound, a flash — reading `DamageInfo.is_critical`.
+- **Damage numbers, hit sounds and hit VFX**: the critical mark is a placeholder; what replaces it
+  hears `Hitbox.hit_accepted` and reads `DamageInfo` (M13 art, M14 animation and audio).
+- **Feedback on the player being hit**, and a **settings screen** for the accessibility scales (M19).
 - **Targeting 2.0**: soft targeting (a light aim assist with no lock), a camera that frames the
   locked target, line of sight kept while a target is held, moving the lock to the next target when
   one dies — none built; see *Target lock (M11.8)*.

@@ -6,25 +6,25 @@
 
 ## Current Milestone
 
-**M11 — Combat System 2.0** (In progress)
+**M11 — Combat System 2.0** (Completed)
 
-**M11.1 — Combat Foundation 2.0**, **M11.2 — Light Attack Combo Chain**, **M11.3 — Heavy Attack &
-Attack Variants**, **M11.4 — Dodge & I-Frames**, **M11.5 — Stamina & Combat Resource Management**
-**M11.6 — Hit Reactions, Stagger & Knockback**, **M11.7 — Critical Hits & Damage Model 2.0** and
-**M11.8 — Target Lock & Combat Targeting** are complete: the player's combat runs on its own
-controller (`PlayerCombat`); the light attack is a real three-hit chain on it, the heavy attack a
-second, slower chain of one on its own button, the dodge has explicit phases whose i-frames the
-hurtbox enforces and costs stamina, enemies flinch, stagger and get knocked back by what hits them,
-every hit's damage follows one model, with its own critical roll, and the player can lock onto an
-enemy. M11.9 is next; sprint, combat feedback and soft targeting are not built yet. The architecture
-is `ARCHITECTURE.md`, *Combat architecture (M11)*; the deliverables are in `ROADMAP.md`.
+**M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
+player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
+attack as chains of `AttackData`, a dodge with explicit phases whose i-frames the hurtbox enforces,
+stamina paying for the dodge, enemies that flinch, stagger and get knocked back, one damage model
+with a critical rolled per hit, a target lock, and — since M11.9 — every hit that counts felt as a
+hit stop and a camera shake, with a mark for a critical. Sprint, soft targeting, floating damage
+numbers and the damage model's prospective fields were not built (`ROADMAP.md`, *M11*).
+
+Next: **M12 — Enemy AI 2.0 & Boss Framework**, not started. The architecture is `ARCHITECTURE.md`,
+*Combat architecture (M11)*, and what M12 inherits is its *Combat System 2.0 at the close of M11*.
 
 ## Where the project is
 
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 complete; M11 in progress (M11.1–M11.8 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 not started |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -40,6 +40,80 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M11 — Combat System 2.0** (Completed). Closed on M11.9. The player's combat was rebuilt on its
+  own controller and grown step by step on it — the combo chain, the heavy attack, the dodge and its
+  i-frames, stamina, hit reactions, the damage model and criticals, the target lock, and the hit
+  feedback — each step one component or one extension of an existing one, each tested alone and end
+  to end, the whole suite clean after every step. What the milestone did and did not deliver is in
+  `ROADMAP.md`; how it is built, and what M12 inherits, in `ARCHITECTURE.md`.
+
+- **M11.9 — Combat Feedback & M11 Closure** (Completed). What already existed was checked first: no
+  hit stop, no camera shake, no use of `Engine.time_scale`, no damage numbers — only the enemy's
+  squash and the boss's tint on being hit, kept as they are. Then:
+
+    - **A hit that counted**: `HealthComponent.take_damage()` and `Hurtbox.receive_hit()` return
+      whether it did, and the `Hitbox` emits **`hit_accepted`** after `hit_landed` only then — one
+      common event for light, heavy and critical hits. A miss, a hit into i-frames, a hit on a corpse
+      or a target already hit by the swing is felt as nothing.
+    - **`PlayerCombatFeedback`** (`scripts/player/player_combat_feedback.gd`, wired by
+      `Player._wire_components()`) plays the feedback of the player's own hits and of nothing else.
+      Rules in `PlayerCombatFeedbackData` (`resources/characters/player_combat_feedback.tres`), each
+      attack's own values in `AttackData`'s new *Feedback* group (`hit_stop_duration`,
+      `camera_shake_strength`, `camera_shake_duration`).
+    - **Hit stop**: `Engine.time_scale` **0** for Light 1 / 2 / 3 / heavy **0.025 / 0.03 / 0.04 /
+      0.065 s** (2 / 2 / 3 / 4 ticks), **+0.015 s** for a critical, **one per swing** however many
+      targets (another target only lengthens it), clamped to **0.1 s**. Everything on `delta` holds
+      and resumes where it was — the attack, the input buffer, the dodge, stamina, enemies, their
+      stagger and push, the boss, the shadow — while input still lands. It is the only writer of the
+      time scale and restores it when the stop ends, on the player's death, on a pause and on leaving
+      the tree; it never starts one while paused, so the boss's killing blow (which opens the run
+      summary first) has none.
+    - **Camera shake** on the existing `CameraRig` — `shake()` / `stop_shake()` through the
+      `Camera3D`'s `h_offset` / `v_offset`, never the rig's rotation, so aiming and the lock are
+      untouched: **3 / 4.5 / 7 / 12 cm** settling in **0.10 / 0.12 / 0.16 / 0.22 s**, **×1.35** for a
+      critical, the stronger shake replacing the weaker, clamped to **0.2 m / 0.35 s**; on the clock,
+      so it plays through the stop; ended by a pause.
+    - **Critical**: the longer stop, the harder shake and a placeholder **`CRITICO!`** that rises and
+      fades over the target (at most 4 at once), until damage numbers exist.
+    - **Shadow policy**: a shadow's hits hold and shake nothing — only its target's own reaction.
+    - **Accessibility (preparation)**: `camera_shake_scale` and `hit_stop_scale`, 0..1, defaults in
+      the data, set on the component; 0 turns either off. No settings UI.
+    - **The M11 audit**: `PlayerCombat._iframes_active`, a flag that always equalled the dodge phase,
+      became the query `has_iframes()`; `PlayerTargeting.get_candidates()`, never called, was
+      removed; the training dummy stopped printing on every hit. No duplicated formula, second owner,
+      parallel older system, unused combat state or unread `AttackData` / `DamageInfo` field was
+      found; every input action is used.
+
+  Tests: **`tests/combat/combat_feedback_test.tscn`** (41) — the data (the lights rising, the heavy
+  strongest, within the asked ranges) and the rules (critical bonus, ceilings, accessibility); one
+  stop and one shake per attack, held 2 / 2 / 3 / 4 ticks, each attack lasting its full timeline in
+  game time; nothing on a miss, a refused hit, a dead target or a shadow's critical hit; a heavy
+  through three enemies as one stop, lengthened never added; the critical's longer stop, harder shake
+  and mark, capped; the push, the stagger, the attack and stamina regeneration standing still through
+  a stop and resuming — the push as far as without one, the stagger its 0.5 s of game time; a press
+  in each stop buffered and kept through L1 → L2 → L3; a dodge in the stop refused as mid-swing, then
+  run with its i-frames; the shake's replace rule, the rig never moving, a pause ending it; the lock
+  and its bearing unmoved; the player's death, a pause, a freed node and ten requests in one tick all
+  leaving the game at full speed; both scales at 0; the boss hit and killed; and an every-tick watcher
+  (the time scale down exactly while a stop holds, the camera still with no shake).
+  **`tests/core/m11_feedback_run.gd`** (26) — the M11 stress run: the hub's training dummy felt → a
+  dungeon: killed locked on, mid-heavy, inside a stop (let go at once) and killed mid-dodge, each
+  restart clean → the light combo felt harder hit by hit, damage untouched; a heavy through two, one
+  stop; a critical's mark; the lock held through the stops; the stats menu opened mid-stop; stamina
+  empty / exactly one dodge / full → 120 ticks with three enemies, the shadow and the player fighting
+  at their 2.0 s and ~2–3 ms of physics a tick; a kill raced with the shadow, paid once, one stop per
+  player swing that counted → the boss: its swing dodged, hit, killed straight into the run summary on
+  a game at full speed, cleaned up → hub → a second dungeon to its boss → hub, with exactly as many
+  nodes as the first time and nothing orphaned.
+
+  **1963 assertions across 53 suites, zero failures, zero runtime errors, zero exit-time
+  leaks** (`tests/run_all.gd`). The 51 existing suites keep M11.8's 1896; three had to learn about
+  the new component — `hit_reaction_test` measures its stagger in game time rather than ticks, and
+  `m11_combat_run` and `m11_combo_run` expect the feedback as a second listener on `attack_started`
+  (`m11_combat_run` also checks `hit_accepted` for stale connections) — and two changed with the
+  audit (`has_iframes()`); the two new ones add 67. Zero parser warnings in the changed scripts and the new tests; cold-cache
+  reimport, headless boot and a headless run of the game are clean.
 
 - **M11.8 — Target Lock & Combat Targeting** (Completed). The player can lock onto an enemy — one new
   component and one new view, on the existing input, movement, combat and HUD:
@@ -301,8 +375,8 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
   headless run of the game are clean.
 
   Found, not fixed (M12): a basic enemy chasing a player who stands still can stop about 1.83 m away,
-  past its 1.8 m attack range, and wait there until the player moves (`ARCHITECTURE.md`, *Left for
-  the next M11 steps*).
+  past its 1.8 m attack range, and wait there until the player moves (`ARCHITECTURE.md`, *Not built
+  in M11*).
 
   Left for M11.5 and later: stamina (and its dodge cost, in `can_dodge()`), Dodge 2.0, hit reactions
   / stagger / knockback, crits, target lock, combat feedback.
@@ -1691,7 +1765,7 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-Nothing in flight. M0–M9 are complete and the slice is at RC1; **M10 has not been started.**
+Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 has not been started.**
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —
@@ -1711,8 +1785,9 @@ Carried forward from the prototype phase. Each item names where it now belongs.
   do. Not blocking, and the one kind of validation the automated suites cannot replace.
 - **Playtest-tune the enemy parameters** in `resources/enemies/basic_melee_enemy.tres`. The
   M9.2 baseline says the numbers are in target on paper; how they feel is a different question.
-- **Player-side death reaction** — input lockout and a visual state. Folds into hit reactions and
-  stagger at **M11**.
+- **Player-side death reaction** — since M11.1 combat refuses every intent while the player is dead;
+  a visual death state, and any reaction of the player to being hit, were not built in M11 and come
+  with animation at **M14**.
 - **Dungeon layout pass.** The grey-box is functional, not shaped for play. Belongs with the
   modular environment kits at **M15** and the room types at **M18**.
 - **Return the player to the gate on exit**, rather than to the hub's default spawn. Small, and

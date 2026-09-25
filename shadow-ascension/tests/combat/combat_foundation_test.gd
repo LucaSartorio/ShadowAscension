@@ -503,9 +503,9 @@ func _frame_rate_tests() -> void:
 		while bare.is_dodging() and t < 2.0:
 			bare._physics_process(dt)
 			t += dt
-			if bare._iframes_active and iframes_on < 0.0:
+			if bare.has_iframes() and iframes_on < 0.0:
 				iframes_on = t
-			if not bare._iframes_active and iframes_on >= 0.0 and iframes_off < 0.0:
+			if not bare.has_iframes() and iframes_on >= 0.0 and iframes_off < 0.0:
 				iframes_off = t
 		_record(_within(iframes_on, _shipped.invulnerability_start, dt)
 				and _within(iframes_off, _shipped.invulnerability_end, dt)

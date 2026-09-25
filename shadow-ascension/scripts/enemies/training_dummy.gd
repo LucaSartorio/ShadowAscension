@@ -13,7 +13,6 @@ var _dead: bool = false
 
 
 func _ready() -> void:
-	health_component.health_changed.connect(_on_health_changed)
 	health_component.died.connect(_on_died)
 
 
@@ -28,13 +27,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
-func _on_health_changed(current: float, maximum: float) -> void:
-	print("[TrainingDummy] health: %.0f / %.0f" % [current, maximum])
-
-
 func _on_died() -> void:
 	_dead = true
-	print("[TrainingDummy] died")
 	body_collision.call_deferred("set_disabled", true)
 	hurtbox.call_deferred("set_monitorable", false)
 	hurtbox_collision.call_deferred("set_disabled", true)

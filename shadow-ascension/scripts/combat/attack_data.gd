@@ -56,6 +56,20 @@ extends Resource
 ## direction, before the target's own multiplier.
 @export var knockback_force: float = 0.0
 
+@export_group("Feedback")
+## What a hit of this attack feels like, when it counts — presentation only:
+## none of it changes the damage, the critical, the stagger, the push or any
+## timing. Played by PlayerCombatFeedback, which adds a critical's bonus, applies
+## the accessibility scales and clamps every value; 0 plays nothing.
+##
+## Seconds the whole game holds on the hit (the hit stop). One per swing,
+## however many targets it hits.
+@export var hit_stop_duration: float = 0.0
+## How far the camera is thrown on the hit, in metres, and how long the shake
+## takes to settle, in seconds.
+@export var camera_shake_strength: float = 0.0
+@export var camera_shake_duration: float = 0.0
+
 @export_group("Debug")
 ## Colour of the hitbox's debug mesh while it is open.
 @export var debug_color: Color = Color(1, 0.3, 0.3, 0.35)

@@ -330,7 +330,9 @@ having to be rewritten again and again.
 
 ## M11 — Combat System 2.0
 
-**Status:** in progress.
+**Status: Complete** — closed by M11.9 (Combat Feedback & M11 Closure), with the M11 stress run
+(`tests/core/m11_feedback_run.gd`): two whole Hub → Gate → Dungeon → Boss → Hub cycles, deaths
+inside a hit stop and a dodge, a menu opened mid-stop, a kill raced with the shadow.
 
 | Step | State | What it did |
 | --- | --- | --- |
@@ -342,7 +344,17 @@ having to be rewritten again and again.
 | **M11.6** Hit Reactions, Stagger & Knockback | **Complete** | enemies answer the hits they survive: a flinch on every one; a stagger — attack cut off, AI suspended for 0.5 s, then 1 s immune — when the hit's `stagger_power` reaches the enemy's resistance; a knockback away from the attacker through the physics body. Values per attack in `AttackData` (Light 1/2/3/heavy: stagger 10/15/30/60, push 2/2.5/4.5/8 m/s), per enemy in `EnemyData`. Death first; the boss is neither staggered nor pushed; the shadow's hits only flinch |
 | **M11.7** Critical Hits & Damage Model 2.0 | **Complete** | the damage rules in one place (`DamageModel`): raw = base 20 × the attack's multiplier (1.0 / 1.25 / 1.75 / 2.0), then weapon and STR; a critical rolled once per hit — per target — at 10% for ×1.5, rounded once; `DamageInfo.is_critical`; the target never recomputes. Stagger, knockback, i-frames and rewards untouched; only the player crits; defense has its insertion point documented, no formula |
 | **M11.8** Target Lock & Combat Targeting | **Complete** | a target lock owned by `PlayerTargeting`: `Tab` locks the living enemy or boss best placed in front of the camera within 15 m and in view (one physics query, on demand), `Z` / `X` switch left / right by bearing, the lock drops past 18 m, on death, when the target leaves the scene, on the player's death or on `Tab` again. Locked, the player faces the target (12 rad/s) and strafes, attacks aim at it (facing only — hits stay physical), the dodge still follows the keys; a ring and a hint show it. Soft targeting and a lock-on camera are not built |
-| M11.9 onwards | Not started | the rest of the deliverables below |
+| **M11.9** Combat Feedback & M11 Closure | **Complete** | the player's hits felt, on a hit that counted (`Hitbox.hit_accepted`) and never on a miss, a refused hit or a corpse: a hit stop (`Engine.time_scale` 0 for L1/L2/L3/heavy 0.025 / 0.03 / 0.04 / 0.065 s, +0.015 s critical, one per swing, clamped to 0.1 s, always restored — on death, pause, scene change), a camera shake through the camera's offsets (0.03 / 0.045 / 0.07 / 0.12 m, ×1.35 critical, the stronger replaces, clamped) that never turns the rig, and a placeholder `CRITICO!` mark; accessibility scales for both; the shadow's hits felt as nothing. Owned by `PlayerCombatFeedback`; then the M11 audit and stress run |
+
+**Closed without** — built later, where the roadmap puts them:
+- **Sprint**, so stamina gates only the dodge (the movement pass; sprint animation is M14's).
+- **Soft targeting** and a camera that frames the locked target (M14's combat camera).
+- **Floating damage numbers**: a critical leaves a placeholder mark; numbers, hit sounds and hit VFX
+  come with M13–M14.
+- **The damage model's prospective fields** — magic, elemental and status damage, defense, armour
+  penetration: the model and `DamageInfo` carry what is used (physical damage, critical, stagger,
+  knockback, direction); defense has its insertion point documented (`ARCHITECTURE.md`, *Damage model
+  and critical hits (M11.7)*) and no formula was invented. They arrive with M16's derived stats.
 
 **Goal**
 Turn prototype combat into a real action-RPG combat system.
@@ -366,6 +378,8 @@ Turn prototype combat into a real action-RPG combat system.
 ---
 
 ## M12 — Enemy AI 2.0 & Boss Framework
+
+**Status:** not started.
 
 **Goal**
 Build a reusable framework for enemies and bosses, rather than one hand-made enemy and one
@@ -445,8 +459,9 @@ Bring the M13 assets to life.
 - **VFX:** weapon trails, hit effects, critical effects, skill effects, shadow effects, gate
   effects, boss attacks, level-up, loot rarity
 - **Audio buses:** Music, Ambient, Combat, Player, Enemy, UI, Skills
-- **Camera and game feel:** camera collision, combat camera, boss camera, dynamic FOV, camera
-  shake, hit stop
+- **Camera and game feel:** camera collision, combat camera, boss camera, dynamic FOV; camera
+  shake and hit stop exist since M11.9 (`PlayerCombatFeedback`) and are tuned here against real
+  animation and audio
 
 **Exit criteria**
 - Every combat state has an animation and no state pops or T-poses

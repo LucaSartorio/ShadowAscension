@@ -156,12 +156,6 @@ func is_valid_target(target: RoomCombatant, within: float) -> bool:
 	return _flat(target.global_position - _player.global_position).length() <= within
 
 
-## What a lock or a switch would choose from right now. Runs the search, so it
-## is for a lock, a switch or a test — never a frame.
-func get_candidates() -> Array[RoomCombatant]:
-	return _find_candidates()
-
-
 func get_search_count() -> int:
 	return _searches
 

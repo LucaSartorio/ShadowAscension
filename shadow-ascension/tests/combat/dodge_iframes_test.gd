@@ -509,9 +509,9 @@ func _check_invariants() -> void:
 			or _player.attack_hitbox.is_active() or _combat.get_combo_index() != PlayerCombat.NO_ATTACK
 			or _combat.get_queued_attack() != null or _combat.has_buffered_attack()):
 		_violations.append("DODGING with an attack, a chain or an open hitbox")
-	if _combat._iframes_active != (phase == PlayerCombat.DodgePhase.INVULNERABLE):
-		_violations.append("i-frames %s in dodge phase %s" % [_combat._iframes_active, PlayerCombat.DodgePhase.keys()[phase]])
-	if _combat._iframes_active != _player.hurtbox._invulnerable_reasons.has(PlayerCombat.IFRAMES_REASON):
+	if _combat.has_iframes() != (phase == PlayerCombat.DodgePhase.INVULNERABLE):
+		_violations.append("i-frames %s in dodge phase %s" % [_combat.has_iframes(), PlayerCombat.DodgePhase.keys()[phase]])
+	if _combat.has_iframes() != _player.hurtbox._invulnerable_reasons.has(PlayerCombat.IFRAMES_REASON):
 		_violations.append("the hurtbox and the dodge disagree on the i-frames")
 
 

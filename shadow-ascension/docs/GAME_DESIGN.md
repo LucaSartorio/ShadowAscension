@@ -377,15 +377,24 @@ swing onto the target. A dodge still goes where the movement keys point; with no
 away from the target. The lock lets go when the target dies, gets further than **18 m**, when `Tab` is
 pressed again, or when the player dies. The boss can be locked like any enemy; the shadow never can.
 
-**Scheduled for M11 — Combat System 2.0.** Defined at that milestone, not here. No numeric values,
-timing windows or interactions are committed yet (the heavy attack, the dodge's timing, stamina, hit
-reactions and critical hits shipped in M11.3 to M11.7):
+**M11.9 made the player's hits felt, and closed M11.** When a hit of the player's lands and counts,
+the whole game holds for a split second — the **hit stop** — and the camera jolts and settles — the
+**camera shake**. Both grow through the light combo and are biggest on the heavy: Light 1 / 2 / 3
+and the heavy hold for **0.025 / 0.03 / 0.04 / 0.065 s** and shake the camera **3 / 4.5 / 7 / 12 cm**.
+A critical holds **0.015 s** longer, shakes **35%** harder, and pops a **CRITICO!** above the enemy
+(a placeholder until there are damage numbers). One swing is one hit stop however many enemies it
+reaches. A miss, or a hit on something already dead, is felt as nothing. None of it changes damage,
+criticals, stagger, knockback, stamina, the lock or any timing: the game simply stands still for a
+moment and carries on exactly where it was, and a button pressed during the stop still counts. The
+shadow's hits are not felt this way — only its target's own reaction — so a crowd of shadows never
+shakes the screen. Nothing of it plays over a menu or a death, and the boss's last blow goes straight
+to the run summary with no slow motion. The shake and the stop can each be turned down or off (there
+is no settings screen for it yet).
 
-- sprint, draining stamina
-- combat feedback: hit stop, camera shake, floating damage
-- target lock, soft targeting, target switching, target indicators
-- a damage model carrying Physical, Magic, Critical, Defense, Armor Penetration, Elemental damage
-  and Status Effects
+**Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
+and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
+elemental and status damage, defense or armour penetration. Each is defined at the milestone that
+implements it.
 
 **Scheduled for M17 — Skills & Shadow Army 2.0**: active, passive, ultimate, movement and shadow
 skills, with cooldown, mana cost, cast, range and area.

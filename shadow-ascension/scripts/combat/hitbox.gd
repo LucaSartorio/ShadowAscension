@@ -1,8 +1,14 @@
 class_name Hitbox
 extends Area3D
 
-## A hit landed on `target`, carrying exactly what was sent to its hurtbox.
+## A hit landed on `target`, carrying exactly what was sent to its hurtbox —
+## whether the hurtbox took it or refused it (i-frames), or it found the target
+## already dead.
 signal hit_landed(target: Node, hit: DamageInfo)
+## The same hit, and it counted: the hurtbox took it and health went down, a
+## killing blow included. Emitted right after hit_landed, and only then. Hit
+## feedback listens to this one: a refused or pointless hit shows nothing.
+signal hit_accepted(target: Node, hit: DamageInfo)
 
 ## Below this, a source and its target count as standing in the same place, and
 ## the hit is pushed the way the hitbox faces instead.
@@ -110,8 +116,10 @@ func _on_area_entered(area: Area3D) -> void:
 	hit.stagger_power = stagger_power
 	hit.knockback_force = knockback_force
 	hit.direction = _direction_to(target_entity)
-	hurtbox.receive_hit(hit)
+	var accepted: bool = hurtbox.receive_hit(hit)
 	hit_landed.emit(target_entity, hit)
+	if accepted:
+		hit_accepted.emit(target_entity, hit)
 
 
 ## From the attacker to the target, flat: the way a push goes. When the two

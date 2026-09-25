@@ -37,6 +37,10 @@ var _heavy: AttackData = null
 var _hits: Array[Dictionary] = []
 var _violations: Array[String] = []
 var _watching: bool = false
+## Game time: every physics tick's delta, summed. A hit stop (M11.9) holds the
+## game, and the ticks it holds pass with no delta — a duration the game lives
+## is measured on this, not by counting ticks.
+var _clock: float = 0.0
 var _pass: int = 0
 var _fail: int = 0
 
@@ -60,7 +64,8 @@ func _ready() -> void:
 	_run()
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	_clock += delta
 	if _watching:
 		_check_invariants()
 
@@ -196,9 +201,9 @@ func _combo_tests() -> void:
 func _stagger_lifecycle_tests() -> void:
 	await _fresh(_a, IN_FRONT)
 	await _swing(_light, 2, _a)
-	var hit_frame: int = _hits[-1]["frame"]
+	var hit_clock: float = _hits[-1]["clock"]
 	await _until(func() -> bool: return not _a.is_staggered())
-	var total: float = (Engine.get_physics_frames() - hit_frame) * DT
+	var total: float = _clock - hit_clock
 	_record(absf(total - _a.stagger_duration) <= (FRAME_SLACK + 1) * DT and _a.is_stagger_immune()
 			and _a._state == BasicMeleeEnemy.State.IDLE,
 		"ST1) a stagger lasts %.2fs (%.2fs), then a parked enemy stands idle — and immune" % [_a.stagger_duration, total])
@@ -513,7 +518,7 @@ func _check_invariants() -> void:
 
 func _on_player_hit(target: Node, info: DamageInfo) -> void:
 	var entry: Dictionary = {"target": target, "info": info, "attack": info.attack_id, "amount": info.amount,
-		"frame": Engine.get_physics_frames()}
+		"clock": _clock}
 	var enemy: BasicMeleeEnemy = target as BasicMeleeEnemy
 	if enemy != null:
 		entry["staggered"] = enemy.is_staggered()

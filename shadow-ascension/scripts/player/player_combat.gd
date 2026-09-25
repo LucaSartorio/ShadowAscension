@@ -113,7 +113,6 @@ var _next_attack: AttackData = null
 var _buffered_attack: float = 0.0
 var _dodge_phase: DodgePhase = DodgePhase.NONE
 var _dodge_cooldown_remaining: float = 0.0
-var _iframes_active: bool = false
 ## This player's stamina ceiling, copied from the data so it can move without
 ## the shared asset being written, and the stamina left, always within 0..max.
 var _max_stamina: float = 0.0
@@ -256,6 +255,12 @@ func can_dodge() -> bool:
 
 func get_dodge_phase() -> DodgePhase:
 	return _dodge_phase
+
+
+## Whether the dodge's i-frames hold: exactly while it is INVULNERABLE. Read from
+## the phase, never kept beside it.
+func has_iframes() -> bool:
+	return _dodge_phase == DodgePhase.INVULNERABLE
 
 
 ## The attack being performed, or null.
@@ -554,7 +559,7 @@ func _log(what: String) -> void:
 	print("[PlayerCombat] %s  attack=%s (%d/%d)  queued=%s  buffered=%.2fs  dodge=%s  iframes=%s  stamina=%.1f/%.0f (regen in %.2fs)" % [
 		what, _attack.id if _attack != null else &"-", _combo_index + 1, _chain.size(),
 		_next_attack.id if _next_attack != null else &"-", _buffered_attack,
-		DodgePhase.keys()[_dodge_phase], _iframes_active,
+		DodgePhase.keys()[_dodge_phase], has_iframes(),
 		_stamina, _max_stamina, _stamina_regen_delay_remaining])
 
 
@@ -565,10 +570,9 @@ func _log_hit(target: Node, hit: DamageInfo) -> void:
 		hit.amount])
 
 
+## Called on a dodge-phase change and on reset(); the hurtbox keeps its reasons
+## as a set, so saying the same thing twice changes nothing.
 func _set_iframes(value: bool) -> void:
-	if value == _iframes_active:
-		return
-	_iframes_active = value
 	if _hurtbox != null:
 		_hurtbox.set_invulnerable(value, IFRAMES_REASON)
 

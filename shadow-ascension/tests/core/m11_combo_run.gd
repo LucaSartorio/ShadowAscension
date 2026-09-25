@@ -116,7 +116,8 @@ func _phase_into_dungeon(run: int) -> void:
 	var listeners: Dictionary = _listeners(fresh)
 	if run == 1:
 		_first_listeners = listeners
-		_record(listeners["attack_started"] == 1, "G1.3) its combat has one listener: %s" % [listeners])
+		_record(listeners["attack_started"] == 2,
+			"G1.3) its combat has two listeners — the player's presentation and its hit feedback: %s" % [listeners])
 	else:
 		_record(listeners == _first_listeners,
 			"G2.3) the second dungeon's player has exactly the first one's listeners: %s" % [listeners])

@@ -28,20 +28,23 @@ func _ready() -> void:
 
 
 ## The only place health goes down. Every hit arrives here the same way,
-## whoever dealt it.
-func take_damage(hit: DamageInfo) -> void:
+## whoever dealt it. True when it took health — a killing blow included — and
+## false when there was nothing to take it from or nothing to take: dead
+## already, no hit, no damage.
+func take_damage(hit: DamageInfo) -> bool:
 	if is_dead or hit == null:
-		return
+		return false
 	if hit.amount <= 0.0:
-		return
+		return false
 	last_damage = hit
 	current_health = max(0.0, current_health - hit.amount)
 	health_changed.emit(current_health, max_health)
 	if current_health <= 0.0:
 		is_dead = true
 		died.emit()
-		return
+		return true
 	damaged.emit(hit)
+	return true
 
 
 ## Changes the ceiling without healing: current health is only ever clamped down
