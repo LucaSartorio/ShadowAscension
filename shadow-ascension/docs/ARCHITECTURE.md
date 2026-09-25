@@ -140,8 +140,8 @@ An enemy's AI (M12.1) is its state machine in `BasicEnemy` (`BasicMeleeEnemy` un
 components: **`EnemyTargeting`** (`scripts/enemies/enemy_targeting.gd`), the one owner of whom it
 fights, and an **`EnemyAttack`** (`scripts/enemies/enemy_attack.gd`, M12.2, a base since M12.3), the one
 owner of what it attacks with and of the attack under way — **`EnemyMeleeAttack`** for the melee
-archetype, **`EnemyRangedAttack`** for the ranged. See *Enemy AI (M12.1)*, *Melee archetype (M12.2)*
-and *Ranged archetype (M12.3)*.
+archetype (and the tank, a melee tuned by data, M12.4), **`EnemyRangedAttack`** for the ranged. See
+*Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)* and *Tank archetype (M12.4)*.
 
 - **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
@@ -213,14 +213,14 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 
 | Resource | Responsible for | Main fields | Read by | Must NOT contain |
 | --- | --- | --- | --- | --- |
-| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
+| `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
 | `PlayerCombatData` (`scripts/player/`) | the player's combat | base damage, critical chance and multiplier, the light combo and the heavy attack (chains of `AttackData`), input-buffer time, dodge duration / i-frames / cooldown / stamina cost, maximum stamina and its regeneration delay and rate | `PlayerCombat` | the combat state, timers, combo position, buffered input or the stamina left — `PlayerCombat`'s runtime state; the dodge's speed, which is movement and scales with AGI on `player.gd` |
-| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
+| `AttackData` (`scripts/combat/`) | one attack; the light combo's three and the heavy are `resources/characters/player_attacks/*.tres`, the melee enemy's `resources/enemies/attacks/melee_basic_attack.tres` (M12.2), the ranged enemy's `ranged_basic_bolt.tres` (M12.3), the tank's `tank_heavy_swing.tres` (M12.4) | `id`, `animation` (a name the presentation resolves), damage multiplier, windup / active / recovery, combo window, dodge-cancel window, movement multiplier, stagger power and knockback force, hit stop and camera shake (M11.9), debug colour, a ranged attack's projectile scene, speed and lifetime (M12.3) | `PlayerCombat`; the presentation reads `animation`, `PlayerCombatFeedback` the feedback; `EnemyAttack` reads `id`, the multiplier, the three timings, the impact and the debug colour (M12.2), `EnemyRangedAttack` the projectile (M12.3) | a damage number of its own — it scales the owner's base; any per-swing state (index, queue, timers, hit history); how the attack looks |
 | `ShadowData` (`scripts/shadows/`) | one kind of shadow | `id`, name, extraction chance, summon scene, base health and damage and their growth, XP curve | `ShadowInstance`, `ShadowSource`, `ShadowRemnant`, the menus | a shadow's level or XP — every shadow of a type shares this, so progress on it would be shared too; that is `ShadowInstance`'s |
 | `ItemData`, `LootTable`, `LootTableEntry` (`scripts/items/`) | items and what drops them | see *Items and loot* | inventory, equipment, `LootDropper` | stack counts or what is carried |
 
@@ -328,7 +328,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
 **49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
-(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**, all clean. Since M11.9 a hit stop holds the
+(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**, all clean. Since M11.9 a hit stop holds the
 game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
 in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
@@ -2055,7 +2055,8 @@ where the behaviour lives — a ranged enemy is a different attack component (wh
 swing does) and a different slot distance, not an `if enemy_type == RANGED` in the state machine;
 there is no enemy type anywhere in it. The transitions table is the place a new state (a retreat, a
 stun) is allowed in, with its enter, update and exit. M12.2 built the first archetype on it, the melee,
-and M12.3 the second, the ranged — both on this one state machine; the rest is M12.4 onwards.
+M12.3 the second, the ranged, and M12.4 the third, the tank — a melee specialised by data alone — all
+on this one state machine; the rest is M12.5 onwards.
 
 ## Melee archetype (M12.2)
 
@@ -2376,6 +2377,91 @@ together, each keep their own state, cooldown, target and projectiles (`MU1`, `M
 The shipped dungeon is unchanged — its five enemies are melee. Placing ranged enemies in rooms is
 content, M18's; `m12_ranged_run` brings its own into the real dungeon instead. The ranged has no shadow
 of its own to extract yet (no `ShadowSource`); its loot is the melee's table.
+
+## Tank archetype (M12.4)
+
+M12.4 (Tank Archetype 2.0) added the third archetype: a heavy that is slow, hard to stop and hard to
+move, and hits hard when its blow lands. It is **a melee specialised by data** — the M12.1 state
+machine, the M12.2 melee attack, the same hitbox, damage path, reactions and death — and nothing else:
+no tank script, no archetype enum, no `if tank` anywhere. Every trait the tank needed already had a
+field:
+
+| Trait | Where it lives | Tank | Melee |
+| --- | --- | --- | --- |
+| health | `EnemyData.max_health` | 260 | 100 |
+| movement | `movement_speed` / `acceleration` / `rotation_speed` | 2.4 m/s / 8 / 4 rad/s | 3.8 / 12 / 7 |
+| reach and ring | `attack_range` / `preferred_combat_distance` / `minimum_combat_distance` | 2.3 / 2.0 / 1.4 m | 1.8 / 1.6 / 1.15 m |
+| noticing | `alert_duration` | 0.4 s | 0 s |
+| stagger resistance | `stagger_resistance` / `stagger_duration` / `stagger_immunity_time` | 45 / 0.4 s / 1.5 s | 25 / 0.5 s / 1.0 s |
+| knockback resistance | `knockback_multiplier` | 0.35 | 1.0 |
+| the attack | `attacks` — `tank_heavy_swing.tres` | telegraph 0.8 s, active 0.2 s, recovery 1.1 s | 0.35 / 0.15 / 0.65 s |
+| damage | `attack_damage` × the attack's `damage_multiplier` | 20 × 1.5 = **30** | 15 × 1.0 = 15 |
+| cooldown | `attack_cooldown` | 1.2 s | 0.4 s |
+| commitment | `telegraph_turn_fraction` / `telegraph_facing_lock` / `max_attack_facing_angle` | 0.15 / 0.3 s / 20° | 0.3 / 0.1 s / 25° |
+| reward | `xp_reward` | 50 | 25 |
+
+What the data cannot say — how big it is — the scene does: `scenes/enemies/basic_tank_enemy.tscn` is
+the melee scene with a 0.6 m × 2.3 m body, a 0.7 m × 2.4 m hurtbox, a hitbox of 1.8 × 1.6 × 2.0 m held
+1.5 m in front (it reaches from 0.5 to 2.5 m, around its 1.4–2.3 m band), its lock anchor at 1.4 m and
+its health bar at 2.85 m. Its avoidance radius is `enemy_spacing_radius` (1.0 m), as for every enemy.
+The placeholder look is steel grey with a slab of shoulders, turning orange as it winds up.
+
+### Attack lifecycle and commitment
+
+`EnemyMeleeAttack`'s lifecycle, untouched, on `tank_heavy_swing`:
+
+| Phase | Lasts | |
+| --- | --- | --- |
+| `TELEGRAPH` | 0.8 s | the hitbox shut; it rears high (`startup_scale` 0.85 × 1.3) and turns orange; it follows the target at 15% of a 4 rad/s turn — a player circling it 90° drags it round about 17° — and not at all in the last 0.3 s |
+| `ACTIVE` | 0.2 s | the hitbox open: 30 once per target, the player and a shadow in it hit once each; facing locked |
+| `RECOVERY` | 1.1 s | committed, the hitbox shut, not turning: the punish window — a player who stepped out of the blow walks back in and lands Light 1 and Light 2 before it can swing again |
+| cooldown | 1.2 s | at most one swing every 3.3 s |
+
+No homing anywhere: from the lock to the end of the recovery it does not turn, so stepping out of the
+blow in the last 0.3 s, or dodging into it (the i-frames refuse it), avoids it completely.
+
+### Resistance
+
+**Stagger** is M11.6's rule, per hit: a hit staggers when its stagger power reaches the resistance.
+Against the tank's 45:
+
+| Player attack | Stagger power | The melee (25) | The tank (45) |
+| --- | --- | --- | --- |
+| Light 1 | 10 | flinch | flinch — its swing goes on |
+| Light 2 | 15 | flinch | flinch — its swing goes on |
+| Light 3 | 30 | **stagger** | flinch — its swing goes on |
+| Heavy | 60 | stagger | **stagger** — a telegraph is cancelled, no ACTIVE |
+
+So the light combo never stops a tank, and the heavy does — a resistance, not an immunity, which keeps
+the heavy (and future skills) worth using. A critical changes the damage and nothing else (M11.7): a
+critical heavy staggers exactly as a normal one. Its stagger is short (0.4 s) and its immunity after
+one long (1.5 s), so a tank cannot be held down by heavies.
+
+**Knockback** is M11.6's push, scaled by the target's `knockback_multiplier` — the one formula, no
+second system: `push speed = knockback_force × knockback_multiplier`, dying out at
+`knockback_deceleration`. At 0.35 the tank keeps 35% of the speed and, the distance going with its
+square, about an eighth of the distance: a heavy throws a melee 1.13 m and moves a tank 0.15 m; Light 3
+moves a melee 0.38 m and a tank 0.055 m. The push still belongs to the physics — navigation does not
+cancel it, and a tank shoved into a wall stops at the wall.
+
+### Player, shadow, others
+
+- **The player**: Light 1/2/3 land and flinch it without moving it; the heavy staggers it; criticals
+  add damage only; the hit stop holds its telegraph and its stagger with the game; the dodge, by moving
+  or by i-frames, avoids its blow; the lock and its ring sit at its higher anchor.
+- **The shadow**: M12.1's policy — the basic tank fights the player; a tank whose data lists the
+  shadow's group hunts it; its blow hits a shadow for 30 like anyone in the hitbox. A shadow's kill of a
+  tank pays 70/30 (35 / 15 of its 50).
+- **No friendly fire**: the tank's hitbox masks the player's and the shadows' hurtboxes only.
+
+### Three roles, one foundation
+
+Side by side against the player, with nothing coordinating them: the melee arrives first and presses;
+the tank arrives a second or more later and holds its space with a slow, heavy swing; the ranged keeps
+its 7 m and shoots. Same state machine, same targeting, same reactions — three sets of data, two
+attack components. The shipped dungeon still holds melee only; `tank_archetype_test` and
+`m12_tank_run` bring their own. The tank has no shadow of its own to extract yet, and its loot is the
+melee's table.
 
 ## Content pipeline (M13+)
 

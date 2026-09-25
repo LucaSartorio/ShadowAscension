@@ -8,18 +8,20 @@
 
 **M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
-**M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0** and **M12.3 — Ranged
-Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
+**M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0**, **M12.3 — Ranged
+Archetype 2.0** and **M12.4 — Tank Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
 ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`), with one writer of its state and a table of legal
 transitions; its target has one owner, `EnemyTargeting`, choosing from the target groups its data
 names — the player's alone, as before. An archetype is an attack component and its data: the melee
 (M12.2) swings through a hitbox; the ranged (M12.3) keeps 4–10 m from its target, 7 m by preference,
 and fires a telegraphed `Projectile` that flies straight — both on one `EnemyAttack` lifecycle
-(telegraph, active, recovery, then a cooldown) and `AttackData`, the player's resource. The boss keeps
-its own AI; the shipped dungeon still holds melee only. M12.4 is next; the other archetypes, the target
+(telegraph, active, recovery, then a cooldown) and `AttackData`, the player's resource; the tank
+(M12.4) is a melee specialised by data alone — heavier, slower, harder to stagger and to push, a
+slower and harder swing. The boss keeps its own AI; the shipped dungeon still holds melee only. M12.5
+is next; the other archetypes, the target
 choice between player and shadow, group combat and the Boss Framework are not built yet. The
-architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee archetype (M12.2)* and *Ranged
-archetype (M12.3)*; the deliverables are in `ROADMAP.md`.
+architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged
+archetype (M12.3)* and *Tank archetype (M12.4)*; the deliverables are in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -37,7 +39,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.3 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.4 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -53,6 +55,49 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.4 — Tank Archetype 2.0** (Completed). The question first: could a tank be the melee, tuned?
+  Every trait asked for already had a field — health, speed, reach, stagger resistance and duration,
+  the knockback multiplier M11.6's push already scales by, the attack's timings and damage in its
+  `AttackData`, the telegraph's tracking and facing lock — and its size is the scene's. So the tank is a
+  melee specialised by data, with no code of its own:
+  - **`resources/enemies/basic_tank_enemy.tres`**: 260 HP, 2.4 m/s (acceleration 8, turn 4 rad/s),
+    ALERT 0.4 s, reach 2.3 m / ring 2.0 m / minimum 1.4 m, avoidance radius 1.0 m, base damage 20,
+    cooldown 1.2 s, facing cone 20°, telegraph turn 15% and facing lock 0.3 s, stagger resistance 45
+    (0.4 s stagger, 1.5 s immunity), knockback ×0.35, 50 XP.
+  - **`resources/enemies/attacks/tank_heavy_swing.tres`**: telegraph 0.8 s, active 0.2 s, recovery
+    1.1 s, ×1.5 — 30 damage; no stagger or push of its own (neither the player nor the shadow reacts to
+    an enemy's yet).
+  - **`scenes/enemies/basic_tank_enemy.tscn`**: the melee scene, bigger — body, hurtbox, a hitbox
+    reaching 0.5–2.5 m, lock anchor 1.4 m, health bar 2.85 m — steel grey with shoulders, no shadow to
+    extract, the melee's loot.
+  - **No code changed** but a comment in `EnemyData` (the range model's tank values).
+
+  **`tests/enemies/tank_archetype_test`** (36) — configuration against the melee's, the same script and
+  attack, the hitbox covering the band; spawn; detection with its ALERT; chasing beside a melee (2.55 m
+  to its 5.60 m, never over 2.40 m/s); a telegraph from 2.23 m; the telegraph (0.80 s, shut, rearing
+  orange), the hit (30, once), recovery 1.10 s and cooldown 1.20 s; the commitment (17° followed of a
+  90° circle, then no turn); a step out of the blow, the i-frames, stamina back; the punish window (Light
+  1 and 2 in its recovery); Light 1 and 2 in its telegraph (it swings on), the combo against a tank and
+  a melee (Light 3 staggers the melee only), the heavy cancelling a telegraph; the heavy's push on a
+  melee and a tank (1.13 m / 0.15 m), Light 3's (0.38 / 0.055 m), into a wall, mid-chase; criticals
+  (damage only); death in the telegraph and mid-swing (50 XP once); the player and a shadow in one
+  swing, a tank hunting a shadow; two tanks; a melee, a ranged and a tank together — arrival order, the
+  lock switched across all three, physics under budget; the hit stop through its telegraph and its
+  stagger; every tick's invariants. **`tests/core/m12_tank_run.gd`** (17) — the real game with a tank
+  and a ranged brought into room one beside its melee: the melee first, the tank 1.5 s later, the ranged
+  at 7 m, the tank's blow 30 once a swing; a blow dodged through; the lock across the three; critical
+  heavies bringing it down (50 XP once); the shadow's kill of a tank (35 / 15); the boss; hub; a second
+  dungeon the same, the tank fresh, no listener doubled; hub, nothing orphaned.
+
+  **2170 assertions across 61 suites, zero failures, zero runtime errors, zero
+  exit-time leaks** (`tests/run_all.gd`). The 59 existing suites keep M12.3's 2117; the two new ones add
+  53. Zero parser warnings in the new tests; cold-cache reimport, headless boot and a headless run of
+  the game are clean.
+
+  Left for M12.5 and later: assassin, support and elite archetypes; placing tanks and ranged enemies in
+  the dungeon (M18); an enemy attack that staggers or pushes the player; shields, armour, poise; group
+  coordination; the Boss Framework.
 
 - **M12.3 — Ranged Archetype 2.0** (Completed). What existed was read first: no projectile, no ranged
   code anywhere; the damage path a projectile needs already whole in `Hitbox` (source filtering, one
@@ -1970,7 +2015,7 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 ## In Progress
 
 Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 to
-M12.3 are done, M12.4 is next.
+M12.4 are done, M12.5 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —

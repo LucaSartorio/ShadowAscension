@@ -421,6 +421,15 @@ player who ducks behind cover mid-wind-up makes it hold its fire. Staggering it 
 cancels the shot; a bolt already in the air flies on. A shadow in the line takes the bolt. It is not
 in the dungeon yet: placing it is part of the dungeon content to come.
 
+**M12.4 added the tank.** Big, slow and hard to shift: **260** health, it walks at about two thirds
+of the melee's pace and turns slowly, and it reaches **2.3 m**. Its blow is announced for a long
+**0.8 s** — it rears up high and glows orange, and tracks the player only a little, not at all in the
+last moment — and it hits for **30**, then stands committed for **1.1 s**: the moment to punish it.
+Light attacks hurt it but never stop its swing, not even the combo's third hit; a heavy staggers it
+and cancels a wind-up. Pushes barely move it — a heavy that throws a melee a metre shifts a tank a
+hand's breadth. Dodging out of the blow or through it avoids it entirely. Like the ranged, it is not
+in the dungeon yet.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that

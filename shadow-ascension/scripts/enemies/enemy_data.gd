@@ -64,7 +64,8 @@ extends Resource
 ## attack range, flat; beyond it the enemy only closes in. It closes in to the
 ## preferred_combat_distance ring and holds there; nearer than the minimum it
 ## steps back to the ring (REPOSITION). A melee's are 1.15 / 1.6 / 1.8 m, a
-## ranged's 4 / 7 / 10 m. Stepping back to the ring, not to the minimum, is the
+## tank's 1.4 / 2.0 / 2.3 m (M12.4: a bigger body, a longer reach), a ranged's
+## 4 / 7 / 10 m. Stepping back to the ring, not to the minimum, is the
 ## hysteresis: it will not turn round again until pressed past the minimum.
 @export_range(0.0, 10.0, 0.05, "or_greater") var attack_range: float = 1.8
 @export_range(0.0, 10.0, 0.05, "or_greater") var preferred_combat_distance: float = 1.6
@@ -102,6 +103,9 @@ extends Resource
 ## land — so no chain of hits can hold the enemy helpless for ever.
 @export_range(0.0, 10.0, 0.05, "or_greater") var stagger_immunity_time: float = 1.0
 ## Scales every push this enemy takes: 1.0 as the attack meant it, 0.0 immovable.
+## Its knockback resistance is what it takes off: a tank's 0.35 keeps 35% of the
+## push's speed (M12.4) — and, the push dying out at knockback_deceleration, about
+## an eighth of the distance.
 @export_range(0.0, 5.0, 0.05, "or_greater") var knockback_multiplier: float = 1.0
 ## How fast a push dies out, in m/s per second.
 @export_range(0.1, 200.0, 0.5, "or_greater") var knockback_deceleration: float = 30.0
