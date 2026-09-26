@@ -48,3 +48,16 @@ outline_size = 12
 modulate = Color(0.92, 0.94, 0.98, 1)
 outline_modulate = Color(0, 0, 0, 1)
 text = "100 / 100"
+
+[node name="EliteTag" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.36, 0)
+visible = false
+pixel_size = 0.0035
+billboard = 1
+shaded = false
+no_depth_test = true
+font_size = 40
+outline_size = 12
+modulate = Color(0.95, 0.72, 0.15, 1)
+outline_modulate = Color(0, 0, 0, 1)
+text = "ELITE"

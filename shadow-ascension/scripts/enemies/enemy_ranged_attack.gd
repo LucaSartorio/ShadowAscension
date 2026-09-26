@@ -43,8 +43,8 @@ var max_aim_angle: float = 0.0
 var _shots: int = 0
 
 
-func configure(source: EnemyData) -> void:
-	super.configure(source)
+func configure(source: EnemyData, rank: EliteModifierData) -> void:
+	super.configure(source, rank)
 	line_of_sight_mask = source.line_of_sight_mask
 	max_aim_angle = source.max_attack_facing_angle
 

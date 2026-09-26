@@ -452,6 +452,15 @@ orange glow, **+20%** damage for **6 s**, never doubled by a second support. Wit
 a small bolt (**8**) that can be dodged or stepped out of. It backs away if the player closes in, and
 alone it simply fights. Like the others, it is not in the dungeon yet.
 
+**M12.7 added elites.** Any of the five can appear as an **elite**: the same enemy, fighting exactly the
+same way — the same wind-ups to read, the same reach, the same dodgeable blows — but more dangerous. An
+elite has **60%** more health, hits **20%** harder, moves a little faster, waits a little less between
+attacks, is harder to stagger and to push, and is worth **twice** the XP (shared 70/30 as usual when a
+shadow lands the kill). A light combo's third hit no longer staggers an elite melee or ranged; the heavy
+still staggers every elite, the tank included. A support heals an elite ally by a quarter of the elite's
+own, larger health. An elite is marked by a gold **ELITE** tag over its health bar and a gold frame
+round the bar. None appear in the dungeon yet; choosing where they stand is dungeon content.
+
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,
 elemental and status damage, defense or armour penetration. Each is defined at the milestone that

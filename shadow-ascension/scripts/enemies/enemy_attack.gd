@@ -39,7 +39,8 @@ extends Node
 
 enum Phase { NONE, TELEGRAPH, ACTIVE, RECOVERY }
 
-# Configuration, copied from the archetype's EnemyData by configure().
+# Configuration, copied from the archetype's EnemyData by configure() — its
+# damage and cooldown already through the enemy's rank (M12.7).
 ## The archetype's attacks, the first its basic one.
 var attacks: Array[AttackData] = []
 ## What every attack's damage_multiplier scales.
@@ -86,11 +87,14 @@ var _damage_bonus_remaining: float = 0.0
 
 ## Copies what this archetype attacks with from its data. Called by the enemy
 ## while it seeds itself, so the attack and the enemy read the same asset once.
-## A subclass copies its own fields too, after this.
-func configure(source: EnemyData) -> void:
+## `rank` scales the base damage and the cooldown (M12.7: an elite's profile; a
+## normal enemy's is neutral) — the attacks themselves are never touched, so
+## every one of them is scaled alike, and once. A subclass copies its own fields
+## too, after this.
+func configure(source: EnemyData, rank: EliteModifierData) -> void:
 	attacks = source.attacks.duplicate()
-	attack_damage = source.attack_damage
-	attack_cooldown = source.attack_cooldown
+	attack_damage = rank.effective_attack_damage(source.attack_damage)
+	attack_cooldown = rank.effective_attack_cooldown(source.attack_cooldown)
 	telegraph_turn_fraction = source.telegraph_turn_fraction
 	telegraph_facing_lock = source.telegraph_facing_lock
 	telegraph_color = source.telegraph_color

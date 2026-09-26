@@ -143,8 +143,9 @@ owner of what it attacks with and of the attack under way — **`EnemyMeleeAttac
 archetype (and the tank and the assassin, melee tuned by data, M12.4–M12.5), **`EnemyRangedAttack`** for
 the ranged, **`EnemySupportAttack`** for the support (M12.6: the ranged's shot and its casts). A support
 has a third component, **`EnemySupport`** (`scripts/enemies/enemy_support.gd`), the one owner of the
-ally it supports and of what it means to do for it. See *Enemy AI (M12.1)* and the archetype sections,
-M12.2 to M12.6.
+ally it supports and of what it means to do for it. Any of them can be made elite by data alone — an
+`EliteModifierData` set on the instance (M12.7). See *Enemy AI (M12.1)*, the archetype sections, M12.2
+to M12.6, and *Elite framework (M12.7)*.
 
 - **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
@@ -218,6 +219,7 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | --- | --- | --- | --- | --- |
 | `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4), `basic_assassin_enemy.tres` (M12.5), `basic_support_enemy.tres` (M12.6) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance, and the disengage distance (M12.5) — its `support` (`EnemySupportData`, M12.6; null on the other four) — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
 | `EnemySupportData` (`scripts/enemies/enemy_support_data.gd`, M12.6) | what a support does for its allies — a sub-resource of `basic_support_enemy.tres` | the ally layer, the ranges (notice, reach, the cast's break margin), the look-around interval, the approach timeout; the heal (its `AttackData`, threshold, share of the ally's maximum, cooldown, colour); the buff (its `AttackData`, damage bonus, duration, cooldown, colour) | `EnemySupport.configure()` | whom it supports, a cast under way, a cooldown left, a buff on anyone — `EnemySupport`'s and `EnemyAttack`'s runtime state |
+| `EliteModifierData` (`scripts/enemies/elite_modifier_data.gd`, M12.7) | what makes an enemy elite — `resources/enemies/elite_standard.tres`; assigned per enemy (`BasicEnemy.elite_profile`) where it is placed | seven multipliers on the archetype's own numbers — health, movement speed, attack damage, attack cooldown, stagger resistance, knockback taken, XP reward — and the getters that apply them, clamped (`effective_*()`) | `BasicEnemy._apply_stats()` and `get_xp_reward()`, `EnemyAttack.configure()` | any base value (they stay in `EnemyData`), attack timings, distances, a support's heal or buff, anything that changes during a fight |
 | `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
 | `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
@@ -332,7 +334,7 @@ close of M10 the run is **35 suites and 1430 assertions**, all clean; at M11.1, 
 at M11.3, **41 suites and 1614 assertions**; at M11.4, **43 suites and 1677 assertions**; at M11.5,
 **45 suites and 1749 assertions**; at M11.6, **47 suites and 1804 assertions**; at M11.7,
 **49 suites and 1845 assertions**; at M11.8, **51 suites and 1896 assertions**; at the close of M11
-(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**; at M12.5, **63 suites and 2224 assertions**; at M12.6, **65 suites and 2295 assertions**, all clean. Since M11.9 a hit stop holds the
+(M11.9), **53 suites and 1963 assertions**; at M12.1, **55 suites and 2011 assertions**; at M12.2, **57 suites and 2059 assertions**; at M12.3, **59 suites and 2117 assertions**; at M12.4, **61 suites and 2170 assertions**; at M12.5, **63 suites and 2224 assertions**; at M12.6, **65 suites and 2295 assertions**; at M12.7, **67 suites and 2354 assertions**, all clean. Since M11.9 a hit stop holds the
 game for a few ticks on every player hit: a suite that measures a duration the game lives measures it
 in game time — each tick's delta, summed — not by counting ticks. Since M11.7 a player hit can be critical at
 random; a suite that checks exact damage turns criticals off for its own run (one line at the top of
@@ -2069,7 +2071,8 @@ stun) is allowed in, with its enter, update and exit. M12.2 built the first arch
 M12.3 the second, the ranged, M12.4 the third, the tank — a melee specialised by data alone — M12.5
 the fourth, the assassin — a melee with a disengage and a lunge, both data — and M12.6 the fifth, the
 support — a ranged with an optional part, `EnemySupport`, whose casts run as attacks — all on this one
-state machine; the rest is M12.7 onwards.
+state machine. M12.7 made any of them elite by a data profile, with no new scene or code path; the rest
+is M12.8 onwards.
 
 ## Melee archetype (M12.2)
 
@@ -2747,6 +2750,138 @@ a fighter; the tank brought to 40%, the support turns to heal it and the player'
 off. The lock switches across all five. Four supports and eight allies cost about 3 ms of physics a
 tick; each support looks around 8 times in 4 s. The shipped dungeon still holds melee only;
 `support_archetype_test` and `m12_support_run` bring their own.
+
+## Elite framework (M12.7)
+
+M12.7 (Elite Enemy Framework) lets any enemy on the AI foundation be an **elite**: the same archetype —
+its scene, its script, its state machine, its attacks, its behaviour — with more dangerous numbers. An
+elite melee, ranged, tank, assassin or support is its normal scene with one per-instance property set;
+there is no `EliteMelee.tscn`, no elite script, no `if is_elite` anywhere in the AI.
+
+### Elite enemy
+
+- **The rank** is `BasicEnemy.elite_profile` (an `EliteModifierData`, exported in the *Per-Instance*
+  group beside the approach angle and the attack desync): null, a normal enemy; set, an elite.
+  `get_rank()` (`Rank.NORMAL` / `Rank.ELITE`) and `is_elite()` read it — nothing is stored beside it,
+  and there is no rarity ladder.
+- **Where it is set**: wherever the enemy is placed — a room's scene file for a hand-placed enemy
+  (the inspector's *Per-Instance* group), the code that instances it otherwise — before it enters the
+  tree. That is the whole spawn integration: `enemy_scene + enemy_data (stats) + elite_profile`. The
+  shipped dungeon places no elite; placing them is content (M18). Nothing picks elites at random.
+- **The boss is not an elite** and does not use this: it keeps `BossStats` and its own AI.
+
+### EliteModifierData
+
+`scripts/enemies/elite_modifier_data.gd` — multipliers only, no base value repeated; the defaults (1.0)
+are the neutral profile a normal enemy is scaled by. `resources/enemies/elite_standard.tres`:
+
+| Field | `elite_standard` | Convention |
+| --- | --- | --- |
+| `health_multiplier` | 1.6 | × `max_health` |
+| `move_speed_multiplier` | 1.05 | × `movement_speed` (and the navigation's max speed) |
+| `damage_multiplier` | 1.2 | × `attack_damage`, the base every attack scales |
+| `cooldown_multiplier` | 0.85 | × `attack_cooldown`: below 1 is shorter — 0.85 is 15% shorter |
+| `stagger_resistance_multiplier` | 1.3 | × `stagger_resistance`: above 1, harder to interrupt |
+| `knockback_taken_multiplier` | 0.7 | × `knockback_multiplier`, the share of a push it takes: below 1, pushed less |
+| `xp_reward_multiplier` | 2.0 | × `xp_reward`, rounded to a whole number |
+
+**Validation**: the inspector ranges are 0.1–10; `is_valid()` reports a multiplier that is not a
+positive finite number (the enemy warns once when it readies), and every getter clamps to 0.1–10
+anyway — a zero health multiplier makes a 10% enemy, never a dead one.
+
+### Effective stats
+
+One pipeline, applied once, when the enemy readies — `BasicEnemy._apply_stats()`, with the attack's part
+in `EnemyAttack.configure(source, rank)` — through the profile's getters (`effective_*()`):
+
+```
+base (EnemyData, shared, read)  ->  x elite profile  ->  the enemy's runtime copy (its own)
+  max_health          x health            -> max_health            -> HealthComponent.reset_to(): current = effective max
+  movement_speed      x move speed        -> movement_speed        -> NavigationAgent3D.max_speed
+  stagger_resistance  x stagger           -> stagger_resistance    (M11.6's check)
+  knockback_multiplier x knockback taken  -> knockback_multiplier  (M11.6's push)
+  attack_damage       x damage            -> EnemyAttack.attack_damage
+  attack_cooldown     x cooldown          -> EnemyAttack.attack_cooldown
+  xp_reward           x XP                -> get_xp_reward(), asked at death (rounded)
+```
+
+**Order.** The elite modifier is static: applied at spawn, before anything is built on it — the health
+is filled to the effective maximum, not raised after — and never recomputed. A runtime modifier comes
+after it and never writes it: the damage of a hit is
+
+```
+EnemyAttack.attack_damage (base x elite, at spawn)
+  -> get_attack_damage(): x (1 + a support's buff), while one lasts   (DamageModel.buffed_damage)
+  -> x the attack's own damage_multiplier                              (DamageModel.attack_damage)
+```
+
+so each multiplier applies once: an elite melee's swing is 15 × 1.2 = 18; buffed, 21.6; the buff over,
+18 again. An elite tank's heavy swing is 20 × 1.2 × 1.5 = 36; an elite ranged's bolt 12 × 1.2 = 14.4,
+fixed on the projectile when it is fired; an elite support's bolt 9.6. Enemies never crit; the
+player's critical against an elite is the player's damage × 1.5 — the rank adds or takes nothing.
+
+**Timing is not scaled.** Telegraph, active and recovery stay the archetype's — the readability of an
+attack is never shortened by a rank — and so do its reach, the distances it keeps, its hitbox and its
+facing rules. Only the gap between attacks (the cooldown) changes.
+
+### Resource safety
+
+Nothing shared is written. `EnemyData`, `AttackData`, `EnemySupportData` and the elite profile are only
+read; every effective value is a copy on the instance. A normal and an elite melee sharing one
+`EnemyData` have 100 and 160 HP, and the asset still says 100 (`elite_framework_test` RS1–RS4, IV2
+compare every shared value before and after the whole suite). A normal enemy is scaled by the neutral
+profile — × 1.0, exactly its data (RG1, all five archetypes). Nothing is global: the rank lives and
+dies with the instance, so a scene change, a second dungeon or a New Game starts from the data again
+(`m12_elite_run` O1, G2, NG1).
+
+### Archetype compatibility
+
+| Archetype | Normal -> elite (`elite_standard`) | What stays |
+| --- | --- | --- |
+| Melee | 100 -> 160 HP; 15 -> 18 a swing; 3.8 -> 3.99 m/s; stagger 25 -> 32.5 (Light 3 no longer staggers it, the heavy does); push ×1.0 -> ×0.7; cooldown 0.4 -> 0.34 s; 25 -> 50 XP | its chase, telegraph (0.35 s), active, recovery, reach, hitbox |
+| Ranged | 70 -> 112 HP; a bolt of 12 -> 14.4; cooldown 1.6 -> 1.36 s; stagger 25 -> 32.5; 25 -> 50 XP | its 4 / 7 / 10 m, retreat, line of sight, the projectile (scene, speed, lifetime) |
+| Tank | 260 -> 416 HP; stagger 45 -> 58.5 — still under the heavy's 60, so the heavy staggers it as ever; push ×0.35 -> ×0.245 (never 0); 2.4 -> 2.52 m/s; a 30 -> 36 swing; 50 -> 100 XP | its role and its 0.8 s telegraph; still far slower than an assassin |
+| Assassin | 60 -> 96 HP; 5.6 -> 5.88 m/s — under the player's 6; a 18 -> 21.6 strike; stagger 20 -> 26 (Light 3 still staggers it); 30 -> 60 XP | its approach, lunge, disengage (4.5 m) and re-engage |
+| Support | 65 -> 104 HP; a bolt of 8 -> 9.6; stagger 20 -> 26; 30 -> 60 XP | its heal and buff exactly as a normal support's |
+
+The speed multiplier is kept moderate on purpose: one profile scales every archetype, and 1.05 leaves
+the assassin slower than the player and the tank the slowest.
+
+### Support compatibility
+
+- **A support healing an elite** heals a share of the elite's **effective** maximum, through its
+  `HealthComponent` (whose maximum is the effective one): an elite tank at 40% of 416 is chosen over a
+  normal tank at 50% of 260 — the share, of the effective maximum — and healed for 104 (a quarter of 416),
+  clamped at 416, never at the base 260. Its bar is drawn on 416.
+- **An elite support's heal is not scaled**: its rank makes it a tougher, harder-hitting healer, not a
+  stronger heal — `damage_multiplier` never touches a heal, and there is no heal modifier (none was
+  needed). Its buff is a normal support's +20%.
+- **A buffed elite**: the buff multiplies the elite damage at attack time and ends back on it (18 ->
+  21.6 -> 18) — the elite's static value, not the base's, and nothing written.
+
+### Rewards and the shadow's share
+
+`get_xp_reward()` is the effective reward, and the reward flow is unchanged: `claim_xp()` hands it out
+once, `PlayerProgression` pays it — the player's kill all of it, a shadow's kill 70/30 **of the
+effective total**. An elite melee: 25 × 2 = 50 — the player's kill +50; the shadow's kill +35 shadow,
++15 player (not 70/30 of the base 25). Player and shadow striking together: one death, one reward, to
+the killing blow; a blow on the dead pays nothing.
+
+### Visual placeholder
+
+Until M14's UI, an elite is recognised by its health bar (`EnemyHealthBar3D`, which asks its combatant
+`is_elite()` once, as the UI does — gameplay never calls it): a gold **ELITE** tag above the bar, up
+while the elite lives even when the bar is hidden, and a gold frame round the bar. Neither touches the
+body — no scale change, so the collider, the navigation radius and the reach are the archetype's — and
+the tag stands about 1.5 m above the target lock's ring, so both read. It goes with the enemy. The
+enemy's debug label (`debug_state_label`, off by default) adds its rank and its base and effective
+health and damage.
+
+### Future affixes
+
+The profile is a resource the enemy reads once at spawn, and runtime modifiers (the buff) already sit
+after it without writing it; further profiles (offensive, defensive, fast) are new `.tres` files, and
+affixes could extend the same pipeline later. None is implemented.
 
 ## Content pipeline (M13+)
 

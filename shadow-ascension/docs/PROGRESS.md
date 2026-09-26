@@ -9,8 +9,8 @@
 **M12 — Enemy AI 2.0 & Boss Framework** (In progress)
 
 **M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0**, **M12.3 — Ranged
-Archetype 2.0**, **M12.4 — Tank Archetype 2.0**, **M12.5 — Assassin Archetype 2.0** and **M12.6 —
-Support Archetype 2.0** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
+Archetype 2.0**, **M12.4 — Tank Archetype 2.0**, **M12.5 — Assassin Archetype 2.0**, **M12.6 —
+Support Archetype 2.0** and **M12.7 — Elite Enemy Framework** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
 ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`), with one writer of its state and a table of legal
 transitions; its target has one owner, `EnemyTargeting`, choosing from the target groups its data
 names — the player's alone, as before. An archetype is an attack component and its data: the melee
@@ -23,11 +23,13 @@ backs out to a disengage ring while its attack cools down and comes back in — 
 of the shared code; the support (M12.6) keeps a ranged's distance and helps its allies — it finds
 them, heals the most hurt through their health, buffs a fighter's damage when nobody needs healing,
 and fires the ranged's bolt when there is nothing to do — through one optional part, `EnemySupport`,
-whose casts run as attacks. The boss keeps its own AI; the shipped dungeon still holds melee only.
-M12.7 is next; the elite archetype, the target choice between player and shadow, group combat and the
-Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee
-archetype (M12.2)*, *Ranged archetype (M12.3)*, *Tank archetype (M12.4)*, *Assassin archetype
-(M12.5)* and *Support archetype (M12.6)*; the deliverables are in `ROADMAP.md`.
+whose casts run as attacks. Any of the five can be made elite (M12.7) by one data profile set where
+it is placed — the same scene and AI, its numbers scaled once at spawn. The boss keeps its own AI; the
+shipped dungeon still holds normal melee only. M12.8 is next; the target choice between player and
+shadow, group combat and the Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`,
+*Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)*, *Tank archetype (M12.4)*,
+*Assassin archetype (M12.5)*, *Support archetype (M12.6)* and *Elite framework (M12.7)*; the
+deliverables are in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -45,7 +47,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.6 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.7 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -61,6 +63,54 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.7 — Elite Enemy Framework** (Completed). Where the numbers were configured first: max health,
+  movement speed, stagger resistance and knockback in `EnemyData`, copied by `BasicEnemy._apply_stats()`;
+  damage and cooldown in `EnemyData`, copied by `EnemyAttack.configure()`; the XP reward in `EnemyData`,
+  read by `get_xp_reward()` at death and paid by `PlayerProgression` (70/30 for a shadow's kill). No
+  spawner script — a room's enemies are scene instances with per-instance overrides. So the elite is one
+  more per-instance override and one step in the copying that already happens, no second source of
+  truth:
+  - **`EliteModifierData`** (`scripts/enemies/elite_modifier_data.gd`): seven multipliers — health,
+    move speed, damage, cooldown (below 1 is shorter), stagger resistance, knockback taken (below 1 is
+    pushed less), XP — and their getters, clamped to 0.1–10, with `is_valid()`; defaults 1.0, the
+    neutral profile. `resources/enemies/elite_standard.tres`: 1.6 / 1.05 / 1.2 / 0.85 / 1.3 / 0.7 / 2.0.
+  - **`BasicEnemy.elite_profile`** (per instance) — the rank: `get_rank()` (`Rank.NORMAL` / `ELITE`),
+    `is_elite()`, `get_rank_profile()` (the neutral one for a normal enemy). `_apply_stats()` copies
+    every effective value through it, before the health is filled; `EnemyAttack.configure(source,
+    rank)` its damage and cooldown; `get_xp_reward()` the effective reward. Nothing else in the AI
+    changed; timings, reach, distances, hitboxes and a support's heal and buff are never scaled.
+  - **Visual placeholder**: `EnemyHealthBar3D` asks its combatant `is_elite()` and shows a gold ELITE
+    tag above the bar — up while the elite lives, even with the bar hidden — and a gold frame round it.
+    The enemy's debug label (off by default) adds its rank and base / effective health and damage.
+
+  **`tests/enemies/elite_framework_test`** (43) — the profile (its values; multipliers only; neutral by
+  default); a normal and an elite melee on one `EnemyData`: the same assets, scene and script, 100 / 160
+  HP, the base untouched; the elite's health filled to 160 and its bar on 160; the tag and frame, gone
+  at death; the melee's swing 15 / 18 with the same telegraph, active and recovery, its cooldown 0.4 /
+  0.34 s, its speed 3.8 / 3.99, the light combo (Light 3 staggers only the normal) and the heavy (both
+  staggered, pushed 8.0 / 5.6); the ranged's bolt 12 / 14.4 with the same projectile and a 1.6 / 1.36 s
+  cooldown; the elite tank (416 HP, stagger 58.5 — the heavy still staggers it — a 36 swing); the
+  elite assassin (96 HP, 5.88 m/s, a 21.6 strike, the same disengage); the elite support (104 HP, a 9.6
+  bolt, its heal unscaled); a support healing an elite tank on its effective maximum (104, clamped at
+  416); a buffed elite (18 -> 21.6 -> 18); a critical Light 1 (30), hit stop and shake; a swing dodged
+  through; XP 50 once, the shadow's kill 35 / 15, a player-and-shadow race paying once; three elites
+  sharing one profile; the lock and switching; an invalid profile clamped; the five normal archetypes
+  exactly their data; normal and elite together with the support and the player's whole kit; twenty
+  at once; every shared value compared before and after. **`tests/core/m12_elite_run.gd`** (16) — the
+  real game: the shipped melee normal at their base, an elite beside them (18 against 15), the room
+  clearing, the elite locked and killed (50 XP once), a support healing an elite tank for 104, the
+  shadow's kill of an elite (35 / 15), the boss untouched, leaving with elites alive (nothing survives),
+  a second dungeon normal and a fresh elite, no listener doubled, a New Game with nothing carried over.
+
+  **2354 assertions across 67 suites, zero failures, zero runtime errors, zero
+  exit-time leaks** (`tests/run_all.gd`). The 65 existing suites keep M12.6's 2295; the two new ones add
+  59. Zero parser warnings in the changed scripts and the new tests; cold-cache reimport, headless boot
+  and a headless run of the game are clean.
+
+  Left for M12.8 and later: elites placed in the dungeon (content, M18); more profiles (offensive,
+  defensive, fast) as data when needed; affixes on the same pipeline; a body tint or model for elites
+  (M13–M14); the target choice between player and shadow; group combat; the Boss Framework.
 
 - **M12.6 — Support Archetype 2.0** (Completed). What was there first, and asked: an enemy's health is
   its `HealthComponent` (`current_health` / `max_health`, `health_changed`, `died`, and a `heal()` that
@@ -2136,7 +2186,7 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 ## In Progress
 
 Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 to
-M12.6 are done, M12.7 is next.
+M12.7 are done, M12.8 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —

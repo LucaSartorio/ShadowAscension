@@ -10,9 +10,15 @@ extends Node3D
 ##
 ## The boss deliberately does not use this. It has its own dedicated bar, and a
 ## second world-space one would only compete with it.
+##
+## An elite (M12.7) — asked once, of the combatant, through `is_elite()` — gets a
+## gold frame round its bar and an ELITE tag above it. The tag stays up while the
+## elite lives, even when the bar is out of the way. PLACEHOLDER until M14's UI.
 
 ## Above this fraction, and out of combat, the bar stays out of the way.
 const FULL_EPSILON: float = 0.001
+## PLACEHOLDER: an elite's frame, the colour of its tag.
+const ELITE_FRAME_COLOR: Color = Color(0.95, 0.72, 0.15)
 
 @export var health_component: HealthComponent
 ## Anything that reports whether it is fighting, via `engagement_changed`.
@@ -28,10 +34,12 @@ const FULL_EPSILON: float = 0.001
 @onready var fill_pivot: Node3D = $Pivot/FillPivot
 @onready var fill: MeshInstance3D = $Pivot/FillPivot/Fill
 @onready var label: Label3D = $Pivot/Label
+@onready var elite_tag: Label3D = $EliteTag
 
 var _ratio: float = 1.0
 var _engaged: bool = false
 var _dead: bool = false
+var _elite: bool = false
 var _fill_material: StandardMaterial3D = null
 var _fade_tween: Tween = null
 var _camera: Camera3D = null
@@ -53,6 +61,8 @@ func _ready() -> void:
 			else health_component.current_health / health_component.max_health
 	if combatant != null and combatant.has_signal("engagement_changed"):
 		combatant.engagement_changed.connect(_on_engagement_changed)
+	_elite = combatant != null and combatant.has_method("is_elite") and bool(combatant.call("is_elite"))
+	_show_rank()
 	_redraw()
 	_apply_visibility(true)
 
@@ -63,6 +73,10 @@ func is_bar_visible() -> bool:
 
 func get_ratio() -> float:
 	return _ratio
+
+
+func is_elite_tag_visible() -> bool:
+	return elite_tag.visible
 
 
 # --- data ------------------------------------------------------------------------
@@ -82,7 +96,18 @@ func _on_engagement_changed(engaged: bool) -> void:
 
 func _on_died() -> void:
 	_dead = true
+	elite_tag.visible = false
 	_apply_visibility(true)
+
+
+func _show_rank() -> void:
+	elite_tag.visible = _elite and not _dead
+	if not _elite:
+		return
+	elite_tag.modulate = ELITE_FRAME_COLOR
+	var frame: StandardMaterial3D = background.get_surface_override_material(0) as StandardMaterial3D
+	if frame != null:
+		frame.albedo_color = ELITE_FRAME_COLOR
 
 
 func _redraw() -> void:

@@ -13,6 +13,9 @@ extends RoomCombatant
 ##
 ##     Data        EnemyData (`stats`): the archetype's numbers, copied into the
 ##                 runtime fields below once; the asset is never written.
+##     Rank        `elite_profile` (M12.7): null for a normal enemy; an elite's
+##                 EliteModifierData scales those numbers as they are copied —
+##                 the same scene, script and AI, other values.
 ##     AI state    this script's state machine: `_state`, changed only through
 ##                 _change_state(), each state with its enter / update / exit.
 ##     Target      EnemyTargeting (child node): whom it fights, and when that ends.
@@ -64,6 +67,9 @@ signal state_changed(from: State, to: State)
 ## REPOSITION is the chase's own manoeuvre (M5): the state machine keeps it
 ## because the behaviour needs it.
 enum State { IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD }
+## What it is, as far as danger goes (M12.7): read from `elite_profile`, never
+## stored beside it. No rarity ladder: normal, or elite.
+enum Rank { NORMAL, ELITE }
 
 ## The legal transitions, from each state. Anything missing is refused.
 const TRANSITIONS: Dictionary = {
@@ -105,6 +111,10 @@ const DEBUG_LABEL_HEIGHT: float = 2.4
 ## Deterministic per-instance desync so a group does not swing in unison.
 @export var initial_attack_delay: float = 0.0
 @export var attack_cooldown_variation: float = 0.0
+## Makes this enemy an elite (M12.7): its archetype's numbers scaled by this
+## profile as they are copied — set by whatever places it, like the fields above.
+## Null: a normal enemy. Shared by every elite that uses it; never written.
+@export var elite_profile: EliteModifierData = null
 
 @export_group("DEBUG")
 ## DEBUG ONLY. Off by default. Prints every hit this enemy survives: its stagger
@@ -114,8 +124,9 @@ const DEBUG_LABEL_HEIGHT: float = 2.4
 ## refused — with the target and its distance, and every change of target.
 @export var debug_log_ai: bool = false
 ## DEBUG ONLY. Off by default. A label over the enemy: its state and attack phase
-## (TELEGRAPH, ACTIVE, RECOVERY), its target and the distance to it, and whether
-## its navigation has somewhere to go.
+## (TELEGRAPH, ACTIVE, RECOVERY), its target and the distance to it, whether
+## its navigation has somewhere to go, and for an elite its base and effective
+## health and damage.
 @export var debug_state_label: bool = false
 
 # RUNTIME tuning: this instance's own values, seeded from `stats` in
@@ -207,6 +218,9 @@ var _in_sight: bool = false
 var _sight_age: float = INF
 
 var _debug_label: Label3D = null
+## The neutral profile a normal enemy is scaled by — every multiplier 1.0 — made
+## the first time it is needed; an elite uses its own.
+var _neutral_rank: EliteModifierData = null
 
 
 func _ready() -> void:
@@ -227,22 +241,50 @@ func _ready() -> void:
 
 
 ## Answered from the stats asset rather than copied into the inherited field on
-## _ready(), so initialisation order never decides what a kill is worth.
+## _ready(), so initialisation order never decides what a kill is worth — an
+## elite's through its profile (M12.7), the total PlayerProgression then pays
+## once and splits for a shadow's kill.
 func get_xp_reward() -> int:
-	return stats.xp_reward if stats != null else xp_reward
+	return get_rank_profile().effective_xp_reward(stats.xp_reward) if stats != null else xp_reward
+
+
+func get_rank() -> Rank:
+	return Rank.ELITE if elite_profile != null else Rank.NORMAL
+
+
+func is_elite() -> bool:
+	return elite_profile != null
+
+
+## The profile its numbers are scaled by: its elite profile, or the neutral one.
+func get_rank_profile() -> EliteModifierData:
+	if elite_profile != null:
+		return elite_profile
+	if _neutral_rank == null:
+		_neutral_rank = EliteModifierData.new()
+	return _neutral_rank
 
 
 ## Seeds this instance from its archetype. With no asset assigned it falls back
 ## to EnemyData's own defaults — the template a new asset starts from — so even
 ## the fallback keeps no copy of the numbers in this script.
+##
+## The rank (M12.7) is applied here, before anything is built on these values:
+## base (EnemyData) -> its profile -> the runtime copy — max health (then filled
+## to it by _ready()), speed, stagger resistance, knockback, and through the
+## attack its damage and cooldown. Once, for its whole life: nothing here is
+## recomputed per frame, and the shared assets are only read.
 func _apply_stats() -> void:
 	var source: EnemyData = stats
 	if source == null:
 		push_warning("%s has no EnemyData assigned; falling back to EnemyData's defaults." % name)
 		source = EnemyData.new()
-	max_health = source.max_health
+	var rank: EliteModifierData = get_rank_profile()
+	if not rank.is_valid():
+		push_warning("%s: its elite profile has a multiplier that is not a positive number; it is clamped." % name)
+	max_health = rank.effective_max_health(source.max_health)
 
-	movement_speed = source.movement_speed
+	movement_speed = rank.effective_movement_speed(source.movement_speed)
 	acceleration = source.acceleration
 	rotation_speed = source.rotation_speed
 	gravity = source.gravity
@@ -263,14 +305,16 @@ func _apply_stats() -> void:
 	disengage_distance = source.disengage_distance
 
 	max_attack_facing_angle = source.max_attack_facing_angle
-	attack.configure(source)
+	attack.configure(source, rank)
+	# A support's heal and buff are not scaled by its rank: an elite support is a
+	# tougher, harder-hitting healer, not a stronger heal.
 	if support != null:
 		support.configure(source)
 
-	stagger_resistance = source.stagger_resistance
+	stagger_resistance = rank.effective_stagger_resistance(source.stagger_resistance)
 	stagger_duration = source.stagger_duration
 	stagger_immunity_time = source.stagger_immunity_time
-	knockback_multiplier = source.knockback_multiplier
+	knockback_multiplier = rank.effective_knockback_multiplier(source.knockback_multiplier)
 	knockback_deceleration = source.knockback_deceleration
 
 	reposition_timeout = source.reposition_timeout
@@ -1071,3 +1115,6 @@ func _process(_delta: float) -> void:
 	_debug_label.text = "%s%s\n%s %s" % [State.keys()[_state],
 		" (%s)" % EnemyAttack.Phase.keys()[phase] if phase != EnemyAttack.Phase.NONE else "",
 		"%s %.1fm" % [target.name, targeting.get_distance()] if target != null else "no target", navigation]
+	if is_elite() and stats != null:
+		_debug_label.text += "\nELITE  HP %.0f -> %.0f  damage %.1f -> %.1f" % [
+			stats.max_health, max_health, stats.attack_damage, attack.attack_damage]

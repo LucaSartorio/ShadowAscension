@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M11 complete; M12 in progress (M12.1–M12.6 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M11 complete; M12 in progress (M12.1–M12.7 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -47,15 +47,19 @@ distance and helps its allies through one optional part, `EnemySupport` (`EnemyD
 `EnemySupportData`) — the support target, apart from the hostile target; allies found by a physics
 query every 0.5 s; the most hurt by share of health healed through `HealthComponent.heal()`; a damage
 buff that lives on the ally's `EnemyAttack` (one slot, never stacked) — its casts running as attacks
-(`EnemySupportAttack`), its fallback the ranged's bolt.
+(`EnemySupportAttack`), its fallback the ranged's bolt. Since M12.7 any of them can be elite by data
+alone: `BasicEnemy.elite_profile` (an `EliteModifierData`, set per instance where the enemy is placed;
+null is normal) scales the archetype's numbers once, at spawn, into the instance's runtime copies —
+health, speed, damage, cooldown, stagger resistance, knockback taken, XP — never the shared assets, never
+the attack timings; a gold ELITE tag on its health bar.
 Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.7 (M12.1–M12.6 are complete). See
+Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.8 (M12.1–M12.7 are complete). See
 `shadow-ascension/docs/ROADMAP.md` for the M12–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today, and
 *Enemy AI (M12.1)* for the enemy AI foundation, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)*,
 *Tank archetype (M12.4)*, *Assassin archetype (M12.5)* and *Support archetype (M12.6)* for the
-archetypes.
+archetypes, and *Elite framework (M12.7)* for elites.
 
 ---
 

@@ -1,0 +1,86 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://tests/enemies/elite_framework_test.gd" id="1_test"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
+
+[sub_resource type="Environment" id="env_1"]
+background_mode = 1
+background_color = Color(0.2, 0.2, 0.25, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.7, 0.7, 0.7, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="NavigationMesh" id="navmesh_1"]
+cell_size = 0.25
+cell_height = 0.25
+agent_radius = 0.5
+agent_height = 2.0
+agent_max_climb = 0.5
+agent_max_slope = 45.0
+geometry_parsed_geometry_type = 1
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(80, 1, 80)
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+size = Vector3(80, 1, 80)
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.3, 0.3, 0.32, 1)
+
+[sub_resource type="BoxShape3D" id="screen_shape"]
+size = Vector3(6, 3, 0.6)
+
+[sub_resource type="BoxMesh" id="screen_mesh"]
+size = Vector3(6, 3, 0.6)
+
+[sub_resource type="BoxShape3D" id="back_shape"]
+size = Vector3(80, 3, 1)
+
+[sub_resource type="BoxMesh" id="back_mesh"]
+size = Vector3(80, 3, 1)
+
+[sub_resource type="StandardMaterial3D" id="wall_mat"]
+albedo_color = Color(0.55, 0.4, 0.3, 1)
+
+[node name="EliteFrameworkTest" type="Node3D"]
+script = ExtResource("1_test")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env_1")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh_1")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Floor"]
+mesh = SubResource("floor_mesh")
+surface_material_override/0 = SubResource("floor_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Floor"]
+shape = SubResource("floor_shape")
+
+[node name="ScreenWall" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 1.5, -5)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/ScreenWall"]
+mesh = SubResource("screen_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/ScreenWall"]
+shape = SubResource("screen_shape")
+
+[node name="BackWall" type="StaticBody3D" parent="NavigationRegion3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -30)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/BackWall"]
+mesh = SubResource("back_mesh")
+surface_material_override/0 = SubResource("wall_mat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/BackWall"]
+shape = SubResource("back_shape")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)

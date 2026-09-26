@@ -19,8 +19,9 @@ M11.8 (target lock) and M11.9 (combat feedback — hit stop, camera shake — an
 **M12 — Enemy AI 2.0 & Boss Framework** is in progress: M12.1 (the enemy AI foundation — a state
 machine and a target owner), M12.2 (the melee archetype — a telegraphed swing as data), M12.3 (the
 ranged archetype — distance kept, a telegraphed projectile), M12.4 (the tank archetype — a heavy melee,
-from data alone), M12.5 (the assassin archetype — strike, disengage, re-engage) and M12.6 (the support
-archetype — heals and buffs its allies, fights when idle) are done; the phase
+from data alone), M12.5 (the assassin archetype — strike, disengage, re-engage), M12.6 (the support
+archetype — heals and buffs its allies, fights when idle) and M12.7 (the elite framework — any
+archetype made elite by a data profile) are done; the phase
 runs to Alpha 1 at M20.
 
 ```
