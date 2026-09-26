@@ -10,6 +10,7 @@ const ROOM1_TRIGGER: Vector3 = Vector3(0, 0.1, -13)
 const ROOM2_TRIGGER: Vector3 = Vector3(0, 0.1, -33)
 const BOSS_TRIGGER: Vector3 = Vector3(0, 0.1, -53)
 
+## Indices into the boss's attacks, in the order its phases first list them.
 const QUICK: int = 0
 const SWEEP: int = 1
 const SLAM: int = 2
@@ -82,6 +83,19 @@ func _place_player(distance: float) -> void:
 	await get_tree().physics_frame
 
 
+func _attack(index: int) -> BossAttack:
+	return _boss.get_attacks()[index]
+
+
+## Makes `index` the only attack the boss can choose, and sends it to decide.
+func _only(index: int) -> void:
+	var all: Array[BossAttack] = _boss.get_attacks()
+	_boss.combat.clear_cooldowns()
+	for i in all.size():
+		_boss.combat.set_cooldown(all[i], 0.0 if i == index else 99.0)
+	_boss._change_state(DungeonBoss.State.DECIDE)
+
+
 ## Makes `index` the only attack the decision layer can choose, then waits for it
 ## to land. Returns the damage the player took.
 func _force_attack(index: int, distance: float, timeout: float = 4.0) -> float:
@@ -89,11 +103,7 @@ func _force_attack(index: int, distance: float, timeout: float = 4.0) -> float:
 	_player.health_component.is_dead = false
 	_player.hurtbox.set_invulnerable(false)
 	await _place_player(distance)
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0 if i == index else 99.0
-	_boss._last_attack = -1
-	_boss._consecutive = 0
-	_boss._state = DungeonBoss.State.DECIDE
+	_only(index)
 
 	var hp_before: float = _player.health_component.current_health
 	var elapsed: float = 0.0
@@ -106,11 +116,8 @@ func _force_attack(index: int, distance: float, timeout: float = 4.0) -> float:
 
 
 func _reset_boss_to_decide() -> void:
-	_boss._state = DungeonBoss.State.DECIDE
-	_boss._attack_phase = DungeonBoss.AttackPhase.NONE
-	_boss._active_attack = -1
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0
+	_boss.combat.clear_cooldowns()
+	_boss._change_state(DungeonBoss.State.DECIDE)
 
 
 # --- activation ---------------------------------------------------------------
@@ -204,7 +211,7 @@ func _attack_tests() -> void:
 	var names: Array[String] = []
 	var gated: bool = true
 	for i in 3:
-		var hitbox: Hitbox = _boss._hitboxes[i]
+		var hitbox: Hitbox = _boss.combat.get_hitbox(_attack(i))
 		names.append(hitbox.name)
 		if hitbox.is_active():
 			gated = false
@@ -227,13 +234,9 @@ func _commitment_tests() -> void:
 	var shapes: Array[String] = []
 	for index in [QUICK, SWEEP, SLAM]:
 		await _place_player(2.0)
-		for i in _boss.attacks.size():
-			_boss._cooldowns[i] = 0.0 if i == index else 99.0
-		_boss._last_attack = -1
-		_boss._consecutive = 0
-		_boss._state = DungeonBoss.State.DECIDE
+		_only(index)
 		_player.hurtbox.set_invulnerable(true)
-		await _wait(_boss.attacks[index].startup * 0.8)
+		await _wait(_attack(index).attack.windup * 0.8)
 		# Compare each channel against its own target magnitude and take the
 		# dominant one, instead of trusting a fixed check order.
 		var m: Node3D = _boss.mesh_root
@@ -251,7 +254,7 @@ func _commitment_tests() -> void:
 			shapes.append("compress")
 		await _wait(1.8)
 		# settle the body so the next sample reads a clean wind-up, not a reset
-		_boss._reset_telegraph_instantly()
+		_boss.combat.settle_look(true)
 		await get_tree().physics_frame
 	var distinct: bool = shapes.size() == 3 and shapes[0] != shapes[1] and shapes[1] != shapes[2] and shapes[0] != shapes[2]
 	_record(distinct and not shapes.has("none"),
@@ -259,16 +262,13 @@ func _commitment_tests() -> void:
 
 	# 18) ACTIVE does not track
 	await _place_player(2.0)
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0 if i == SLAM else 99.0
-	_boss._last_attack = -1
-	_boss._state = DungeonBoss.State.DECIDE
+	_only(SLAM)
 	var locked: bool = false
 	var elapsed: float = 0.0
 	while elapsed < 3.0:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE:
+		if _boss.get_attack_phase() == BossCombat.Phase.ACTIVE:
 			var yaw_before: float = _boss.visual_root.rotation.y
 			_player.global_position = _boss.global_position + Vector3(2.0, 0, 0)
 			await get_tree().physics_frame
@@ -282,10 +282,7 @@ func _commitment_tests() -> void:
 	# 19) the player can make an attack miss by leaving during the wind-up
 	_player.health_component.current_health = _player.health_component.max_health
 	await _place_player(2.0)
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0 if i == QUICK else 99.0
-	_boss._last_attack = -1
-	_boss._state = DungeonBoss.State.DECIDE
+	_only(QUICK)
 	var hp: float = _player.health_component.current_health
 	await _wait(0.12)
 	_player.global_position = _boss.global_position + Vector3(0, 0, 9.0)
@@ -296,10 +293,7 @@ func _commitment_tests() -> void:
 	# 20/21) dodge and i-frames still gate boss damage with no boss-side logic
 	_player.health_component.current_health = _player.health_component.max_health
 	await _place_player(2.5)
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0 if i == SLAM else 99.0
-	_boss._last_attack = -1
-	_boss._state = DungeonBoss.State.DECIDE
+	_only(SLAM)
 	var saved_speed: float = _player.dodge_speed
 	_player.dodge_speed = 0.0  # isolate the i-frame window from displacement
 	var dodged: bool = false
@@ -308,12 +302,12 @@ func _commitment_tests() -> void:
 	while elapsed < 3.0:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and not dodged:
-			if _boss._phase_timer <= 0.1:
+		if _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and not dodged:
+			if _boss.combat.get_phase_remaining() <= 0.1:
 				_player.combat._dodge_cooldown_remaining = 0.0
 				_player._on_dodge_pressed()
 				dodged = true
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.NONE and dodged:
+		if _boss.get_attack_phase() == BossCombat.Phase.NONE and dodged:
 			break
 	_player.dodge_speed = saved_speed
 	_record(dodged and _player.hurtbox != null and _player.health_component.current_health == iframe_hp,
@@ -334,11 +328,12 @@ func _decision_tests() -> void:
 	var sequence: Array[int] = []
 	var elapsed: float = 0.0
 	var last_seen: int = -1
+	var all: Array[BossAttack] = _boss.get_attacks()
 	while elapsed < 22.0:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
 		_player.global_position = _boss.global_position + Vector3(0, 0, -2.0)
-		var active: int = _boss.get_active_attack_index()
+		var active: int = all.find(_boss.get_current_attack())
 		if active >= 0 and active != last_seen:
 			sequence.append(active)
 			last_seen = active
@@ -355,45 +350,43 @@ func _decision_tests() -> void:
 	var used: Dictionary = {}
 	for a in sequence:
 		used[a] = true
-	_record(sequence.size() >= 6 and max_run <= _boss.max_consecutive_repeats,
+	_record(sequence.size() >= 6 and max_run <= _boss.data.max_consecutive_repeats,
 		"22) no attack repeats more than %d in a row (longest run=%d over %d attacks)" % [
-			_boss.max_consecutive_repeats, max_run, sequence.size()])
+			_boss.data.max_consecutive_repeats, max_run, sequence.size()])
 	_record(used.size() == 3, "22b) all three attacks appear in a free fight (%d distinct, %s)" % [
 		used.size(), str(sequence)])
 
 	# 23) individual cooldowns: using one must not arm the others
 	_reset_boss_to_decide()
 	await _place_player(2.0)
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0 if i == QUICK else 99.0
-	_boss._last_attack = -1
-	_boss._state = DungeonBoss.State.DECIDE
+	_only(QUICK)
 	var saw_attack: bool = false
 	elapsed = 0.0
 	while elapsed < 3.0:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
-		if _boss.get_active_attack_index() == QUICK:
+		if _boss.get_current_attack() == _attack(QUICK):
 			saw_attack = true
 			break
 	await _wait(0.1)
-	var quick_cd: float = _boss.get_attack_cooldown(QUICK)
-	_record(saw_attack and is_equal_approx(_boss.attacks[QUICK].cooldown, 1.0) and quick_cd > 0.0,
+	var quick_cd: float = _boss.combat.get_cooldown(_attack(QUICK))
+	_record(saw_attack and is_equal_approx(_attack(QUICK).cooldown, 1.0) and quick_cd > 0.0,
 		"23) using an attack starts its own cooldown (quick=%.2f of %.1f)" % [
-			quick_cd, _boss.attacks[QUICK].cooldown])
+			quick_cd, _attack(QUICK).cooldown])
 	await _wait(1.2)
-	_record(_boss.get_attack_cooldown(QUICK) == 0.0 and _boss.get_attack_cooldown(SLAM) > 0.0,
+	_record(_boss.combat.get_cooldown(_attack(QUICK)) == 0.0 and _boss.combat.get_cooldown(_attack(SLAM)) > 0.0,
 		"23b) cooldowns are per attack, not shared (quick=%.2f slam=%.2f)" % [
-			_boss.get_attack_cooldown(QUICK), _boss.get_attack_cooldown(SLAM)])
+			_boss.combat.get_cooldown(_attack(QUICK)), _boss.combat.get_cooldown(_attack(SLAM))])
 
 
 # --- taking damage ---------------------------------------------------------------
 
 func _receiving_damage_tests() -> void:
+	# Hold it still while the player swings: a test-only hold, past the machine.
+	_boss.combat.interrupt()
 	_boss._state = DungeonBoss.State.INTRO
-	_boss._intro_timer = 99.0  # hold it still while the player swings
+	_boss._intro_timer = 99.0
 	_boss.health_component.current_health = _boss.health_component.max_health
-	_boss._last_health = _boss.health_component.max_health
 	await _wait(0.2)
 
 	# 24/25) a player swing lands exactly once, for its own damage
@@ -416,7 +409,7 @@ func _receiving_damage_tests() -> void:
 	var boss_pos: Vector3 = _boss.global_position
 	_boss.hurtbox.receive_hit(DamageInfo.new(25.0, null))
 	await get_tree().physics_frame
-	var feedback: bool = _boss._feedback_tween != null and _boss._feedback_tween.is_running()
+	var feedback: bool = _boss.is_flashing()
 	await _wait(0.3)
 	_record(feedback and _boss.global_position.distance_to(boss_pos) < 0.05,
 		"26) hit feedback plays with no positional recoil (tween=%s)" % feedback)
@@ -448,7 +441,7 @@ func _death_tests() -> void:
 	_record(_boss.global_position.distance_to(pos) < 0.05 and _boss.velocity == Vector3.ZERO,
 		"29) a dead boss does not move (drift=%.3f)" % _boss.global_position.distance_to(pos))
 	var any_live: bool = false
-	for hitbox in _boss._hitboxes:
+	for hitbox in _boss.combat.get_hitboxes():
 		if hitbox != null and hitbox.is_active():
 			any_live = true
 	_record(not any_live and _player.health_component.current_health == player_hp,

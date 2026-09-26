@@ -970,7 +970,7 @@ func _on_damaged(hit: DamageInfo) -> void:
 ## One hit, judged alone: strong enough, and not inside a stagger or the
 ## immunity after one.
 func _staggers(hit: DamageInfo) -> bool:
-	if hit.stagger_power <= 0.0 or hit.stagger_power < stagger_resistance:
+	if not HitReaction.breaks_through(hit, stagger_resistance):
 		return false
 	return _state != State.STAGGERED and _stagger_immunity_timer <= 0.0
 
@@ -984,10 +984,10 @@ func _enter_stagger(hit: DamageInfo) -> void:
 ## A push replaces any push still dying out rather than adding to it, so a
 ## flurry of hits never builds into a launch.
 func _apply_knockback(hit: DamageInfo) -> void:
-	var speed: float = hit.knockback_force * knockback_multiplier
-	if speed <= 0.0 or hit.direction == Vector3.ZERO:
+	var push: Vector3 = HitReaction.push_velocity(hit, knockback_multiplier)
+	if push == Vector3.ZERO:
 		return
-	_knockback_velocity = Vector3(hit.direction.x, 0.0, hit.direction.z).normalized() * speed
+	_knockback_velocity = push
 	_desired_horizontal = Vector3.ZERO
 
 

@@ -358,7 +358,7 @@ helpless. Hits also **push** it straight away from whoever struck, and walls and
 push. The light combo builds up to its finisher: Light 1 and Light 2 only flinch a basic enemy and
 barely nudge it, keeping it in reach; Light 3 staggers it and knocks it back a step; the heavy
 staggers it and throws it back about a metre. A killing blow simply kills — no stagger, no push. The
-boss takes damage and flashes, but it is never staggered and never pushed. The shadow's hits make
+boss takes damage and flashes, but it is never staggered and never pushed (until M12.8, below). The shadow's hits make
 their target flinch, nothing more. The player is not staggered or pushed by enemies yet.
 
 **M11.7 added critical hits.** Any hit of the player's has a **10%** chance to be critical and deal
@@ -460,6 +460,22 @@ shadow lands the kill). A light combo's third hit no longer staggers an elite me
 still staggers every elite, the tank included. A support heals an elite ally by a quarter of the elite's
 own, larger health. An elite is marked by a gold **ELITE** tag over its health bar and a gold frame
 round the bar. None appear in the dungeon yet; choosing where they stand is dungeon content.
+
+**M12.8 rebuilt the boss on a framework of its own, without changing its fight.** The boss still wakes
+when the player walks into its room — a short swell, its health bar at the top with its name and
+**FASE 1** — and fights with the same three attacks, each announced by its own wind-up: Quick Strike
+(**20**, a forward lean), Wide Sweep (**30**, a spin), Ground Slam (**40**, a crouch, all round it). It
+never uses the same attack more than twice in a row, and each attack has its own cooldown. At **half
+health** it enters its second phase: whatever it was doing is cut off at once — a blow already falling
+does not land — and for **1.5 s** it pulses and turns a darker red, neither moving nor attacking, while
+the bar calls **FASE 2**; the player can keep hitting it through the beat. Then it is quicker: every
+wind-up, recovery and cooldown a fifth shorter, a little faster on its feet, and a fourth attack,
+Double Strike (**18** twice, a recoil before it). The phase never goes back, whatever happens to its
+health; a blow that kills it through the threshold simply kills it. It is now **hard to stagger but not
+immune**: light attacks, the combo's third included, never interrupt it, but the **heavy** does — it
+cancels the attack under way and holds the boss for **0.5 s**, after which the boss cannot be staggered
+again for **5 s**. Pushes barely move it: a heavy shifts it about a centimetre. It still fights the
+player, not the shadow, which can hit it and even land the killing blow (the XP split 70/30 as usual).
 
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,

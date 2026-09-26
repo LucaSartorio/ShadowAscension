@@ -19,7 +19,7 @@ const PARKING: Vector3 = Vector3(40, 0.1, 40)
 const STRIKE_RANGE: float = 1.6
 
 var _enemy_data: EnemyData = preload("res://resources/enemies/basic_melee_enemy.tres")
-var _boss_stats: BossStats = preload("res://resources/enemies/bosses/dungeon_boss_stats.tres")
+var _boss_data: BossData = preload("res://resources/enemies/bosses/dungeon_boss_data.tres")
 var _progression: ProgressionStats = preload("res://resources/characters/player_progression.tres")
 var _shadow_data: ShadowData = preload("res://resources/shadows/basic_melee_shadow.tres")
 var _pass: int = 0
@@ -59,8 +59,8 @@ func _phase_assets() -> void:
 			and is_equal_approx(_enemy_data.detection_range, 10.0)
 			and is_equal_approx(_enemy_data.attack_range, 1.8),
 		"3) moving at 3.8, seeing 10 m, striking at 1.8 m")
-	_record(is_equal_approx(_boss_stats.max_health, 900.0) and _boss_stats.xp_reward == 200
-			and is_equal_approx(_boss_stats.phase_2_health_fraction, 0.5),
+	_record(is_equal_approx(_boss_data.max_health, 900.0) and _boss_data.xp_reward == 200
+			and _boss_data.phases.size() == 2 and is_equal_approx(_boss_data.phases[1].health_threshold, 0.5),
 		"4) the boss: 900 HP, 200 XP, phase 2 at half health")
 	_record(_progression.starting_level == 1 and _progression.strength == 10
 			and _progression.stat_points_per_level == 5 and _progression.max_level == 100
@@ -114,7 +114,7 @@ func _phase_enemies_share_configuration_only() -> void:
 	a.attack.attack_damage = damage
 
 
-# --- 15-17. the boss is seeded from BossStats, not from its scene ------------------------
+# --- 15-17. the boss is seeded from BossData, not from its scene ------------------------
 
 func _phase_boss() -> void:
 	var dungeon: DungeonController = current_scene as DungeonController
@@ -123,14 +123,14 @@ func _phase_boss() -> void:
 			and is_equal_approx(boss.health_component.max_health, 900.0)
 			and is_equal_approx(boss.health_component.current_health, 900.0),
 		"15) the boss starts at 900 / 900 — its scene no longer carries a stale 600")
-	_record(boss.get_xp_reward() == _boss_stats.xp_reward,
-		"16) and is worth the asset's %d XP" % _boss_stats.xp_reward)
+	_record(boss.get_xp_reward() == _boss_data.xp_reward,
+		"16) and is worth the asset's %d XP" % _boss_data.xp_reward)
 	boss.health_component.take_damage(DamageInfo.new(50.0))
 	await _pause(0.1)
 	_record(is_equal_approx(boss.health_component.current_health, 850.0)
-			and is_equal_approx(_boss_stats.max_health, 900.0),
+			and is_equal_approx(_boss_data.max_health, 900.0),
 		"17) a wound lowers the boss's health, never the asset's (%.0f, asset %.0f)" % [
-			boss.health_component.current_health, _boss_stats.max_health])
+			boss.health_component.current_health, _boss_data.max_health])
 
 
 # --- 18-20. the player's progression reads its curve from ProgressionStats ----------------

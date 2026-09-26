@@ -102,15 +102,15 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 
 	_record(boss != null and bar.is_showing() and boss.combat_enabled,
 		"F%d) the encounter starts: boss awake, health bar up" % n)
-	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_1
-			and bar.get_phase_text() == bar.phase_1_text,
+	_record(boss.get_phase_index() == 0
+			and bar.get_phase_text() == bar.phase_text_format % 1,
 		"F%d) it opens in phase 1, UI reads '%s'" % [n, bar.get_phase_text()])
 	_record(objective.get_objective() == "Sconfiggi il Boss",
 		"F%d) objective reads '%s'" % [n, objective.get_objective()])
 	_record(dungeon.get_rooms()[2].exit_door.is_locked(),
 		"F%d) the arena is sealed" % n)
 
-	var phases: Array[int] = [boss.get_phase()]
+	var phases: Array[String] = [_phase_label(boss)]
 	var attacks_used: Dictionary = {}
 	var telegraphs: Dictionary = {}
 	var locked_during_active: bool = true
@@ -134,14 +134,14 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 			break
 
 		# Track what the boss is doing, frame by frame.
-		if boss.get_phase() != phases[phases.size() - 1]:
-			phases.append(boss.get_phase())
-		var index: int = boss.get_active_attack_index()
-		var active: bool = index >= 0 and boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE
-		if index >= 0:
-			attacks_used[boss.attacks[index].attack_name] = true
-		if boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and index >= 0:
-			_track_telegraph_peak(telegraphs, boss.attacks[index].attack_name, boss)
+		if _phase_label(boss) != phases[phases.size() - 1]:
+			phases.append(_phase_label(boss))
+		var attack: BossAttack = boss.get_current_attack()
+		var active: bool = attack != null and boss.get_attack_phase() == BossCombat.Phase.ACTIVE
+		if attack != null:
+			attacks_used[attack.get_id()] = true
+		if boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and attack != null:
+			_track_telegraph_peak(telegraphs, String(attack.get_id()), boss)
 		if active and not was_active:
 			yaw_at_active = boss.visual_root.rotation.y
 		elif active and absf(wrapf(boss.visual_root.rotation.y - yaw_at_active, -PI, PI)) > 0.02:
@@ -153,7 +153,7 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 		# The player keeps swinging, unless this run is the one that dies. The
 		# swing is fired and the loop goes straight on: pausing here would skip
 		# whole wind-ups, and Double Strike's is only 0.22s long.
-		var stop_swinging: bool = die_in_phase_2 and boss.get_phase() == DungeonBoss.BossPhase.PHASE_2
+		var stop_swinging: bool = die_in_phase_2 and boss.get_phase_index() == 1 and not boss.is_in_transition()
 		if stop_swinging and player.hurtbox.is_invulnerable:
 			player.hurtbox.set_invulnerable(false)
 		if not stop_swinging and player.combat.get_state() == PlayerCombat.State.IDLE:
@@ -177,10 +177,8 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 	_record(boss.health_component.is_dead and boss.get_state() == DungeonBoss.State.DEAD,
 		"F%d) the player kills the boss with its own combo (%d swings, %.0f damage)" % [
 			n, swings, damage_dealt])
-	_record(phases.size() == 3 and phases[0] == DungeonBoss.BossPhase.PHASE_1
-			and phases[1] == DungeonBoss.BossPhase.TRANSITION
-			and phases[2] == DungeonBoss.BossPhase.PHASE_2,
-		"F%d) the fight ran PHASE_1 -> TRANSITION -> PHASE_2 exactly once: %s" % [n, phases])
+	_record(phases == ["phase_1", "transition", "phase_2"],
+		"F%d) the fight ran phase_1 -> transition -> phase_2 exactly once: %s" % [n, phases])
 	_record(attacks_used.size() == 4,
 		"F%d) all four attacks were used: %s" % [n, attacks_used.keys()])
 	var shapes: Array[String] = []
@@ -203,7 +201,7 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 ## The boss killed the player: the run must fail and reload, and the boss must
 ## come back whole and asleep in phase 1.
 func _fight_death(n: int, dungeon: DungeonController, boss: DungeonBoss, _bar: BossHealthBar) -> void:
-	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
+	_record(boss.get_phase_index() == 1,
 		"F%d) the boss reached phase 2 before it killed the player" % n)
 	var doomed_id: int = current_scene.get_instance_id()
 	await _pause(0.4)
@@ -216,14 +214,18 @@ func _fight_death(n: int, dungeon: DungeonController, boss: DungeonBoss, _bar: B
 	var restarted: DungeonController = current_scene as DungeonController
 	var fresh: DungeonBoss = restarted.get_rooms()[2].get_enemies()[0] as DungeonBoss
 	var fresh_bar: BossHealthBar = restarted.get_node("BossHealthBar")
-	_record(fresh.get_phase() == DungeonBoss.BossPhase.PHASE_1
-			and not fresh.phase_transition_spent()
+	_record(fresh.get_phase_index() == -1 and not fresh.is_in_transition()
 			and fresh.health_component.current_health == fresh.health_component.max_health
 			and fresh.get_state() == DungeonBoss.State.INACTIVE,
-		"F%d) the restarted boss: phase 1, transition unspent, %.0f HP, INACTIVE" % [
+		"F%d) the restarted boss: no phase before its fight, %.0f HP, INACTIVE" % [
 			n, fresh.health_component.current_health])
 	_record(not fresh_bar.is_showing() and not fresh_bar.is_banner_showing(),
 		"F%d) its UI starts hidden again" % n)
+
+
+## Where the fight is: its phase's id, or "transition" during the beat.
+func _phase_label(boss: DungeonBoss) -> String:
+	return "transition" if boss.is_in_transition() else String(boss.get_phase_id())
 
 
 func _exit_dungeon(n: int) -> void:

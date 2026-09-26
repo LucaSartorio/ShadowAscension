@@ -126,7 +126,7 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 		return false
 	_record(bar.is_showing(), "RUN %d/2) boss health bar appears when the encounter starts" % n)
 
-	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_1 and bar.get_phase_text() == bar.phase_1_text,
+	_record(boss.get_phase_index() == 0 and bar.get_phase_text() == bar.phase_text_format % 1,
 		"RUN %d/2) the fight opens in phase 1" % n)
 
 	player.hurtbox.set_invulnerable(true)
@@ -145,7 +145,7 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 		boss.hurtbox.receive_hit(DamageInfo.new(HIT, null))
 		swings += 1
 		await _pause(0.12)
-		if boss.get_phase() == DungeonBoss.BossPhase.TRANSITION and not saw_transition:
+		if boss.is_in_transition() and not saw_transition:
 			saw_transition = true
 			transition_at = swings
 		var expected: float = boss.health_component.current_health / boss.health_component.max_health
@@ -157,8 +157,8 @@ func _fight_boss(dungeon: DungeonController, player: Player, n: int) -> bool:
 	_record(saw_transition and transition_at == half_at,
 		"RUN %d/2) the phase transition fired at half health, on swing %d of %d" % [
 			n, transition_at, to_fell])
-	_record(boss.phase_transition_spent(),
-		"RUN %d/2) and it is spent, so it cannot run again this life" % n)
+	_record(boss.get_phase_index() == boss.get_phase_count() - 1,
+		"RUN %d/2) and it ended in the last phase, so nothing is left to run again this life" % n)
 
 	_record(swings == to_fell, "RUN %d/2) the boss took %d hits of %.0f to fell (%.0f HP)" % [
 		n, swings, HIT, boss.health_component.max_health])
@@ -246,7 +246,7 @@ func _boss_fight_death_and_restart() -> void:
 	var boss: DungeonBoss = dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
 	boss.hurtbox.receive_hit(DamageInfo.new(boss.health_component.max_health * 0.55, null))
 	await _pause(2.0)
-	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
+	_record(boss.get_phase_index() == 1,
 		"19) the boss reached phase 2 before the player died")
 
 	var doomed_id: int = current_scene.get_instance_id()
@@ -262,9 +262,8 @@ func _boss_fight_death_and_restart() -> void:
 
 	var fresh_boss: DungeonBoss = restarted.get_rooms()[2].get_enemies()[0] as DungeonBoss
 	var fresh_bar: BossHealthBar = restarted.get_node("BossHealthBar")
-	_record(fresh_boss.get_phase() == DungeonBoss.BossPhase.PHASE_1
-			and not fresh_boss.phase_transition_spent(),
-		"22) the restarted boss is back in phase 1 with its transition unspent")
+	_record(fresh_boss.get_phase_index() == -1 and not fresh_boss.is_in_transition(),
+		"22) the restarted boss has no phase until its fight starts, and no transition pending")
 	_record(fresh_boss.health_component.current_health == fresh_boss.health_component.max_health,
 		"23) at full health (%.0f/%.0f)" % [
 			fresh_boss.health_component.current_health, fresh_boss.health_component.max_health])

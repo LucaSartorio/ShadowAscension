@@ -260,12 +260,12 @@ func _phase_boss() -> void:
 	var on_landed: Callable = func(target: Node, info: DamageInfo) -> void:
 		if target == p and p.combat.get_dodge_phase() == PlayerCombat.DodgePhase.INVULNERABLE:
 			taken[0] += info.amount if p.health_component.last_damage == info else 0.0
-	for hitbox in boss._hitboxes:
+	for hitbox in boss.combat.get_hitboxes():
 		if hitbox != null:
 			hitbox.hit_landed.connect(on_landed)
 	var coming: bool = await _until(func() -> bool:
 		_stick(p, boss)
-		return boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and boss._phase_timer <= DODGE_LEAD, 10.0)
+		return boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and boss.combat.get_phase_remaining() <= DODGE_LEAD, 10.0)
 	var speed: float = p.effective_dodge_speed
 	p.effective_dodge_speed = 0.0
 	var stamina: float = p.combat.get_stamina()
@@ -273,7 +273,7 @@ func _phase_boss() -> void:
 	var paid: float = stamina - p.combat.get_stamina()
 	await _until(func() -> bool: return not p.combat.is_dodging(), 1.0)
 	p.effective_dodge_speed = speed
-	for hitbox in boss._hitboxes:
+	for hitbox in boss.combat.get_hitboxes():
 		if hitbox != null:
 			hitbox.hit_landed.disconnect(on_landed)
 	p.hurtbox.set_invulnerable(true)

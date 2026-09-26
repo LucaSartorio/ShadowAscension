@@ -131,6 +131,7 @@ Systems are built from small, composable components attached to a scene root (e.
 
 - **`HealthComponent`** (`Node`) — tracks `current_health` / `max_health`; `take_damage(hit: DamageInfo)` is the only way health goes down, and returns whether it took the hit (M11.9). Emits `health_changed(current, maximum)` and `died`, and — for a hit that leaves it alive, never with `died` — `damaged(hit)`, which hit reactions listen to (M11.6), and records the last hit as `last_damage` (with `last_damage_source` read off it) for the owner to read. `reset_to(maximum)` sets a new maximum *and* refills, which is what an actor calls when its real maximum arrives after the component's own `_ready()`. `heal(amount)` is the only way health goes up — never past the maximum, never for the dead, so a heal after a killing blow (even in the same frame) raises nothing — and returns what it restored (M12.6: a support's heal goes through it).
 - **`Hitbox`** (`Area3D`) — active only during an attack's hit window via `activate()` / `deactivate()`; carries the swing's `damage`, `source`, `attack_id`, `stagger_power`, `knockback_force` and critical chance and multiplier (`use_attack(attack, base_damage)` stamps all but the critical from an `AttackData`, M12.3), sends each target one `DamageInfo` — its critical rolled for that hit, its direction worked out at impact — emits `hit_landed(target, hit)`, then `hit_accepted(target, hit)` if the target took it (M11.9), and will not hit the same target twice within one activation.
+- **`HitReaction`** (`scripts/combat/hit_reaction.gd`, static, M12.8) — the hit-reaction rules in one place: `breaks_through(hit, resistance)` (a hit staggers when its stagger power reaches the resistance) and `push_velocity(hit, multiplier)` (its push, scaled, flat). `BasicEnemy` and `DungeonBoss` both answer a hit through it, each with its own numbers.
 - **`DamageModel`** (`scripts/combat/damage_model.gd`, static, M11.7) — the damage rules in one place: `attack_damage(base, multiplier)`, `roll_critical(chance, rng)`, `final_damage(raw, critical, multiplier)`, and `buffed_damage(base, bonus)` — an enemy's base under a support's buff (M12.6). Stateless; see *Damage model and critical hits (M11.7)*.
 - **`Hurtbox`** (`Area3D`) — `receive_hit(hit: DamageInfo)`: the one place that decides whether a hit counts. It refuses hits while `is_invulnerable`, which holds while any *reason* set through `set_invulnerable(value, reason)` holds (the dodge's i-frames are one reason, since M11.4), and forwards the rest to the `HealthComponent` it is wired to; it returns whether the hit counted (M11.9). `get_center()` (M12.3) is the middle of its shape — where a ranged attack aims.
 - **`DamageInfo`** (`RefCounted`) — one hit in transit: `amount`, `source`, `attack_id` (M11.1); `stagger_power`, `knockback_force` and the flat `direction` from attacker to target (M11.6); `is_critical` (M11.7), with `amount` already the final damage.
@@ -146,6 +147,11 @@ has a third component, **`EnemySupport`** (`scripts/enemies/enemy_support.gd`), 
 ally it supports and of what it means to do for it. Any of them can be made elite by data alone — an
 `EliteModifierData` set on the instance (M12.7). See *Enemy AI (M12.1)*, the archetype sections, M12.2
 to M12.6, and *Elite framework (M12.7)*.
+
+A boss (M12.8) is its own category: `DungeonBoss`'s state machine with a `BossData`, and three parts —
+**`BossPhaseController`** (`scripts/enemies/bosses/boss_phase_controller.gd`), the one owner of the phase
+it is in; **`BossCombat`** (`scripts/enemies/bosses/boss_combat.gd`), the one owner of its attack choice,
+the attack under way and the cooldowns; and the same **`EnemyTargeting`**. See *Boss framework (M12.8)*.
 
 - **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
@@ -193,7 +199,7 @@ them is how shared state leaks between entities.
   curve, a shadow type's growth per level. It is authored in the editor, saved as `.tres`, shared by
   every entity of that kind, and **never written during play**.
 - **Runtime state** is how *one* thing is doing: this enemy's current health, this shadow's level,
-  this boss's phase-2 speed. It belongs to the entity (or, for the character, to the session) and
+  this boss's phase and the speed its phase gives it. It belongs to the entity (or, for the character, to the session) and
   starts from the configuration.
 
 An entity that needs per-instance values **copies them out of its asset once, in `_ready()`**, and
@@ -220,8 +226,9 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `EnemyData` (`scripts/enemies/enemy_data.gd`) | one enemy archetype — `basic_melee_enemy.tres`, `basic_ranged_enemy.tres` (M12.3), `basic_tank_enemy.tres` (M12.4), `basic_assassin_enemy.tres` (M12.5), `basic_support_enemy.tres` (M12.6) | `xp_reward`, `max_health`, movement, perception (target groups and ALERT duration since M12.1, the line-of-sight interval since M12.3), spacing — the range model: minimum, preferred and maximum attack distance, and the disengage distance (M12.5) — its `support` (`EnemySupportData`, M12.6; null on the other four) — the attack — its `attacks` (`AttackData`, M12.2), base damage, cooldown, facing cone and the telegraph's turn and facing lock — hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), the telegraph's look | `BasicEnemy._apply_stats()`, which hands the attack's part to `EnemyMeleeAttack.configure()` | current health or any fight state — a stagger or a push in progress included; AI state (the state, the target, the swing's phase, the cooldown and stagger left, the navigation); placement (approach angle, attack desync — set per instance in the room); loot and shadow drops, which `LootDropper` and `ShadowSource` declare |
 | `EnemySupportData` (`scripts/enemies/enemy_support_data.gd`, M12.6) | what a support does for its allies — a sub-resource of `basic_support_enemy.tres` | the ally layer, the ranges (notice, reach, the cast's break margin), the look-around interval, the approach timeout; the heal (its `AttackData`, threshold, share of the ally's maximum, cooldown, colour); the buff (its `AttackData`, damage bonus, duration, cooldown, colour) | `EnemySupport.configure()` | whom it supports, a cast under way, a cooldown left, a buff on anyone — `EnemySupport`'s and `EnemyAttack`'s runtime state |
 | `EliteModifierData` (`scripts/enemies/elite_modifier_data.gd`, M12.7) | what makes an enemy elite — `resources/enemies/elite_standard.tres`; assigned per enemy (`BasicEnemy.elite_profile`) where it is placed | seven multipliers on the archetype's own numbers — health, movement speed, attack damage, attack cooldown, stagger resistance, knockback taken, XP reward — and the getters that apply them, clamped (`effective_*()`) | `BasicEnemy._apply_stats()` and `get_xp_reward()`, `EnemyAttack.configure()` | any base value (they stay in `EnemyData`), attack timings, distances, a support's heal or buff, anything that changes during a fight |
-| `BossStats` (`scripts/enemies/bosses/`) | the boss's body | `xp_reward`, `max_health`, movement, spacing, decision, phase 2, encounter beats | `DungeonBoss._apply_stats()` | its attacks (each a `BossAttack`); its display name, still on the node; phase or health state; hit-reaction tuning — the boss does not stagger or move under hits (M11.6), so it has none |
-| `BossAttack` (`scripts/enemies/bosses/`) | one boss attack | damage, timings, range, multi-hit, phase-2 variants, weights, telegraph | `DungeonBoss` | cooldown remaining or any per-fight state |
+| `BossData` (`scripts/enemies/bosses/boss_data.gd`, M12.8 — replaced `BossStats`) | one boss — `resources/enemies/bosses/dungeon_boss_data.tres` | `id`, `display_name`, `xp_reward`, `max_health`, the base `attack_damage`, movement, perception (target groups, detection range), spacing, decision (facing cone, repeat ceiling, reposition), hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), its `phases` (`BossPhaseData`, in order), the encounter beats | `DungeonBoss._apply_data()`; `get_problems()` validates it | current health, the phase it is in, the attack under way, a cooldown, the target — `DungeonBoss`'s, `BossPhaseController`'s and `BossCombat`'s runtime state |
+| `BossPhaseData` (`scripts/enemies/bosses/boss_phase_data.gd`, M12.8) | one phase — sub-resources of the `BossData` | stable `id`, `health_threshold` (share of max health), `transition_duration`, its `attacks` (`BossAttack`s), modifiers (movement speed, reposition timeout, tempo), a placeholder body colour | `BossPhaseController`, `DungeonBoss._apply_phase()` | whether it is the current phase; anything written during the fight |
+| `BossAttack` (`scripts/enemies/bosses/boss_attack.gd`, refit M12.8) | one boss attack: an `AttackData` composed with what only a boss needs | its `attack` (`AttackData`: id, damage multiplier, windup / active / recovery, impact), the hitbox it swings, the range band, its own cooldown, its weight, multi-hit, telegraph shape, colour and facing correction | `BossCombat` | the cooldown left, the swing under way or its history — `BossCombat`'s |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
@@ -417,7 +424,8 @@ it owns and calls it; what is owned reports back with signals; the UI observes a
   and a remnant each come up on their own and either work or stand still — nothing assumes a
   `Player`, a `HUD` or a `DungeonController` at a known path.
 - **No lookups per frame.** An enemy holds the target it acquires (`EnemyTargeting`, M12.1) and reads
-  its groups on a one-second cadence only while it has none; the boss caches the player it acquires;
+  its groups on a one-second cadence only while it has none — the boss through the same component
+  since M12.8;
   the character sheet caches its player instead of searching on every refresh.
 - **A connection to something that outlives the connector is dropped explicitly** in `_exit_tree()`
   — the two `SceneTree.node_added` listeners (`DungeonRunStats`, `ExtractionFeedback`) do.
@@ -873,7 +881,7 @@ should be read as a description of the current code.
 
 ## Data-driven architecture (M10)
 
-The vertical slice is already partly data-driven: `EnemyData`, `BossStats`, `BossAttack`,
+The vertical slice is already partly data-driven: `EnemyData`, `BossStats` (now `BossData`, M12.8), `BossAttack`,
 `ProgressionStats`, `ItemData`, `LootTable`, `AttackStep` (now `AttackData`) and `ShadowData` are all `Resource` assets
 today, described in §5. M10 finishes the job and gives every domain one named definition resource —
 each introduced when a system actually reads it, never as an empty file ahead of one:
@@ -898,8 +906,8 @@ each introduced when a system actually reads it, never as an empty file ahead of
 - **The summoned shadow's AI tuning** — follow distance, leash, attack timings, stuck recovery — is
   `@export`s on `basic_melee_shadow.gd`, which is already per-type because `ShadowData.summon_scene`
   names the scene. It moves with the shadow AI rebuild at M17.
-- **The boss's display name** is still an `@export` on its node; M12's boss framework decides
-  where boss identity lives.
+- **The boss's display name** was an `@export` on its node; since M12.8 it is `BossData.display_name`,
+  with the rest of the boss's identity.
 - **`PlayerProgression.SHADOW_KILL_SHARE` (0.70)** is a rule of the shadow system, defined once. If
   the split ever varies — by shadow rank, say — it will vary per shadow, so the data it belongs to
   is decided at M17 rather than guessed now.
@@ -1442,7 +1450,10 @@ blow for as long as it lasts. Both are on the mesh, not the facing node, and M14
 **The boss** takes damage exactly as before and keeps its tint flash on every hit, but it does not
 stagger and is not pushed: it reads neither value, has no stagger state, and a hit with any power at
 all neither interrupts its attack nor moves it. That is deliberate — a boss thrown about by every
-heavy is no boss — and whether it gets a poise it can break is M12's boss framework.
+heavy is no boss — and whether it gets a poise it can break is M12's boss framework. **Since M12.8**
+it reads both values through the same rules as an enemy (`HitReaction`), against its own numbers: a
+resistance of 60 that only the heavy reaches, a 5 s immunity after a stagger, a tenth of any push —
+see *Boss framework (M12.8)*.
 
 **The shadow's** hits go through the same flow with no stagger power and no push, so they flinch what
 they hit and nothing more; its AI is untouched, and its kills still pay 70/30.
@@ -1817,7 +1828,7 @@ What exists at the close of M11, and who owns it:
 | Stamina, the dodge's cost | `PlayerCombat` → `PlayerStaminaHUD` | `PlayerCombatData` |
 | Damage rules and critical hits | `DamageModel` (static), rolled per hit by the `Hitbox` | `PlayerCombatData`, `AttackData.damage_multiplier` |
 | A hit | `Hitbox` → `DamageInfo` → `Hurtbox` → `HealthComponent` | — |
-| Hit reactions: flinch, stagger, knockback | `BasicEnemy`; the boss only flashes | `AttackData` impact, `EnemyData` hit reactions |
+| Hit reactions: flinch, stagger, knockback | `BasicEnemy` and `DungeonBoss` (M12.8), by the shared rules of `HitReaction` | `AttackData` impact, `EnemyData` / `BossData` hit reactions |
 | Target lock | `PlayerTargeting` → `TargetLockIndicator` | `PlayerTargetingData` |
 | Hit feedback: hit stop, camera shake, critical mark | `PlayerCombatFeedback`, `CameraRig.shake()` | `PlayerCombatFeedbackData`, `AttackData` feedback |
 
@@ -2057,7 +2068,9 @@ what the tests and the label read.
 **The boss is not on this foundation.** `DungeonBoss` keeps its own AI (`INTRO / DECIDE / CHASE /
 REPOSITION / ATTACK / RECOVERY / DEAD`, phases, multi-hit attacks) and still finds the player as the
 first member of `Player.GROUP`; migrating it is the M12 Boss Framework's, and forcing it here would
-risk the encounter for nothing. It shares everything common: the same `DamageInfo` in and out, the same
+risk the encounter for nothing. (M12.8 did: the boss has its own framework — its own state machine,
+phases and attack choice — and takes its target from this foundation's `EnemyTargeting`; see *Boss
+framework (M12.8)*.) It shares everything common: the same `DamageInfo` in and out, the same
 `HealthComponent` and death report, the player's lock, the hit feedback — and `m12_ai_run` fights it
 through to the dungeon's completion. The shadow's AI is untouched; enemies simply do not target it.
 
@@ -2213,7 +2226,7 @@ tick, no `load()` anywhere in the enemy's scripts.
 
 ### The boss
 
-Not on the archetype. `DungeonBoss` keeps its own AI and its own `BossAttack`s; it shares the hitbox,
+Not on the archetype. `DungeonBoss` keeps its own AI (its own framework since M12.8) and its own `BossAttack`s; it shares the hitbox,
 `DamageInfo`, `HealthComponent` and the lock, and `m12_melee_run` fights it through to the dungeon's
 completion.
 
@@ -2385,7 +2398,7 @@ knockback and death; they differ in their attack component and their numbers. Th
 M12.2's: every melee suite and flow passes unchanged in what it checks. The two rules added to the
 shared state machine for the ranged — out of sight on the ring, cornered — only change what a melee
 does in those edge cases (a melee cornered 1.15 m from the player now swings instead of standing still).
-The boss keeps its own AI and `BossAttack`s. No coordinator: several ranged, or ranged and melee
+The boss keeps its own AI and `BossAttack`s (its own framework since M12.8). No coordinator: several ranged, or ranged and melee
 together, each keep their own state, cooldown, target and projectiles (`MU1`, `MX1`).
 
 ### Where it is in the game
@@ -2634,7 +2647,7 @@ laid under the ally while a cast is for it. Its loot is the melee's table; it ha
   never a walk of the tree, never per frame; between two looks it only checks its plan.
 - **A valid ally**: a `RoomCombatant` in the scene, alive (not died, its health not dead), awake
   (`combat_enabled` — a parked enemy is not in the fight), not itself, within 14 m, and on the AI
-  foundation — it has an `EnemyAttack`. The boss, on its own AI, never is: `m12_support_run` puts a
+  foundation — it has an `EnemyAttack`. The boss, on its own framework (M12.8), never is: `m12_support_run` puts a
   support beside it at 40 HP and it is neither listed nor healed.
 - **Priority**: the lowest share of health, `current_health / max_health`, under `heal_threshold`
   (0.7) — a share, not points: a tank at 40% (104) comes before a melee at 60% (60). Exactly on the
@@ -2768,7 +2781,8 @@ there is no `EliteMelee.tscn`, no elite script, no `if is_elite` anywhere in the
   (the inspector's *Per-Instance* group), the code that instances it otherwise — before it enters the
   tree. That is the whole spawn integration: `enemy_scene + enemy_data (stats) + elite_profile`. The
   shipped dungeon places no elite; placing them is content (M18). Nothing picks elites at random.
-- **The boss is not an elite** and does not use this: it keeps `BossStats` and its own AI.
+- **The boss is not an elite** and does not use this: it has its own `BossData` and its own framework
+  (M12.8) — nothing of `elite_profile` exists on it.
 
 ### EliteModifierData
 
@@ -2882,6 +2896,245 @@ health and damage.
 The profile is a resource the enemy reads once at spawn, and runtime modifiers (the buff) already sit
 after it without writing it; further profiles (offensive, defensive, fast) are new `.tres` files, and
 affixes could extend the same pipeline later. None is implemented.
+
+## Boss framework (M12.8)
+
+M12.8 (Boss Framework Foundation) gives bosses a foundation of their own. A boss is not an enemy with a
+lot of health, not a tank elite and not a scene of hardcoded timers and `if health < 50%`: it is a
+`DungeonBoss` scene with a `BossData` — the same lifecycle, phases, attack choice and reactions for
+every boss, other numbers, other phases and other attacks for each. The shipped boss is the first on
+it, with the moveset it had (Quick Strike, Wide Sweep, Ground Slam; Double Strike in phase 2); a new
+boss is a new `BossData` (and its hitboxes in its scene), with no boss-specific code.
+
+### Boss framework
+
+**Identity.** A boss is a `DungeonBoss` — a `RoomCombatant`, in the `DungeonBoss.GROUP` group — with a
+`BossData`. It is neither a `BasicEnemy` nor an elite: it has no archetype, no `EnemyData`, no
+`elite_profile`, and nothing of the elite pipeline reaches it. It shares what every combatant shares:
+the room contract, the hit (`Hitbox` → `DamageInfo` → `Hurtbox` → `HealthComponent`), the reaction
+rules (`HitReaction`, below), `AttackData`, the targeting (`EnemyTargeting`), the player's lock and the
+hit feedback.
+
+| Part | Owner | Owns |
+| --- | --- | --- |
+| Configuration | `BossData` (+ `BossPhaseData`, `BossAttack`) | every number, the phases, the attacks — read, never written |
+| Lifecycle | `DungeonBoss` (`dungeon_boss.gd`) | the state: `_state`, changed only through `_change_state()`, legal moves in `TRANSITIONS` |
+| Phases | `BossPhaseController` (`boss_phase_controller.gd`, pure logic) | the phase it is in, which phase is due — forward only |
+| Attacks | `BossCombat` (child node `BossCombat`) | the choice, the attack under way and its place in it, the per-attack cooldowns, the repeat history, the hitboxes, the telegraph's look |
+| Target | `EnemyTargeting` (child node `EnemyTargeting`, M12.1's) | whom it fights |
+| Movement | `DungeonBoss` | navigation, facing, the one `move_and_slide()` |
+| Health | `HealthComponent` | heard through `health_changed`, `damaged`, `died` |
+| Completion | `RoomCombatant.report_death()` → `enemy_died` | reported once; the room and the dungeon take it from there |
+
+**States.** `INACTIVE`, `INTRO`, `DECIDE`, `CHASE`, `REPOSITION`, `ATTACK`, `STAGGERED`, `TRANSITION`,
+`DEAD`. Each has an enter / update / exit; `_change_state()` refuses a move `TRANSITIONS` does not list
+(and a state re-entering itself), and `state_changed(from, to)` reports every move after it.
+
+```
+INACTIVE --start_encounter()--> INTRO --intro_duration--> DECIDE
+DECIDE --> CHASE (far) / REPOSITION (too close, nothing valid, facing away) / ATTACK (an attack chosen)
+ATTACK --its recovery over--> DECIDE
+INTRO, DECIDE, CHASE, REPOSITION, ATTACK --a hit that breaks through--> STAGGERED --over--> DECIDE
+any living state --a later phase due--> TRANSITION --beat over--> DECIDE
+any --died--> DEAD (nothing leaves it);  any living --parked by its room--> INACTIVE
+```
+
+**Priority** — DEAD > TRANSITION > STAGGERED > ATTACK > movement — is structural, not a chain of `if`s:
+nothing leaves `DEAD`; a stagger never starts in `TRANSITION` (it is not in `STAGGERABLE`) while a
+transition cuts a stagger short; a stagger cuts an attack off; an attack stands the boss still. A
+killing blow is a death: `HealthComponent` reports `died` instead of `damaged`, and a phase is never
+checked at 0 health, so a lethal hit through a threshold goes to `DEAD` with no transition.
+
+**The encounter.** `start_encounter()` starts it — the room calls it through `set_combat_enabled(true)`
+when the player walks in, and a boss with no room (a test bench, a sandbox) calls it on itself once it
+has readied. It enters the first phase (its numbers applied), clears every cooldown and the repeat
+history, takes a target, plays the intro beat and emits `encounter_started(display_name, health)` and
+`phase_changed(0)`. Only an `INACTIVE` boss starts one, so asking twice changes nothing. Before it, a
+parked boss does nothing: no perception, no decision, no attack. The room parks it again
+(`set_combat_enabled(false)` → `INACTIVE`) when the run ends — the player's death: the attack is cut
+off, the target released, and a resumed fight keeps its phase.
+
+**The end.** On `died`: `DEAD` — the attack cut off (no hitbox open, no delayed swing: every timer is
+`BossCombat`'s own delta, and it is torn down), the target released, the navigation stopped, the body's
+collision off, the phase controller no longer asked (a dead boss's health never changes), the death
+reported once. The lock lets go (it hears `enemy_died`), the health bar hides.
+
+### BossData
+
+`scripts/enemies/bosses/boss_data.gd`; the shipped boss's is `resources/enemies/bosses/dungeon_boss_data.tres`,
+with its phases as sub-resources. Every field is read:
+
+| Group | Fields | Shipped boss |
+| --- | --- | --- |
+| Identity | `id`, `display_name` | `dungeon_boss`, "Dungeon Boss" |
+| Rewards | `xp_reward` | 200 |
+| Health | `max_health` — one pool for the whole fight | 900 |
+| Offence | `attack_damage` — the base every attack's `damage_multiplier` scales | 20 |
+| Movement | `movement_speed`, `acceleration`, `rotation_speed`, `gravity` | 3.2, 10, 5, 20 |
+| Perception | `target_groups`, `detection_range` | the player's group, 30 m |
+| Spacing | `preferred_combat_distance`, `minimum_combat_distance`, `chase_band`, `navigation_radius` | 2.2, 1.4, 1.0, 0.8 |
+| Decision | `max_attack_facing_angle`, `max_consecutive_repeats`, `reposition_timeout`, `reposition_speed_fraction`, `target_update_interval` | 30°, 2, 1.4 s, 0.85, 0.2 s |
+| Hit reactions | `stagger_resistance`, `stagger_duration`, `stagger_immunity_time`, `knockback_multiplier`, `knockback_deceleration` | 60, 0.5 s, 5 s, 0.1, 60 m/s² |
+| Phases | `phases` (`BossPhaseData`, in order) | `phase_1`, `phase_2` |
+| Encounter | `intro_duration`, `death_topple_duration` | 0.8 s, 1.2 s |
+
+`get_problems()` validates it: a positive maximum, at least one phase, a first threshold of 1.0,
+thresholds strictly falling, every phase with an id and attacks, every attack with an `AttackData`, a
+hitbox and a sane range band. A boss whose data has problems reports them with `push_error()` and stays
+`INACTIVE` — `start_encounter()` refuses it — rather than fighting half-configured.
+
+**Runtime.** `DungeonBoss._apply_data()` copies the numbers into the boss's own fields once; a phase
+recomputes the phase-dependent ones (speed, reposition timeout) from the copied bases. Current health,
+the phase, the attack under way, the cooldowns and the target are the boss's (and its parts'), so two
+bosses on one `BossData` share nothing of a fight (`boss_framework_test` 57).
+
+### Phase system
+
+A `BossPhaseData` is: a stable `id` (never an animation's name), a `health_threshold` — the share of
+maximum health, `current / max`, at or below which it begins — a `transition_duration`, its `attacks`,
+and optional modifiers: `movement_speed_multiplier`, `reposition_timeout_multiplier` and
+`tempo_multiplier` (scales every attack's windup, recovery and cooldown — the rhythm, never the damage,
+the reach or the hit window), plus a placeholder `body_color`.
+
+| Phase | Health share | Transition | Attacks | Modifiers |
+| --- | --- | --- | --- | --- |
+| `phase_1` | 100% → above 50% | — | Quick Strike, Wide Sweep, Ground Slam | none |
+| `phase_2` | 50% and below | 1.5 s | the three, and Double Strike | speed ×1.19 (3.81), reposition ×0.64 (0.9 s), tempo ×0.8, a darker red body |
+
+**The current phase** is `BossPhaseController`'s alone (`get_index()`; -1 before the fight). On every
+`health_changed` the boss asks it which phase is due: `due(share)` answers only a phase *after* the
+current one — the deepest whose threshold the share has reached — or none. So the progression is
+**monotonic**: a heal (the test heals it back to full) never brings phase 1 back, and a health that
+wobbles round a threshold never flips; `enter()` refuses anything but a later phase. There is no
+"transition spent" flag beside it: the index is the only answer.
+
+**The transition** is its own state, `TRANSITION`:
+- On entering it: the attack under way is **cancelled on the spot** — `BossCombat.interrupt()` shuts
+  every hit window at once and resets the telegraph's look; its cooldown stands. No hitbox, no timer
+  and no callback outlives it (the choice is deterministic: always cancelled, never finished). The
+  stagger, the path and the velocity are dropped; `phase_transition_started(to)` is emitted; the
+  placeholder beat plays — three pulses of the body and the next phase's colour.
+- During it: no decision, no attack, no movement, no choice weighed. **The boss still takes damage**
+  (no invulnerability): the health and its bar follow, and a hit's stagger power is ignored — the beat
+  is committed.
+- A deeper phase due during it — a blow through a second threshold — becomes where the beat leads: one
+  beat, deterministically, the phases in between passed over (`boss_framework_test` 43).
+- At its end: the phase entered, its modifiers applied from the bases (the `BossData` is never written),
+  every cooldown and the repeat history cleared, `phase_changed(index)` emitted, `DECIDE`.
+
+**Death beats it**: a lethal blow is a death with no transition, and a death inside the beat ends it —
+no phase 2 afterwards. `debug_log_phases` (off) prints each change: `PHASE phase_1 -> phase_2`.
+
+### Attack selection
+
+Centralised in `BossCombat`, asked only from `DECIDE` (the one decision point — never during a
+telegraph, a swing, a recovery or a transition: `get_evaluation_count()` stands still through them).
+
+- **Pool**: the current phase's `attacks`. An attack may be in several phases (the three shared by
+  both here); `BossCombat` knows every attack any phase offers, once, with its hitbox resolved at setup.
+- **Valid**: in the pool; its hitbox exists; its own cooldown over; the target within its range band
+  (`min_range`–`max_range`, flat — so a boss can have close and far attacks); not already run
+  `max_consecutive_repeats` times in a row. A valid target and the facing cone are the boss's checks
+  before it asks: with nothing valid, or the target outside the cone, it repositions instead.
+- **Weighted**: among the valid ones, by `BossAttack.weight` (Ground Slam 0.6, Double Strike 0.9, the
+  others 1.0), drawn from a generator seeded by `decision_seed`, so a run is reproducible.
+- **Cooldowns**: one per attack, runtime (`BossCombat`'s dictionary, never the asset), started when the
+  attack starts, scaled by the phase's tempo (Quick Strike 1.0 s → 0.8 s in phase 2), ticked only while
+  the boss fights; cleared at the encounter's start and at each new phase.
+- **Repeat policy**: individual cooldowns already keep an attack from chaining; the ceiling (2) is the
+  hard rule behind them.
+
+### Attack lifecycle
+
+```
+NONE -> TELEGRAPH (windup x tempo) -> ACTIVE (hit window) -> RECOVERY (recovery x tempo) -> NONE
+                                        | a multi-hit attack:
+                                        +-> BETWEEN_HITS (delay_between_hits) -> ACTIVE ...
+```
+
+- **The attack under way** is `BossCombat`'s `_attack`, and where it is `_phase`: one source; nothing
+  keeps a name, an index or a flag beside them (`get_current_attack()`, `get_attack_phase()`).
+- **`BossAttack`** composes an `AttackData` — the same resource as every attack in the game: its `id`,
+  `damage_multiplier`, windup / active / recovery and impact — with what only a boss needs (the hitbox
+  it swings, the range band, its cooldown and weight, multi-hit, the telegraph's shape and colour, the
+  facing correction). `AttackData` gained nothing for it.
+- **Telegraph**: no hitbox, no damage; each shape deforms a different channel of the mesh (lean, spin,
+  compression, recoil) and tints the body the attack's colour. It may turn by its
+  `facing_correction_fraction`, then commits.
+- **Active**: the hitbox takes the attack (`Hitbox.use_attack()`: base damage × multiplier, its stagger
+  and push) and opens; the standard `DamageInfo` goes to the target's hurtbox, which decides — i-frames
+  included (the boss never asks whether the player is dodging). One landing per target per swing; a
+  multi-hit attack reopens the hitbox for each swing. Facing is locked.
+- **Recovery**: nothing opens, nothing starts; then `attack_ended(attack, true)` and `DECIDE`.
+- **Cut off** (a stagger, a transition, a death, the room parking it): `attack_ended(attack, false)`,
+  every hit window shut, the look reset, its cooldown kept.
+- Everything is timed on the physics delta — no `Timer`, no deferred callback — so nothing can fire
+  after the attack is gone.
+
+### Stagger / knockback
+
+The M11.6 rules, now in one place for everyone who takes hits: `HitReaction.breaks_through(hit,
+resistance)` (a hit with stagger power at least the resistance) and `HitReaction.push_velocity(hit,
+multiplier)` (the hit's push, scaled). `BasicEnemy` and `DungeonBoss` both call them; each keeps its own
+numbers and its own answer.
+
+- **Resistance 60**, high but not immunity. With the player's current attacks: Light 1 (10), Light 2
+  (15) and Light 3 (30) never stagger the boss — its attack goes on; **the heavy (60) does**: in a
+  telegraph or a swing, the attack is cut off, no hitbox left, the boss `STAGGERED` for 0.5 s, then
+  immune for 5 s — a second heavy inside that window lands its damage and nothing else. A critical
+  changes the damage, not the stagger power.
+- **Knockback ×0.1, deceleration 60 m/s²**: the heavy's 8 m/s push becomes 0.8 m/s, gone within a frame
+  or two — about a centimetre. A light nudges it by millimetres. No `if boss: ignore knockback`: the
+  data does it.
+- A parked (`INACTIVE`) boss is not in a fight and is never staggered; in `TRANSITION` the beat wins.
+
+### Targeting
+
+`EnemyTargeting` (M12.1's component) with `BossData.target_groups` — the player's group: the player is
+the boss's target, as it always was; shadows are not candidates (no threat system). The target is taken
+when the encounter starts, kept until it dies or leaves, and let go on death or when the boss is parked;
+while it holds one the boss never searches the tree. Shadows hit the boss normally — the same hitbox,
+`DamageInfo` and health — and a shadow's killing blow still pays 70/30 (140 / 60 of its 200 XP), through
+`PlayerProgression` as every kill: the boss awards nothing itself.
+
+**Target lock**: the boss is a `RoomCombatant` like any other target, its ring on its `TargetAnchor`
+(1.5 m up). The lock holds through phase 1, the transition and phase 2, and lets go on death
+(`enemy_died`).
+
+### Boss Health Bar
+
+`BossHealthBar` finds the boss through `DungeonBoss.GROUP` on ready and listens; the boss knows no UI.
+Hidden until `encounter_started` (name, current and maximum health, full); then it follows
+`health_changed`. The phase caption is `phase_text_format` ("FASE %d") with the boss's phase index;
+`phase_transition_started` flashes the callout and announces the next phase during the beat. One bar
+for one pool: a phase never refills or resets it. It hides on `enemy_died`. No multi-bar.
+
+### Dungeon integration
+
+```
+boss died -> DungeonBoss.report_death() -> enemy_died (once)
+          -> RoomController counts it -> room_cleared -> DungeonController: dungeon_completed (once)
+          -> exit portal enabled, RunSummary opens
+```
+
+The boss never knows a room or a dungeon exists — no `get_node("../../…")`. The boss room's entry
+trigger starts the encounter; the player's death suspends the room, which parks the boss; leaving the
+scene frees it with everything it owned (its tweens, its parts): no timer, callback, target or UI
+reference survives (`m12_boss_run` 65).
+
+### Debug
+
+`debug_state_label` (off by default, built only when on): the state and phase, the attack and where it
+is, the target and the health share, and each cooldown running. `debug_log_phases` (off): one line per
+phase change. Neither costs anything when off.
+
+### Future boss features
+
+The framework is ready for, and does **not** implement: an enrage (a later phase's speed, tempo and
+pool already change by data; a damage modifier would sit beside them), special attacks and an
+ultimate (a `BossAttack` in a later phase's pool — no FSM change), phase-specific mechanics, a third
+phase (the controller and the data take any number; a three-phase boss is exercised in the test), and
+summons, hazards or cinematics — none of which exist.
 
 ## Content pipeline (M13+)
 

@@ -473,7 +473,7 @@ func _qa_deaths() -> void:
 			(boss.get_node("Hurtbox") as Hurtbox).receive_hit(DamageInfo.new(
 				boss.get_node("HealthComponent").max_health * 0.6, p))
 			await _pause(2.2)
-			where = "boss phase %d" % (2 if boss.is_phase_2() else 1)
+			where = "boss phase %d" % (boss.get_phase_index() + 1)
 
 		var before: Dictionary = _snapshot(p)
 		p.hurtbox.set_invulnerable(false)

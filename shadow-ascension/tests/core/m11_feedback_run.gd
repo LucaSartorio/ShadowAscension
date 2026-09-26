@@ -357,7 +357,7 @@ func _phase_boss(run: int) -> void:
 		var hp_before: float = p.health_component.current_health
 		var coming: bool = await _until(func() -> bool:
 			_stick(p, boss)
-			return boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and boss._phase_timer <= DODGE_LEAD, 10.0)
+			return boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and boss.combat.get_phase_remaining() <= DODGE_LEAD, 10.0)
 		var speed: float = p.effective_dodge_speed
 		p.effective_dodge_speed = 0.0
 		_press(p, &"dodge")
@@ -389,7 +389,7 @@ func _phase_boss(run: int) -> void:
 	var at_death: Dictionary = {"scale": Engine.time_scale, "stops": feedback.get_hit_stop_count() - stops,
 		"shaking": p.camera_rig.is_shaking(), "offset": p.camera_rig.get_shake_offset(),
 		"marks": feedback.get_critical_mark_count() - marks, "locked": p.targeting.is_locked(),
-		"hitboxes": boss._hitboxes.any(func(h: Hitbox) -> bool: return h != null and h.is_active())}
+		"hitboxes": boss.combat.get_hitboxes().any(func(h: Hitbox) -> bool: return h != null and h.is_active())}
 	RunSummary.dismiss_open(self)
 	await _frames(4)
 	_record(summary and at_death["scale"] == 1.0 and at_death["stops"] == 0 and not at_death["shaking"]

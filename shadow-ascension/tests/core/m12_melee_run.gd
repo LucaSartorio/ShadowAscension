@@ -306,7 +306,7 @@ func _phase_boss() -> void:
 	# The boss still swings its own attack, on its own phases.
 	var winds_up: bool = await _until(func() -> bool:
 		p.global_position = boss.global_position + Vector3(0, 0, 2.0)
-		return boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP, 6.0)
+		return boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH, 6.0)
 	_stick(p, boss)
 	await _frames(2)
 	_press(p, &"target_lock")

@@ -206,8 +206,8 @@ func _phase_boss() -> void:
 	while waited < 6.0 and not (boss.combat_enabled and bar.is_showing()):
 		await _pause(0.1)
 		waited += 0.1
-	var outcome: Dictionary = await _take_dodge_take(p, boss._hitboxes, func() -> bool:
-		return boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and boss._phase_timer <= DODGE_LEAD,
+	var outcome: Dictionary = await _take_dodge_take(p, boss.combat.get_hitboxes(), func() -> bool:
+		return boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and boss.combat.get_phase_remaining() <= DODGE_LEAD,
 		hud)
 	_record(outcome["taken_before"] > 0.0, "BO1) a boss swing on a standing player takes %.0f HP" % outcome["taken_before"])
 	_record(outcome["connected_in_iframes"] > 0 and outcome["taken_in_iframes"] == 0.0 and outcome["hud_unchanged"],

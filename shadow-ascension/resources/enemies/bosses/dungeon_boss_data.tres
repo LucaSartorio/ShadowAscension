@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="BossData" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/boss_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://scripts/enemies/bosses/boss_phase_data.gd" id="2_phase"]
+[ext_resource type="Resource" path="res://resources/enemies/bosses/boss_quick_strike.tres" id="3_quick"]
+[ext_resource type="Resource" path="res://resources/enemies/bosses/boss_wide_sweep.tres" id="4_sweep"]
+[ext_resource type="Resource" path="res://resources/enemies/bosses/boss_ground_slam.tres" id="5_slam"]
+[ext_resource type="Resource" path="res://resources/enemies/bosses/boss_double_strike.tres" id="6_double"]
+
+[sub_resource type="Resource" id="phase_1"]
+script = ExtResource("2_phase")
+id = &"phase_1"
+health_threshold = 1.0
+transition_duration = 0.0
+attacks = Array[Resource]([ExtResource("3_quick"), ExtResource("4_sweep"), ExtResource("5_slam")])
+
+[sub_resource type="Resource" id="phase_2"]
+script = ExtResource("2_phase")
+id = &"phase_2"
+health_threshold = 0.5
+transition_duration = 1.5
+attacks = Array[Resource]([ExtResource("3_quick"), ExtResource("4_sweep"), ExtResource("5_slam"), ExtResource("6_double")])
+movement_speed_multiplier = 1.19
+reposition_timeout_multiplier = 0.64
+tempo_multiplier = 0.8
+body_color = Color(0.72, 0.12, 0.16, 1)
+
+[resource]
+script = ExtResource("1_data")
+id = &"dungeon_boss"
+display_name = "Dungeon Boss"
+xp_reward = 200
+max_health = 900.0
+attack_damage = 20.0
+movement_speed = 3.2
+acceleration = 10.0
+rotation_speed = 5.0
+gravity = 20.0
+detection_range = 30.0
+preferred_combat_distance = 2.2
+minimum_combat_distance = 1.4
+chase_band = 1.0
+navigation_radius = 0.8
+max_attack_facing_angle = 30.0
+max_consecutive_repeats = 2
+reposition_timeout = 1.4
+reposition_speed_fraction = 0.85
+target_update_interval = 0.2
+stagger_resistance = 60.0
+stagger_duration = 0.5
+stagger_immunity_time = 5.0
+knockback_multiplier = 0.1
+knockback_deceleration = 60.0
+phases = Array[Resource]([SubResource("phase_1"), SubResource("phase_2")])
+intro_duration = 0.8
+death_topple_duration = 1.2

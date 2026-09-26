@@ -238,7 +238,7 @@ func _phase_boss() -> void:
 	var p: Player = dungeon.get_player()
 	p.global_position = ROOM_ANCHORS[2]
 	var boss: DungeonBoss = _boss(dungeon)
-	var untouched: bool = boss.health_component.max_health == boss.stats.max_health and boss.get_xp_reward() == boss.stats.xp_reward \
+	var untouched: bool = boss.health_component.max_health == boss.data.max_health and boss.get_xp_reward() == boss.data.xp_reward \
 		and not boss.has_method("is_elite")
 	var awake: bool = await _until(func() -> bool: return boss.combat_enabled, 6.0)
 	_stick(p, boss)
@@ -251,7 +251,7 @@ func _phase_boss() -> void:
 	_record(untouched and awake and locked and boss.has_died() and not p.targeting.is_locked()
 			and dungeon.get_state() == DungeonController.DungeonState.COMPLETED,
 		"B1) the boss is no elite: its own stats (%.0f HP, %d XP), its own AI; locked and killed, the dungeon completes" % [
-			boss.stats.max_health, boss.stats.xp_reward])
+			boss.data.max_health, boss.data.xp_reward])
 
 
 func _phase_out_with_elites() -> void:

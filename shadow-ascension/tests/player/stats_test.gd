@@ -326,7 +326,7 @@ func _vitality_tests() -> void:
 	# Read from the stats assets rather than repeated here: this checks that the
 	# player's VIT did not reach anything else, not what the boss is tuned to.
 	_record(is_equal_approx(enemy_hp, enemy.stats.max_health)
-			and is_equal_approx(boss.health_component.max_health, boss.stats.max_health),
+			and is_equal_approx(boss.health_component.max_health, boss.data.max_health),
 		"26) enemy (%.0f) and boss (%.0f) keep their own maximums" % [
 			enemy_hp, boss.health_component.max_health])
 

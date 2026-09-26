@@ -5,7 +5,8 @@ extends CanvasLayer
 ## boss dies. Deliberately not a HUD framework — M5.2 replaces it.
 ##
 ## It finds the boss through the `boss` group and listens; the boss knows nothing
-## about any UI.
+## about any UI. One bar for the one pool: a phase changes the caption, never the
+## bar — nothing refills or resets it.
 
 @onready var root: Control = $Root
 @onready var name_label: Label = $Root/NameLabel
@@ -17,10 +18,9 @@ extends CanvasLayer
 
 ## How long the phase callout stays up.
 @export var banner_duration: float = 1.5
-## The phase captions. Data rather than literals in the match below, and
-## Italian like the rest of what the player reads.
-@export var phase_1_text: String = "FASE 1"
-@export var phase_2_text: String = "FASE 2"
+## The phase caption, numbered from 1 — the boss reports indices, the wording
+## lives here, in the player's language. Empty hides the caption.
+@export var phase_text_format: String = "FASE %d"
 
 var _health: HealthComponent = null
 var _banner_tween: Tween = null
@@ -33,6 +33,7 @@ func _ready() -> void:
 		return
 	banner.visible = false
 	boss.encounter_started.connect(_on_encounter_started)
+	boss.phase_transition_started.connect(_on_phase_transition_started)
 	boss.phase_changed.connect(_on_phase_changed)
 	boss.enemy_died.connect(_on_boss_died)
 
@@ -66,16 +67,20 @@ func is_banner_showing() -> bool:
 
 
 ## The boss says which phase it is in; the wording lives here, with the UI.
-func _on_phase_changed(phase: DungeonBoss.BossPhase) -> void:
-	match phase:
-		DungeonBoss.BossPhase.PHASE_1:
-			phase_label.text = phase_1_text
-		DungeonBoss.BossPhase.TRANSITION:
-			# The callout announces what is coming, during the beat itself.
-			phase_label.text = phase_2_text
-			_flash_banner()
-		DungeonBoss.BossPhase.PHASE_2:
-			phase_label.text = phase_2_text
+func _on_phase_changed(index: int) -> void:
+	phase_label.text = _phase_text(index)
+
+
+## The callout announces what is coming, during the beat itself.
+func _on_phase_transition_started(to_index: int) -> void:
+	phase_label.text = _phase_text(to_index)
+	_flash_banner()
+
+
+func _phase_text(index: int) -> String:
+	if phase_text_format.is_empty() or index < 0:
+		return ""
+	return phase_text_format % (index + 1)
 
 
 func _flash_banner() -> void:

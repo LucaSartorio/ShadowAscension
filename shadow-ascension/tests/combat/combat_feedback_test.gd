@@ -629,10 +629,11 @@ func _boss_tests() -> void:
 	_combat.reset()
 	_combat._start_attack(_tuned.heavy_combo, 0)
 	await _until(func() -> bool: return _boss.health_component.current_health < hp, 90)
-	var flashing: bool = _boss._feedback_tween != null and _boss._feedback_tween.is_running()
+	var flashing: bool = _boss.is_flashing()
 	await _until(func() -> bool: return _combat.get_state() == PlayerCombat.State.IDLE)
-	_record(flashing and _feedback.get_hit_stop_count() == count + 1 and _flat(_boss.global_position - spot).length() < 0.01,
-		"BO1) the boss hit: its own flash, one stop, one shake — and it is neither moved nor staggered")
+	_record(flashing and _feedback.get_hit_stop_count() == count + 1 and _flat(_boss.global_position - spot).length() < 0.05
+			and not _boss.is_staggered(),
+		"BO1) the boss hit: its own flash, one stop, one shake — barely nudged, and a parked boss is not staggered")
 	_boss.health_component.current_health = 1.0
 	_aim_at(_boss)
 	_combat.reset()

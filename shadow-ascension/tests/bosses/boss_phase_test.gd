@@ -10,6 +10,7 @@ const ROOM1_TRIGGER: Vector3 = Vector3(0, 0.1, -13)
 const ROOM2_TRIGGER: Vector3 = Vector3(0, 0.1, -33)
 const BOSS_TRIGGER: Vector3 = Vector3(0, 0.1, -53)
 
+## Indices into the boss's attacks, in the order its phases first list them.
 const QUICK: int = 0
 const SWEEP: int = 1
 const SLAM: int = 2
@@ -100,22 +101,25 @@ func _heal_player() -> void:
 ## swing still in flight first: a test that broke out mid-ACTIVE would otherwise
 ## leave the next one reading a stale attack phase.
 func _only_attack(index: int) -> void:
-	for hitbox in _boss._hitboxes:
-		if hitbox != null and hitbox.is_active():
-			hitbox.deactivate()
-	_boss._attack_phase = DungeonBoss.AttackPhase.NONE
-	_boss._active_attack = -1
-	_boss._hits_done = 0
-	_boss._phase_timer = 0.0
-	# Every real interruption resets the wind-up (the transition and death both
-	# do). This helper interrupts too, so it must leave the body where the boss
-	# would — otherwise the next attack is read through the last one's pose.
-	_boss._reset_telegraph_instantly()
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0 if i == index else 99.0
-	_boss._last_attack = -1
-	_boss._consecutive = 0
-	_boss._state = DungeonBoss.State.DECIDE
+	# interrupt() is what every real interruption runs: every hitbox shut and the
+	# body put back at once, so the next attack is not read through this pose.
+	_boss.combat.interrupt()
+	var all: Array[BossAttack] = _boss.get_attacks()
+	_boss.combat.clear_cooldowns()
+	for i in all.size():
+		_boss.combat.set_cooldown(all[i], 0.0 if i == index else 99.0)
+	_boss._change_state(DungeonBoss.State.DECIDE)
+
+
+func _attack(index: int) -> BossAttack:
+	return _boss.get_attacks()[index]
+
+
+func _any_hitbox_live() -> bool:
+	for hitbox in _boss.combat.get_hitboxes():
+		if hitbox.is_active():
+			return true
+	return false
 
 
 ## Blocks until the boss commits to an attack, so a caller measures a fresh one
@@ -141,7 +145,7 @@ func _set_boss_health(fraction: float) -> void:
 ## Records every hit an attack's own hitbox lands, with the time it landed.
 func _watch_hitbox(index: int) -> Array:
 	var log: Array = []
-	var hitbox: Hitbox = _boss._hitboxes[index]
+	var hitbox: Hitbox = _boss.combat.get_hitbox(_attack(index))
 	hitbox.hit_landed.connect(func(target: Node, hit: DamageInfo) -> void:
 		log.append({"t": Time.get_ticks_msec(), "target": target, "damage": hit.amount}))
 	return log
@@ -235,30 +239,28 @@ func _walk_player_to(target: Vector3, budget: float) -> bool:
 # --- phase 1 --------------------------------------------------------------------
 
 func _phase_1_tests() -> void:
-	_record(_boss.get_phase() == DungeonBoss.BossPhase.PHASE_1,
-		"1) the boss starts in PHASE_1 (phase=%d)" % _boss.get_phase())
-	_record(_bar.get_phase_text() == _bar.phase_1_text,
+	_record(_boss.get_phase_index() == 0 and _boss.get_phase_id() == &"phase_1",
+		"1) the boss starts in its first phase (%s)" % _boss.get_phase_id())
+	_record(_bar.get_phase_text() == _bar.phase_text_format % 1,
 		"1b) the UI reads '%s'" % _bar.get_phase_text())
 
 	# 2) phase 1 offers exactly the three original attacks
-	var p1: Array[String] = []
-	var p2: Array[String] = []
-	for attack in _boss.attacks:
-		if attack.is_available(false):
-			p1.append(attack.attack_name)
-		if attack.is_available(true):
-			p2.append(attack.attack_name)
-	_record(p1.size() == 3 and not p1.has("Double Strike"),
+	var p1: Array[StringName] = []
+	var p2: Array[StringName] = []
+	for attack in _boss.data.phases[0].attacks:
+		p1.append(attack.get_id())
+	for attack in _boss.data.phases[1].attacks:
+		p2.append(attack.get_id())
+	_record(p1.size() == 3 and not p1.has(&"boss_double_strike"),
 		"2) phase 1 offers the three original attacks: %s" % [p1])
-	_record(p2.size() == 4 and p2.has("Double Strike"),
+	_record(p2.size() == 4 and p2.has(&"boss_double_strike"),
 		"2b) phase 2 adds Double Strike: %s" % [p2])
 
 	# 3) above the threshold nothing happens
 	await _place_player(2.0)
 	_set_boss_health(0.6)
 	await _wait(0.4)
-	_record(_boss.get_phase() == DungeonBoss.BossPhase.PHASE_1
-			and not _boss.phase_transition_spent(),
+	_record(_boss.get_phase_index() == 0 and not _boss.is_in_transition(),
 		"3) at 60%% health the boss is still in phase 1 and has not transitioned")
 
 
@@ -282,18 +284,14 @@ func _transition_tests() -> void:
 
 	_record(was_attacking and _boss.get_state() == DungeonBoss.State.TRANSITION,
 		"4/5) crossing 50%% interrupts the attack in flight and enters TRANSITION (was attacking=%s)" % was_attacking)
-	_record(_boss.get_phase() == DungeonBoss.BossPhase.TRANSITION,
-		"4b) the phase itself is TRANSITION")
-	_record(_boss.get_active_attack_index() == -1
-			and _boss.get_attack_phase() == DungeonBoss.AttackPhase.NONE,
+	_record(_boss.get_phase_index() == 0 and _boss.get_transition_target() == 1,
+		"4b) the transition leads to phase 2, which has not begun yet")
+	_record(_boss.get_current_attack() == null
+			and _boss.get_attack_phase() == BossCombat.Phase.NONE,
 		"5b) the queued attack is cancelled, not left half-run")
 
-	var any_live: bool = false
-	for hitbox in _boss._hitboxes:
-		if hitbox != null and hitbox.is_active():
-			any_live = true
-	_record(not any_live, "6) every attack hitbox is off during the transition")
-	_record(_bar.is_banner_showing() and _bar.get_phase_text() == _bar.phase_2_text,
+	_record(not _any_hitbox_live(), "6) every attack hitbox is off during the transition")
+	_record(_bar.is_banner_showing() and _bar.get_phase_text() == _bar.phase_text_format % 2,
 		"7/10) the UI flashes the phase callout and reads '%s'" % _bar.get_phase_text())
 
 	# 8) harmless and still for the whole beat
@@ -301,7 +299,7 @@ func _transition_tests() -> void:
 	var moved: float = 0.0
 	var elapsed: float = 0.0
 	var attacked: bool = false
-	while elapsed < _boss.phase_transition_duration - 0.2:
+	while elapsed < _boss.data.phases[1].transition_duration - 0.2:
 		if _boss.get_state() == DungeonBoss.State.ATTACK:
 			attacked = true
 		moved = maxf(moved, _boss.global_position.distance_to(pos))
@@ -312,15 +310,15 @@ func _transition_tests() -> void:
 	_record(moved < 0.2, "8b) it does not chase or reposition either (drift=%.3f)" % moved)
 
 	await _wait(0.6)
-	_record(_boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
-		"9) the transition ends in PHASE_2 (phase=%d)" % _boss.get_phase())
+	_record(_boss.get_phase_index() == 1 and _boss.get_phase_id() == &"phase_2",
+		"9) the transition ends in phase 2 (%s)" % _boss.get_phase_id())
 	_record(_boss.get_state() != DungeonBoss.State.TRANSITION,
 		"9b) and the boss resumes acting (state=%d)" % _boss.get_state())
 
 	# 4) it can never run twice
 	_set_boss_health(0.3)
 	await _wait(0.3)
-	_record(_boss.get_phase() == DungeonBoss.BossPhase.PHASE_2
+	_record(_boss.get_phase_index() == 1
 			and _boss.get_state() != DungeonBoss.State.TRANSITION,
 		"4c) dropping further does not re-run the transition")
 
@@ -328,29 +326,26 @@ func _transition_tests() -> void:
 # --- phase 2 ----------------------------------------------------------------------
 
 func _phase_2_tests() -> void:
-	_record(is_equal_approx(_boss.movement_speed, 3.8)
-			and is_equal_approx(_boss.nav_agent.max_speed, 3.8),
-		"11) phase 2 raises movement speed to %.1f" % _boss.movement_speed)
+	var phase_2: BossPhaseData = _boss.data.phases[1]
+	var tempo: float = phase_2.tempo_multiplier
+	var speed: float = _boss.data.movement_speed * phase_2.movement_speed_multiplier
+	_record(is_equal_approx(_boss.movement_speed, speed) and _boss.movement_speed > _boss.data.movement_speed
+			and is_equal_approx(_boss.nav_agent.max_speed, speed),
+		"11) phase 2 raises movement speed to %.2f" % _boss.movement_speed)
 
-	var quick: BossAttack = _boss.attacks[QUICK]
-	var sweep: BossAttack = _boss.attacks[SWEEP]
-	var slam: BossAttack = _boss.attacks[SLAM]
-	_record(is_equal_approx(quick.get_startup(true), 0.20)
-			and is_equal_approx(quick.get_recovery(true), 0.35)
-			and quick.get_startup(true) < quick.startup,
-		"12) Quick Strike phase 2: startup %.2f -> %.2f, recovery %.2f -> %.2f" % [
-			quick.startup, quick.get_startup(true), quick.recovery, quick.get_recovery(true)])
-	_record(is_equal_approx(sweep.get_startup(true), 0.42)
-			and is_equal_approx(sweep.get_recovery(true), 0.55),
-		"13) Wide Sweep phase 2: startup %.2f, recovery %.2f" % [
-			sweep.get_startup(true), sweep.get_recovery(true)])
-	_record(is_equal_approx(slam.get_startup(true), 0.70)
-			and is_equal_approx(slam.get_recovery(true), 0.80),
-		"14) Ground Slam phase 2: startup %.2f, recovery %.2f" % [
-			slam.get_startup(true), slam.get_recovery(true)])
-	_record(quick.damage == 20.0 and sweep.damage == 30.0 and slam.damage == 40.0,
+	var quick: BossAttack = _attack(QUICK)
+	var sweep: BossAttack = _attack(SWEEP)
+	var slam: BossAttack = _attack(SLAM)
+	_record(tempo < 1.0,
+		"12/13/14) phase 2 quickens every wind-up and recovery (tempo %.2f): quick %.2f/%.2f, sweep %.2f/%.2f, slam %.2f/%.2f" % [
+			tempo, quick.attack.windup * tempo, quick.attack.recovery * tempo,
+			sweep.attack.windup * tempo, sweep.attack.recovery * tempo,
+			slam.attack.windup * tempo, slam.attack.recovery * tempo])
+	_record(_boss.combat.get_hitbox(quick).damage == 20.0 and _boss.combat.get_hitbox(sweep).damage == 30.0
+			and _boss.combat.get_hitbox(slam).damage == 40.0,
 		"14b) phase 2 changes the rhythm, not the damage (%.0f/%.0f/%.0f)" % [
-			quick.damage, sweep.damage, slam.damage])
+			_boss.combat.get_hitbox(quick).damage, _boss.combat.get_hitbox(sweep).damage,
+			_boss.combat.get_hitbox(slam).damage])
 
 	# 12b) the telegraph still takes up most of the wind-up, so it stays readable
 	_heal_player()
@@ -359,38 +354,40 @@ func _phase_2_tests() -> void:
 	var startup_seen: float = 0.0
 	var elapsed: float = 0.0
 	while elapsed < 2.5:
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP:
+		if _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH:
 			startup_seen += get_physics_process_delta_time()
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE:
+		if _boss.get_attack_phase() == BossCombat.Phase.ACTIVE:
 			break
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
-	_record(startup_seen >= 0.15,
-		"12b) the phase 2 Quick Strike still shows a wind-up before it lands (%.2fs)" % startup_seen)
+	_record(startup_seen >= 0.15 and startup_seen <= quick.attack.windup * tempo + 0.05,
+		"12b) the phase 2 Quick Strike shows its quickened wind-up before it lands (%.2fs of %.2f)" % [
+			startup_seen, quick.attack.windup * tempo])
 
 	# 28) cooldowns drop but still exist
-	_record(is_equal_approx(quick.get_cooldown(true), 0.8)
-			and is_equal_approx(sweep.get_cooldown(true), 1.6)
-			and is_equal_approx(slam.get_cooldown(true), 2.8),
+	_record(is_equal_approx(quick.cooldown * tempo, 0.8)
+			and is_equal_approx(sweep.cooldown * tempo, 1.6)
+			and is_equal_approx(slam.cooldown * tempo, 2.8),
 		"28) phase 2 cooldowns: %.1f / %.1f / %.1f" % [
-			quick.get_cooldown(true), sweep.get_cooldown(true), slam.get_cooldown(true)])
+			quick.cooldown * tempo, sweep.cooldown * tempo, slam.cooldown * tempo])
 	_heal_player()
 	await _place_player(2.0)
 	_only_attack(QUICK)
 	var saw: bool = await _await_attack_start()
-	_record(saw and _boss.get_attack_cooldown(QUICK) > 0.0
-			and _boss.get_attack_cooldown(QUICK) <= 0.8,
-		"28b) using it starts its phase 2 cooldown (%.2f of 0.8)" % _boss.get_attack_cooldown(QUICK))
+	_record(saw and _boss.combat.get_cooldown(quick) > 0.0
+			and _boss.combat.get_cooldown(quick) <= 0.8,
+		"28b) using it starts its phase 2 cooldown (%.2f of 0.8)" % _boss.combat.get_cooldown(quick))
 
 
 # --- Double Strike ---------------------------------------------------------------
 
 func _double_strike_tests() -> void:
-	var attack: BossAttack = _boss.attacks[DOUBLE]
-	_record(attack.hit_count == 2 and attack.damage == 18.0
+	var attack: BossAttack = _attack(DOUBLE)
+	var double_damage: float = _boss.combat.get_hitbox(attack).damage
+	_record(attack.hit_count == 2 and double_damage == 18.0
 			and is_equal_approx(attack.delay_between_hits, 0.22),
 		"16/17/18) Double Strike is %d hits of %.0f, %.2fs apart" % [
-			attack.hit_count, attack.damage, attack.delay_between_hits])
+			attack.hit_count, double_damage, attack.delay_between_hits])
 
 	# 15/16) two separate hit windows, one hitbox, opened twice
 	_heal_player()
@@ -398,14 +395,14 @@ func _double_strike_tests() -> void:
 	var log: Array = _watch_hitbox(DOUBLE)
 	_only_attack(DOUBLE)
 	var used: bool = await _await_attack_start()
-	used = used and _boss.get_active_attack_index() == DOUBLE
+	used = used and _boss.get_current_attack() == attack
 	# Count only this one attack: the 2.2s cooldown would let a second start
 	# inside a fixed window, which is the decision layer working, not a defect.
 	var windows: int = 0
 	var was_active: bool = false
 	var elapsed: float = 0.0
 	while elapsed < 3.0 and _boss.get_state() == DungeonBoss.State.ATTACK:
-		var active: bool = _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE
+		var active: bool = _boss.get_attack_phase() == BossCombat.Phase.ACTIVE
 		if active and not was_active:
 			windows += 1
 		was_active = active
@@ -426,7 +423,7 @@ func _double_strike_tests() -> void:
 	_only_attack(DOUBLE)
 	elapsed = 0.0
 	while elapsed < 3.0:
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP:
+		if _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH:
 			_player.global_position = _boss.global_position + Vector3(7.0, 0, 0)
 			break
 		await get_tree().physics_frame
@@ -462,7 +459,7 @@ func _double_strike_tests() -> void:
 	var dodged: bool = false
 	elapsed = 0.0
 	while elapsed < 3.0:
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and not dodged:
+		if _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and not dodged:
 			_player.hurtbox.set_invulnerable(true)
 			dodged = true
 		await get_tree().physics_frame
@@ -480,11 +477,11 @@ func _double_strike_tests() -> void:
 	var seen_gap: bool = false
 	elapsed = 0.0
 	while elapsed < 3.0:
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.BETWEEN_HITS and not seen_gap:
+		if _boss.get_attack_phase() == BossCombat.Phase.BETWEEN_HITS and not seen_gap:
 			seen_gap = true
 			yaw_at_gap = _boss.visual_root.rotation.y
 			_player.global_position = _boss.global_position + Vector3(4.0, 0, 0)
-		if seen_gap and _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE:
+		if seen_gap and _boss.get_attack_phase() == BossCombat.Phase.ACTIVE:
 			yaw_at_hit2 = _boss.visual_root.rotation.y
 			break
 		await get_tree().physics_frame
@@ -515,14 +512,14 @@ func _telegraph_peak(index: int) -> Dictionary:
 	var peak: Dictionary = {"pz": 0.0, "rx": 0.0, "ry": 0.0, "sy": 1.0}
 	var elapsed: float = 0.0
 	while elapsed < 3.5:
-		if _boss.get_active_attack_index() == index \
-				and _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP:
+		if _boss.get_current_attack() == _attack(index) \
+				and _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH:
 			var root: Node3D = _boss.mesh_root
 			peak["pz"] = maxf(peak["pz"], absf(root.position.z))
 			peak["rx"] = maxf(peak["rx"], absf(root.rotation.x))
 			peak["ry"] = maxf(peak["ry"], absf(root.rotation.y))
 			peak["sy"] = minf(peak["sy"], root.scale.y)
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE:
+		if _boss.get_attack_phase() == BossCombat.Phase.ACTIVE:
 			break
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
@@ -547,11 +544,9 @@ func _decision_tests() -> void:
 	# Free fight in phase 2: watch what it actually chooses.
 	_heal_player()
 	await _place_player(2.0)
-	for i in _boss.attacks.size():
-		_boss._cooldowns[i] = 0.0
-	_boss._last_attack = -1
-	_boss._consecutive = 0
-	_boss._state = DungeonBoss.State.DECIDE
+	_boss.combat.clear_cooldowns()
+	_boss._change_state(DungeonBoss.State.DECIDE)
+	var all: Array[BossAttack] = _boss.get_attacks()
 
 	var sequence: Array[int] = []
 	var last: int = -1
@@ -561,7 +556,7 @@ func _decision_tests() -> void:
 		_player.health_component.current_health = _player.health_component.max_health
 		_player.health_component.is_dead = false
 		_boss.health_component.current_health = _boss.health_component.max_health * 0.3
-		var index: int = _boss.get_active_attack_index()
+		var index: int = all.find(_boss.get_current_attack())
 		if index >= 0 and index != last:
 			sequence.append(index)
 		last = index
@@ -581,9 +576,9 @@ func _decision_tests() -> void:
 		max_run = maxi(max_run, run)
 		previous = index
 
-	_record(sequence.size() >= 8 and max_run <= _boss.max_consecutive_repeats,
+	_record(sequence.size() >= 8 and max_run <= _boss.data.max_consecutive_repeats,
 		"26a/27a) no attack repeats more than %d in a row (longest=%d over %d attacks)" % [
-			_boss.max_consecutive_repeats, max_run, sequence.size()])
+			_boss.data.max_consecutive_repeats, max_run, sequence.size()])
 	_record(counts[DOUBLE] >= 1 and counts[DOUBLE] <= sequence.size() / 2,
 		"26b) Double Strike is used but not spammed (%d of %d)" % [counts[DOUBLE], sequence.size()])
 	_record(counts[SLAM] < counts[QUICK] + counts[SWEEP] + counts[DOUBLE],
@@ -605,7 +600,7 @@ func _death_tests() -> void:
 	_only_attack(DOUBLE)
 	var elapsed: float = 0.0
 	while elapsed < 3.0:
-		if _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP:
+		if _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH:
 			break
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
@@ -614,18 +609,16 @@ func _death_tests() -> void:
 	await get_tree().physics_frame
 
 	_record(killed_mid_attack and _boss.get_state() == DungeonBoss.State.DEAD
-			and _boss.get_phase() == DungeonBoss.BossPhase.PHASE_2,
+			and _boss.get_phase_index() == 1,
 		"29) the boss dies during a phase 2 attack (state=%d phase=%d)" % [
-			_boss.get_state(), _boss.get_phase()])
+			_boss.get_state(), _boss.get_phase_index()])
 
 	# 31) the second swing must not arrive from beyond the grave
 	var hp: float = _player.health_component.current_health
 	var any_live: bool = false
 	elapsed = 0.0
 	while elapsed < 1.5:
-		for hitbox in _boss._hitboxes:
-			if hitbox != null and hitbox.is_active():
-				any_live = true
+		any_live = any_live or _any_hitbox_live()
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
 	_record(not any_live and _player.health_component.current_health == hp,
@@ -658,10 +651,7 @@ func _death_during_transition_tests() -> void:
 	var pos: Vector3 = _boss.global_position
 	var hp: float = _player.health_component.current_health
 	await _wait(1.8)
-	var any_live: bool = false
-	for hitbox in _boss._hitboxes:
-		if hitbox != null and hitbox.is_active():
-			any_live = true
+	var any_live: bool = _any_hitbox_live()
 	_record(_boss.get_state() == DungeonBoss.State.DEAD
 			and not any_live
 			and _boss.global_position.distance_to(pos) < 0.05

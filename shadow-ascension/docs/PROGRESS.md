@@ -10,7 +10,8 @@
 
 **M12.1 — Enemy AI 2.0 Foundation**, **M12.2 — Melee Archetype 2.0**, **M12.3 — Ranged
 Archetype 2.0**, **M12.4 — Tank Archetype 2.0**, **M12.5 — Assassin Archetype 2.0**, **M12.6 —
-Support Archetype 2.0** and **M12.7 — Elite Enemy Framework** are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
+Support Archetype 2.0**, **M12.7 — Elite Enemy Framework** and **M12.8 — Boss Framework Foundation**
+are complete. Every enemy runs one explicit state machine, `BasicEnemy` (`IDLE,
 ALERT, CHASE, REPOSITION, ATTACK, STAGGERED, DEAD`), with one writer of its state and a table of legal
 transitions; its target has one owner, `EnemyTargeting`, choosing from the target groups its data
 names — the player's alone, as before. An archetype is an attack component and its data: the melee
@@ -24,12 +25,15 @@ of the shared code; the support (M12.6) keeps a ranged's distance and helps its 
 them, heals the most hurt through their health, buffs a fighter's damage when nobody needs healing,
 and fires the ranged's bolt when there is nothing to do — through one optional part, `EnemySupport`,
 whose casts run as attacks. Any of the five can be made elite (M12.7) by one data profile set where
-it is placed — the same scene and AI, its numbers scaled once at spawn. The boss keeps its own AI; the
-shipped dungeon still holds normal melee only. M12.8 is next; the target choice between player and
-shadow, group combat and the Boss Framework are not built yet. The architecture is `ARCHITECTURE.md`,
-*Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)*, *Tank archetype (M12.4)*,
-*Assassin archetype (M12.5)*, *Support archetype (M12.6)* and *Elite framework (M12.7)*; the
-deliverables are in `ROADMAP.md`.
+it is placed — the same scene and AI, its numbers scaled once at spawn. The boss has a foundation of
+its own (M12.8): `DungeonBoss` on a `BossData`, its own state machine, phases that only advance by
+health share (`BossPhaseController`), one attack choice and lifecycle (`BossCombat`), the enemies'
+targeting and the shared hit-reaction rules — the shipped boss its first user, its moveset kept. The
+shipped dungeon still holds normal melee only. M12.9 is next; the target choice between player and
+shadow, group combat and the boss's special attacks, enrage and ultimate are not built yet. The
+architecture is `ARCHITECTURE.md`, *Enemy AI (M12.1)*, *Melee archetype (M12.2)*, *Ranged archetype
+(M12.3)*, *Tank archetype (M12.4)*, *Assassin archetype (M12.5)*, *Support archetype (M12.6)*, *Elite
+framework (M12.7)* and *Boss framework (M12.8)*; the deliverables are in `ROADMAP.md`.
 
 **M11 — Combat System 2.0** (Completed). **M11.1–M11.9 are complete, and M11.9 — Combat Feedback & M11 Closure — closed the milestone.** The
 player's combat runs on its own controller (`PlayerCombat`): a three-hit light combo and a heavy
@@ -47,7 +51,7 @@ is its *Combat System 2.0 at the close of M11*.
 | Phase | Milestones | State |
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
-| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.7 done) |
+| Core Production Foundation | M10–M12 | **In progress** — M10 and M11 complete; M12 in progress (M12.1–M12.8 done) |
 | Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
@@ -63,6 +67,68 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M12.8 — Boss Framework Foundation** (Completed). What the boss was: `DungeonBoss`, its own AI
+  (`INTRO / DECIDE / CHASE / REPOSITION / ATTACK / TRANSITION / RECOVERY / DEAD`, a `BossPhase` enum and
+  an `AttackPhase` enum beside it), numbers in `BossStats` with `phase_2_*` fields and a
+  `phase_2_health_fraction`, each `BossAttack` carrying its own damage, timings, `phase_2_*` timings,
+  `available_in_phase_1` and two weights; attack choice by index arrays in the boss script; the
+  transition latched by a `_phase_transition_spent` boolean; the player found as the first member of its
+  group; no stagger and no push at all; its display name an `@export`. Rebuilt as a foundation:
+  - **`BossData`** (replaces `BossStats`; `dungeon_boss_data.tres`): identity (`id`, `display_name`),
+    reward, health, base `attack_damage`, movement, perception, spacing, decision, hit reactions
+    (resistance 60, stagger 0.5 s, immunity 5 s, knockback ×0.1, deceleration 60), the encounter beats,
+    and its **`phases`** — **`BossPhaseData`** sub-resources: a stable id, a health-share threshold, a
+    transition duration, the attack pool, and modifiers (speed, reposition, tempo; a placeholder colour).
+    `get_problems()` validates it; a boss with problems reports them and stays inert.
+  - **`BossAttack`** refit to compose an **`AttackData`** (id, damage multiplier, windup / active /
+    recovery, impact) with only what a boss needs: hitbox, range band, own cooldown, weight, multi-hit,
+    telegraph. The four `.tres` carry their `AttackData` inline; damage is now base 20 × multiplier
+    (1.0 / 1.5 / 2.0 / 0.9 → 20 / 30 / 40 / 18, as before).
+  - **`DungeonBoss`** rewritten: `INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, STAGGERED,
+    TRANSITION, DEAD` — `_change_state()` the one writer, `TRANSITIONS` the legal moves, `state_changed`;
+    `start_encounter()`; priority DEAD > TRANSITION > STAGGERED > ATTACK > movement by construction.
+    Parts: **`BossPhaseController`** (pure logic: the phase, `due(share)`, `enter()` forward only),
+    **`BossCombat`** (the choice — the phase's pool, valid by hitbox, cooldown, range and repeat
+    ceiling, weighted and seeded, asked only in DECIDE — the attack under way, per-attack cooldowns,
+    the hitboxes, the telegraph's look; timed on delta, no `Timer`), and M12.1's **`EnemyTargeting`**.
+  - **Phases**: `phase_1` (100–50%: Quick Strike, Wide Sweep, Ground Slam) and `phase_2` (≤50%: those
+    and Double Strike; speed ×1.19, reposition ×0.64, tempo ×0.8 — the old phase-2 rhythm within a few
+    hundredths). The transition cancels the attack on the spot, opens no hitbox, stands still for
+    1.5 s, and still takes damage; a lethal hit is a death with no transition; a deeper threshold
+    crossed in the beat retargets it; no rollback on a heal.
+  - **`HitReaction`** (`scripts/combat/`): the M11.6 rules, now shared by `BasicEnemy` and the boss.
+    With the current attacks only the heavy (60) staggers the boss; Light 1/2/3 (10/15/30) never do.
+  - **`BossHealthBar`**: the caption from the phase index (`phase_text_format`, "FASE %d"), the callout
+    on `phase_transition_started`; one pool, never reset. Debug: `debug_state_label` (state, phase,
+    attack and its phase, target, health share, cooldowns) and `debug_log_phases`, both off.
+  - Removed: `BossStats` and its asset, the phase-2 fields, the `BossPhase` / `AttackPhase` enums, the
+    transition flag, the index-based selection, the group lookup of the player.
+
+  Existing boss tests migrated to the new API with the same checks (`boss_test` 37, `m5_review_run` 39,
+  and the boss parts of 16 others); `boss_phase_test` 51 → 49 — its three per-attack phase-2 timing
+  checks read the removed `phase_2_*` fields and are now one check on the phase's tempo;
+  `hit_reaction_test` BO1–BO3 (33 → 34), `combat_feedback_test` BO1 and `critical_hit_test` BO1 now
+  check the new policy (nudged, not thrown; the heavy staggers it).
+  **`tests/bosses/boss_framework_test`** (66) — the data and its validation, an inert boss without data;
+  identity (no archetype, no elite); the phase controller; the encounter (inert before, clean at start,
+  once); choosing (phase pools, range, cooldown, the repeat ceiling); a free fight (only its pool, no
+  attack before its cooldown, no choice weighed during an attack, no tree search); telegraph / active /
+  recovery; a dodge's i-frames; walking out; the lights and the heavy against its resistance, the
+  immunity, the push; normal and critical; the lock through both phases and its release; a critical
+  across the threshold; the transition (no attack, no hitbox, no movement, damage taken, no stagger);
+  phase 2's pool and modifiers, the data unwritten; a heal without rollback; two bosses on one data;
+  death mid-attack and its cleanup; death beating the transition; a three-phase boss with no dungeon,
+  a threshold crossed mid-swing and a second in the beat; the debug label. **`tests/core/m12_boss_run.gd`**
+  (19) — the real game: rooms fought beside a sleeping boss, the encounter, phase 1, the lock, the
+  player and the shadow past half, the transition and phase 2, the shadow's killing blow (140 / 60),
+  one death and one completion, the hub; a second dungeon's boss fresh; the player's death mid-attack
+  and the reload; the five archetypes and an elite still fighting; leaving mid-attack, nothing left.
+
+  **2438 assertions across 69 suites, zero failures, zero runtime errors, zero exit-time leaks**
+  (`tests/run_all.gd`). The 67 existing suites keep M12.7's 2354 less the two merged checks, plus BO3;
+  the two new ones add 85. Zero parser warnings in the changed scripts and the new tests; cold-cache
+  reimport, headless boot and a headless run of the game are clean.
 
 - **M12.7 — Elite Enemy Framework** (Completed). Where the numbers were configured first: max health,
   movement speed, stagger resistance and knockback in `EnemyData`, copied by `BasicEnemy._apply_stats()`;
@@ -2186,7 +2252,7 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 ## In Progress
 
 Nothing in flight. M0–M11 are complete and the slice is at RC1; **M12 is in progress** — M12.1 to
-M12.7 are done, M12.8 is next.
+M12.8 are done, M12.9 is next.
 
 One definition stays deliberately open: the **definitive art direction**, which is decided at M13
 and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —

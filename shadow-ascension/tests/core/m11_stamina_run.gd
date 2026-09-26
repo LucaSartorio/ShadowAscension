@@ -264,8 +264,8 @@ func _phase_boss() -> void:
 	var boss: DungeonBoss = dungeon.get_rooms()[2].get_enemies()[0] as DungeonBoss
 	var bar: BossHealthBar = dungeon.get_node("BossHealthBar")
 	await _until(func() -> bool: return boss.combat_enabled and bar.is_showing(), 6.0)
-	var outcome: Dictionary = await _take_dodge_take(p, boss._hitboxes, func() -> bool:
-		return boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP and boss._phase_timer <= DODGE_LEAD,
+	var outcome: Dictionary = await _take_dodge_take(p, boss.combat.get_hitboxes(), func() -> bool:
+		return boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH and boss.combat.get_phase_remaining() <= DODGE_LEAD,
 		hud)
 	_record(outcome["taken_before"] > 0.0 and outcome["connected_in_iframes"] > 0 and outcome["taken_in_iframes"] == 0.0
 			and outcome["taken_after"] > 0.0 and outcome["dodge_spends"] == [p.combat.data.dodge_stamina_cost],

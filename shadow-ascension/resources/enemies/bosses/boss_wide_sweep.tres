@@ -1,24 +1,27 @@
-[gd_resource type="Resource" script_class="BossAttack" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="BossAttack" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/boss_attack.gd" id="1_attack"]
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="2_data"]
+
+[sub_resource type="Resource" id="attack_data"]
+script = ExtResource("2_data")
+id = &"boss_wide_sweep"
+damage_multiplier = 1.5
+windup = 0.5
+active = 0.2
+recovery = 0.7
+stagger_power = 0.0
+knockback_force = 0.0
+debug_color = Color(1, 0.5, 0.15, 0.35)
 
 [resource]
 script = ExtResource("1_attack")
-attack_name = "Wide Sweep"
+attack = SubResource("attack_data")
 hitbox_name = &"WideSweepHitbox"
-damage = 30.0
-startup = 0.5
-active = 0.2
-recovery = 0.7
-cooldown = 2.0
 min_range = 0.0
 max_range = 3.4
-phase_2_startup = 0.42
-phase_2_recovery = 0.55
-phase_2_cooldown = 1.6
-available_in_phase_1 = true
-weight_phase_1 = 1.0
-weight_phase_2 = 1.0
+cooldown = 2.0
+weight = 1.0
 telegraph = 1
 telegraph_color = Color(1, 0.5, 0.15, 1)
 facing_correction_fraction = 0.15

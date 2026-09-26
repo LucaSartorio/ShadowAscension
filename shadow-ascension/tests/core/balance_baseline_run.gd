@@ -17,7 +17,7 @@ const ROOM_ANCHORS: Array[Vector3] = [
 const STRIKE_RANGE: float = 1.6
 
 var _enemy_data: EnemyData = preload("res://resources/enemies/basic_melee_enemy.tres")
-var _boss_stats: Resource = preload("res://resources/enemies/bosses/dungeon_boss_stats.tres")
+var _boss_data: BossData = preload("res://resources/enemies/bosses/dungeon_boss_data.tres")
 var _shadow_data: ShadowData = preload("res://resources/shadows/basic_melee_shadow.tres")
 var _enemy_loot: LootTable = preload("res://resources/items/loot/basic_melee_enemy_loot.tres")
 var _boss_loot: LootTable = preload("res://resources/items/loot/dungeon_boss_loot.tres")
@@ -120,19 +120,20 @@ func _report_static() -> void:
 
 	print("")
 	print("=== BOSS ===")
-	print("  HP                   %.0f" % _boss_stats.max_health)
-	print("  XP reward            %d" % _boss_stats.xp_reward)
-	print("  phase 2 at           %.0f%% health" % (_boss_stats.phase_2_health_fraction * 100.0))
-	print("  phase transition     %.2fs" % _boss_stats.phase_transition_duration)
-	for path in ["boss_quick_strike", "boss_wide_sweep", "boss_ground_slam",
-			"boss_double_strike"]:
-		var attack: Resource = load("res://resources/enemies/bosses/%s.tres" % path)
-		var hits: int = attack.get("hit_count") if attack.get("hit_count") != null else 1
-		print("  %-14s %3.0f dmg x%d | P1 %.2f/%.2f/%.2f | P2 %.2f/%.2f/%.2f | w %.1f/%.1f" % [
-			attack.attack_name, attack.damage, maxi(1, hits),
-			attack.startup, attack.recovery, attack.cooldown,
-			attack.phase_2_startup, attack.phase_2_recovery, attack.phase_2_cooldown,
-			attack.weight_phase_1, attack.weight_phase_2])
+	print("  HP                   %.0f" % _boss_data.max_health)
+	print("  XP reward            %d" % _boss_data.xp_reward)
+	print("  stagger resistance   %.0f (%.1fs immune after)" % [
+		_boss_data.stagger_resistance, _boss_data.stagger_immunity_time])
+	for phase in _boss_data.phases:
+		var tempo: float = phase.tempo_multiplier
+		print("  %-8s at %3.0f%% health | transition %.2fs | tempo x%.2f | speed x%.2f" % [
+			phase.id, phase.health_threshold * 100.0, phase.transition_duration, tempo,
+			phase.movement_speed_multiplier])
+		for attack in phase.attacks:
+			print("    %-20s %3.0f dmg x%d | %.2f/%.2f/%.2f | w %.1f" % [
+				attack.get_id(), DamageModel.attack_damage(_boss_data.attack_damage, attack.attack.damage_multiplier),
+				attack.hit_count, attack.attack.windup * tempo, attack.attack.recovery * tempo,
+				attack.cooldown * tempo, attack.weight])
 	print("  worst single hit     %.0f of %.0f player HP (%.0f%%)" % [
 		40.0, p.health_component.max_health, 4000.0 / p.health_component.max_health])
 	print("  boss loot: any drop  %.1f%% (%s)" % [
@@ -363,12 +364,12 @@ func _fight_boss(p: Player, boss: DungeonBoss, defend: bool) -> float:
 	var reapproach_left: float = 0.0
 	while elapsed < 400.0 and not boss.has_died():
 		var winding_up: bool = defend and boss.get_attack_phase() in [
-			DungeonBoss.AttackPhase.STARTUP, DungeonBoss.AttackPhase.ACTIVE,
-			DungeonBoss.AttackPhase.BETWEEN_HITS]
+			BossCombat.Phase.TELEGRAPH, BossCombat.Phase.ACTIVE,
+			BossCombat.Phase.BETWEEN_HITS]
 		if winding_up:
-			var index: int = boss.get_active_attack_index()
-			if index >= 0 and index < boss.attacks.size():
-				attacks[boss.attacks[index].attack_name] = true
+			var attack: BossAttack = boss.get_current_attack()
+			if attack != null:
+				attacks[attack.get_id()] = true
 			# Out past the reach of whatever is coming.
 			var away: Vector3 = (p.global_position - boss.global_position)
 			away.y = 0.0

@@ -261,7 +261,7 @@ func _phase_first_run() -> void:
 	var boss_bar: BossHealthBar = current_scene.get_node("BossHealthBar")
 	_record(boss_bar.visible and objective.get_objective() == dungeon.objective_boss,
 		"38) the boss encounter opens its bar and its objective")
-	_record(boss_bar.get_phase_text() == boss_bar.phase_1_text,
+	_record(boss_bar.get_phase_text() == boss_bar.phase_text_format % 1,
 		"39) starting in %s" % boss_bar.get_phase_text())
 	await _kill(p, boss, 90.0)
 	await _pause(1.2)

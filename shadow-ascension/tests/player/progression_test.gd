@@ -268,7 +268,7 @@ func _dungeon_reward_tests() -> void:
 	var after_first_hit: int = _total_xp()
 	boss.hurtbox.receive_hit(DamageInfo.new(boss.health_component.max_health * 0.55, null))
 	await _wait(2.2)
-	_record(boss.get_phase() == DungeonBoss.BossPhase.PHASE_2, "24a) the boss entered phase 2")
+	_record(boss.get_phase_index() == 1, "24a) the boss entered phase 2")
 	_record(_total_xp() == after_first_hit,
 		"24) the phase transition awards no XP (%d -> %d)" % [after_first_hit, _total_xp()])
 

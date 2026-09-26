@@ -460,19 +460,27 @@ func _boss_tests() -> void:
 	var flashes: int = 0
 	for i in range(first, _hits.size()):
 		flashes += 1 if _hits[i].get("flashed", false) else 0
+	var nudge: float = _flat(_boss.global_position - spot).length()
 	_record(_hits.size() == first + 4 and flashes == 4 and hp - health.current_health == 120.0
-			and _flat(_boss.global_position - spot).length() < 0.01 and _boss.get_state() == DungeonBoss.State.INACTIVE,
-		"BO1) the boss takes Light 1/2/3 and the heavy — 120 damage, a flash each — and is not moved an inch, nor interrupted")
+			and nudge < 0.05 and _boss.get_state() == DungeonBoss.State.INACTIVE,
+		"BO1) the boss takes Light 1/2/3 and the heavy — 120 damage, a flash each — barely nudged (%.3f m), and a parked boss is not staggered" % nudge)
 
-	# In the middle of its own attack: nothing a player hit carries stops it.
+	# M12.8: high resistance, not immunity. Below it, the attack goes on; at it,
+	# the boss staggers and the attack is cut off.
 	_player.hurtbox.set_invulnerable(true)
 	_boss.set_combat_enabled(true)
-	var winding: bool = await _until(func() -> bool: return _boss.get_attack_phase() == DungeonBoss.AttackPhase.STARTUP, 600)
+	var winding: bool = await _until(func() -> bool: return _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH, 600)
 	var at: Vector3 = _boss.global_position
-	_boss.hurtbox.receive_hit(_crafted_hit(1.0, 1000.0, 50.0, Vector3.FORWARD))
-	var swung: bool = await _until(func() -> bool: return _boss.get_attack_phase() == DungeonBoss.AttackPhase.ACTIVE, 120)
+	_boss.hurtbox.receive_hit(_crafted_hit(1.0, _boss.stagger_resistance - 1.0, 0.0, Vector3.FORWARD))
+	var swung: bool = await _until(func() -> bool: return _boss.get_attack_phase() == BossCombat.Phase.ACTIVE, 120)
 	_record(winding and swung and _flat(_boss.global_position - at).length() < 0.05,
-		"BO2) hit mid-windup with any stagger and push at all: the boss swings anyway, and stays where it stood")
+		"BO2) hit mid-windup below its stagger resistance: the boss swings anyway, and stays where it stood")
+	winding = await _until(func() -> bool: return _boss.get_attack_phase() == BossCombat.Phase.TELEGRAPH, 600)
+	_boss.hurtbox.receive_hit(_crafted_hit(1.0, _boss.stagger_resistance, 0.0, Vector3.FORWARD))
+	await _frames(1)
+	_record(winding and _boss.is_staggered() and _boss.get_current_attack() == null
+			and not _boss.combat.is_hit_window_open(),
+		"BO3) a hit at its resistance (the heavy's %.0f) staggers it mid-windup and cuts the attack off" % _boss.stagger_resistance)
 	_boss.set_combat_enabled(false)
 	_boss.global_position = Vector3(20, 0.1, 20)
 	_player.global_position = Vector3(0, 0.1, 0)
@@ -528,7 +536,7 @@ func _on_player_hit(target: Node, info: DamageInfo) -> void:
 		entry["hitbox_open"] = enemy.attack.hitbox.is_active()
 	var boss: DungeonBoss = target as DungeonBoss
 	if boss != null:
-		entry["flashed"] = boss._feedback_tween != null and boss._feedback_tween.is_running()
+		entry["flashed"] = boss.is_flashing()
 	_hits.append(entry)
 
 

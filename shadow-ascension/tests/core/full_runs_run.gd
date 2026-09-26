@@ -364,8 +364,8 @@ func _fight_boss(p: Player, boss: DungeonBoss) -> void:
 	var reapproach_left: float = 0.0
 	while elapsed < 400.0 and not boss.has_died():
 		var winding_up: bool = boss.get_attack_phase() in [
-			DungeonBoss.AttackPhase.STARTUP, DungeonBoss.AttackPhase.ACTIVE,
-			DungeonBoss.AttackPhase.BETWEEN_HITS]
+			BossCombat.Phase.TELEGRAPH, BossCombat.Phase.ACTIVE,
+			BossCombat.Phase.BETWEEN_HITS]
 		if winding_up:
 			var away: Vector3 = p.global_position - boss.global_position
 			away.y = 0.0

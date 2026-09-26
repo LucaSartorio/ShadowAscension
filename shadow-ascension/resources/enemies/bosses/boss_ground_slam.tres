@@ -1,24 +1,27 @@
-[gd_resource type="Resource" script_class="BossAttack" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="BossAttack" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/boss_attack.gd" id="1_attack"]
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="2_data"]
+
+[sub_resource type="Resource" id="attack_data"]
+script = ExtResource("2_data")
+id = &"boss_ground_slam"
+damage_multiplier = 2.0
+windup = 0.85
+active = 0.2
+recovery = 1.0
+stagger_power = 0.0
+knockback_force = 0.0
+debug_color = Color(1, 0.25, 0.2, 0.3)
 
 [resource]
 script = ExtResource("1_attack")
-attack_name = "Ground Slam"
+attack = SubResource("attack_data")
 hitbox_name = &"GroundSlamHitbox"
-damage = 40.0
-startup = 0.85
-active = 0.2
-recovery = 1.0
-cooldown = 3.5
 min_range = 0.0
 max_range = 4.2
-phase_2_startup = 0.7
-phase_2_recovery = 0.8
-phase_2_cooldown = 2.8
-available_in_phase_1 = true
-weight_phase_1 = 0.6
-weight_phase_2 = 0.5
+cooldown = 3.5
+weight = 0.6
 telegraph = 2
 telegraph_color = Color(1, 0.25, 0.2, 1)
 facing_correction_fraction = 0.0
