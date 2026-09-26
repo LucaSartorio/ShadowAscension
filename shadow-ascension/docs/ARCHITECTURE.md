@@ -5,7 +5,7 @@ Does **not** commit to unimplemented features or undocumented game-design choice
 
 This file owns **how the systems are built**: data-driven architecture, state separation, the
 content pipeline, and the gameplay/visual split. Milestone order lives in `ROADMAP.md`, design
-decisions in `GAME_DESIGN.md`.
+decisions in `GAME_DESIGN.md`, the visual standards every asset follows in `VISUAL_BIBLE.md`.
 
 Sections 1–10 are the standing principles. The sections after them describe **what exists today**,
 milestone by milestone. *Direction for M10+* at the end describes what is planned and is explicitly
@@ -50,7 +50,9 @@ shadow-ascension/
     addons/
         godot_mcp/           # editor integration
 
-    assets/                  # raw import sources
+    assets/                  # runtime art/audio — what Godot imports (M13.1: one folder
+                             # per asset; working files live outside the project, see
+                             # *Content pipeline*)
         audio/
         characters/
         environments/
@@ -3284,6 +3286,38 @@ changing**. What gameplay needs of a combatant's scene, and what it does not:
 tree, and `boss_phase_mechanics_test` (M13) does the same to the boss: each still fights, reacts, keeps
 its lock anchor, escalates and dies. Before M12.9 each of them failed on its first frame.
 
+### The standard it becomes (M13.1)
+
+M13.1 turned this into the standard every definitive asset follows (`VISUAL_BIBLE.md`, §16.5):
+
+```
+<Entity> (CharacterBody3D)           origin at the feet (y = 0 at ground contact)
+├── CollisionShape3D                 gameplay body: a primitive capsule, never fitted to a model
+├── Hurtbox (Area3D)                 a primitive capsule on the root, never animated
+├── VisualRoot (Node3D)              the facing — the only node that turns
+│   ├── Model (Node3D)               presentation pivot scripts may tilt/scale
+│   │   └── <asset>.glb instance     turned 180° on Y; the only thing replaced
+│   ├── AttackOrigin(s) → Hitbox     gameplay; siblings of Model, never children
+│   └── ProjectileSpawn (Marker3D)   gameplay; carries no visual
+├── TargetAnchor (Marker3D)          the torso centre, on the root
+└── components
+```
+
+- **`VisualRoot` separation is the rule**, and every combatant already has one. The player's pivot
+  is `VisualRoot/Model`, the boss's `VisualRoot/MeshRoot`; the enemies and the shadow get a `Model`
+  pivot with their first definitive model (M13.6), which moves the placeholder poses onto it.
+- **Gameplay nodes are model-independent**: body, collider, hurtbox, `VisualRoot`, hitboxes,
+  `ProjectileSpawn`, `TargetAnchor` and every component stay when the model changes. A gameplay
+  marker carries no visual — M13.1 moved the ranged's and the support's placeholder `Orb` off
+  `ProjectileSpawn` to a sibling under `VisualRoot` (same position; nothing referenced it).
+- **Axes (verified)**: gameplay forward is −Z (`Vector3.FORWARD`); an imported glTF faces +Z
+  (`Vector3.MODEL_FRONT`); Blender's −Y front exports to +Z. The **180° turn lives on the model
+  instance**, never on a pivot scripts drive — `DungeonBoss` resets `MeshRoot`'s rotation in its
+  beats, the player's tilts drive `Model`.
+- **1 unit = 1 m**, import scale 1.0: a model at the wrong scale is fixed in its source.
+- **Per-instance looks on definitive models** (telegraph flash, hit flash, elite, phase, enrage) go
+  through instance uniforms or a shared `material_overlay`, never a duplicated material.
+
 ## Content pipeline (M13+)
 
 Godot is the engine and the runtime. Blender is a content-pipeline tool — it is not where the game
@@ -3302,6 +3336,17 @@ concept / reference
 column, door, stairs, statue, props — is authored in Blender and *assembled in Godot*. This is what
 gives reuse, better performance, simpler edits, more than one dungeon, and eventually
 semi-procedural composition (M18).
+
+**Source vs runtime (M13.1).** Working files — `.blend`, sculpts, bake cages, texture-painting
+projects — are **source** and live in `art_source/` at the repository root, **outside the Godot
+project**, so Godot never imports them. Only **runtime** assets — `.glb`, exported textures, Godot
+materials and shaders — go into `shadow-ascension/assets/`, one folder per asset, named by the
+Visual Bible's convention (`ch_`, `wp_`, `mat_`, `tex_`, …; §17). A `.blend` is never a runtime asset.
+The folder, and whether it uses Git LFS, are set up by M13.2 with its first file; external or
+generated assets are recorded in an asset register before they are committed (§18).
+
+The visual rules those assets follow — palette, materials, silhouettes, scale, texel density — are
+`VISUAL_BIBLE.md`; the export and import presets that enforce them are M13.2's.
 
 **Toolchain.** The pipeline may come to include Godot, Blender, asset libraries, animation
 libraries, Mixamo or equivalents where appropriate, AI-assisted tools where legally and technically

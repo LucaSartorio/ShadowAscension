@@ -257,7 +257,7 @@ taken from and changes what covers it:
 
 ```
 enemy mesh + shadow material + shadow shader + emission + VFX + particles + aura
-            ( + eye / material variations where they read )
+            ( + the Core and the Seams — the shadow's mark, `VISUAL_BIBLE.md` §11 )
 ```
 
 This is what makes the mechanic scale: any enemy that can be modelled can become a shadow without a
@@ -268,7 +268,8 @@ despawn**, the standing **aura**, **dissolve**, **particles**, **emission**, and
 **variation by shadow rank**. Whether a given shadow also gets bespoke silhouette work is a
 case-by-case decision, not the default.
 
-Built in **M13.7**. Until then the summoned shadow is a translucent, emissive capsule, which is a
+Built in **M13.7**, to the rules of `VISUAL_BIBLE.md` §11 (opaque, violet rim, 0.9× its source, one
+shared material). Until then the summoned shadow is a translucent, emissive capsule, which is a
 placeholder and reads as one.
 
 **Not decided**: any cost to summon, whether bosses yield shadows, what happens to a collection
@@ -510,34 +511,45 @@ milestone that implements it.
 
 ## Art direction
 
-**Not yet decided.** The definitive visual identity is chosen in **M13**, and this section is the
-place it will be written down. What follows is direction, not specification: it is enough to judge
-a reference against, and deliberately not enough to model from.
+**Decided at M13.1.** The authoritative visual reference is `VISUAL_BIBLE.md`; this section only
+holds the identity at the level of design. Where the two ever differ, the Visual Bible wins.
+
+**Visual identity.** *Dark urban fantasy + supernatural military/arcane + clean action-RPG
+readability*, rendered as **stylized realism**: realistic materials and light on simplified,
+slightly exaggerated shapes. A cold, modern, rectilinear city (the hub) with something ancient and
+impossible bleeding through it (the Gates, the dungeons). The mood is dark, elegant, menacing,
+modern and supernatural — not horror, not cartoon, not photorealism. Six pillars govern every
+asset, with **combat readability first**: no visual may hide a telegraph, a hitbox's reach, the
+locked target, the dodge window or a boss attack. Supernatural colour is a signal with an owner —
+**warm is hostile, cold is ours**, green is restoration — and environments carry almost none of it.
 
 **The direction is original.** ShadowAscension is not a reproduction of Solo Leveling, and
-"looks like Solo Leveling" is not an acceptable answer to an art question.
+"looks like Solo Leveling" is not an acceptable answer to an art question. No character, outfit,
+symbol, weapon, creature, logo, dungeon or signature effect of another work is copied; genre
+conventions are shared vocabulary, specific designs are not. Generated assets and references follow
+the Visual Bible's licensing and originality rules (§18).
 
-Conceptual references:
+**Player fantasy.** A disciplined, agile hunter of the modern world who grows into the master of
+something ancient. Athletic, lean, lightly armoured — mobility and precision, never bulk — with the
+**Arc Line**, a cyan light seam across the back, as the player's signature: the camera mostly sees
+the player's back, and that line identifies them in any crowd. Progression shows on the same
+silhouette: brighter accents, polished metal, and violet shadow seams creeping into the gear — but
+the player never becomes a shadow.
 
-- **dark fantasy** as the base register;
-- **urban fantasy** — a contemporary world, not a medieval one;
-- a modern atmosphere, with dungeons that **contrast** with the real world rather than continuing it;
-- a **strong visual identity for the shadows**, distinct at a glance from both the player and the
-  enemies they came from;
-- combat that is **legible first and spectacular second** — an effect that hides a telegraph is a
-  bug, not a flourish;
-- cinematic environments that never cost gameplay readability.
+**Shadow fantasy.** The enemies the player defeats come back as the player's own: **the same
+creature, reclaimed**. A shadow is its source enemy's body under one shared material — the darkest
+thing on screen, outlined by a violet rim, marked by a single violet **Core** at the chest and thin
+**Seams** of light — at 0.9× its source's size, so the player stays the tallest figure in the army.
+Darkness held together by light: one hue, no glowing eyes, no ghostly translucency. The Gate shares
+the same violet light leaking through its seams — shadows and Gates are one energy.
 
-When M13 settles it, this section will describe: player visual style, enemy style, boss style,
-shadow style, gate style, dungeon style, hub style, UI style, lighting, colour palette, and the
-VFX language. **Those are deliberately undecided today and are not to be invented in advance.**
-
-### Placeholders are the plan until M12
+### Placeholders until their category is replaced
 
 Everything visible in the game today — capsules, boxes, flat materials — is a placeholder, and that
 is intentional. Definitive assets are produced from **M13**, once combat, hitboxes, skeleton and
-animation requirements, AI, movement, interaction and architecture have stopped moving. See
-`ROADMAP.md`, *Why art waits for M13*.
+animation requirements, AI, movement, interaction and architecture have stopped moving (`ROADMAP.md`,
+*Why art waits for M13*). They are replaced **one category at a time**, without touching gameplay
+(`VISUAL_BIBLE.md`, §19).
 
 ---
 

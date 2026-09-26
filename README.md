@@ -4,7 +4,7 @@ Action RPG 3D in Godot 4.7 (GDScript). The Godot project lives in `shadow-ascens
 
 ## Status
 
-**M0–M12 complete — Vertical Slice (RC1) on its production foundation: consolidated architecture, Combat System 2.0, Enemy AI 2.0 and the Boss Framework. M13 (art) has not started.**
+**M0–M12 complete — Vertical Slice (RC1) on its production foundation: consolidated architecture, Combat System 2.0, Enemy AI 2.0 and the Boss Framework. M13 (art) in progress: M13.1 — the art direction and the Visual Bible — is complete.**
 
 The slice runs from the main menu through a hub, a dungeon and a boss, and back, with progression,
 loot, equipment and the shadow mechanic all live. Everything you can see is a **placeholder**:
@@ -24,7 +24,11 @@ archetype — heals and buffs its allies, fights when idle), M12.7 (the elite fr
 archetype made elite by a data profile), M12.8 (the boss framework — phases, attack selection and
 lifecycle as data, on a boss of its own) and M12.9 (boss phase mechanics — a phase-2 special and an
 enrage — and the M12 closure) are done, and with them the Core Production Foundation phase.
-**M13 — Art Direction & Character Production** has not started; the roadmap runs to Alpha 1 at M20.
+**M13 — Art Direction & Character Production** is in progress: M13.1 (Art Direction & Visual Bible)
+decided the visual identity — dark urban fantasy, supernatural military/arcane, clean action-RPG
+readability, stylized realism — and wrote it into `shadow-ascension/docs/VISUAL_BIBLE.md`, the official
+visual reference every asset follows. M13.2 (the Blender → Godot asset pipeline) is next and has not
+started; the roadmap runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub
@@ -120,5 +124,6 @@ them:
 | [`docs/ROADMAP.md`](shadow-ascension/docs/ROADMAP.md) | Milestones, development order, the macro-phases through to Alpha 1 |
 | [`docs/GAME_DESIGN.md`](shadow-ascension/docs/GAME_DESIGN.md) | Gameplay loop, progression, shadows, gates, the RPG layer, controls, art direction |
 | [`docs/ARCHITECTURE.md`](shadow-ascension/docs/ARCHITECTURE.md) | Systems and structure, data-driven architecture, state separation, the content pipeline, gameplay/visual separation |
+| [`docs/VISUAL_BIBLE.md`](shadow-ascension/docs/VISUAL_BIBLE.md) | The official visual reference: identity, pillars, palette, materials, silhouettes, shadows, telegraphs, scale, technical-art standards, naming, licensing |
 | [`docs/PROGRESS.md`](shadow-ascension/docs/PROGRESS.md) | What shipped, what was found closing it, what is next, and Future Work |
 | [`CLAUDE.md`](CLAUDE.md) | Operational rules and conventions for working in this repository |

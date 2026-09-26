@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M12 complete; M13 not started.** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M12 complete; M13 in progress — M13.1 complete, M13.2 not started.** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -65,10 +65,19 @@ every modifier is recomputed base → phase → enrage by `DungeonBoss._apply_mo
 an asset. M12.9 closed M12 with an audit (a ranged stuck outside its ring behind cover fixed; the
 placeholder mesh made optional for enemies, the boss and the shadow, so a definitive model needs no
 gameplay change), `mixed_encounter_test` and `m12_closure_run`.
-Everything visible is a **placeholder**: definitive art production starts at M13.
+Everything visible is a **placeholder**: definitive art production starts at M13. Since M13.1 the art
+direction is decided and **`shadow-ascension/docs/VISUAL_BIBLE.md` is the official visual reference** —
+*dark urban fantasy + supernatural military/arcane + clean action-RPG readability*, stylized realism;
+the pillars (combat readability first), the palette (warm is hostile, cold is ours), materials,
+silhouettes, the shadow's look, telegraphs, scale (1 unit = 1 m), the axes (gameplay −Z; models arrive
++Z and are turned 180° on their instance), the `VisualRoot` structure, naming (`ch_`, `wp_`, `mat_`,
+`tex_`, …), source (`art_source/`, outside the project) vs runtime (`assets/`), and licensing. Every
+asset follows it; a change to it is a recorded decision (its *Decision log*). Placeholders are replaced
+one category at a time without touching gameplay.
 
-Next: **M13 — Art Direction & Character Production**, not started. M12 — Enemy AI 2.0 & Boss Framework is
-complete (M12.1–M12.9). See
+Current: **M13 — Art Direction & Character Production**, in progress: M13.1 — Art Direction & Visual
+Bible is complete; next is **M13.2 — Blender → Godot Asset Pipeline Setup**, not started (its inputs:
+the Visual Bible's §22). M12 — Enemy AI 2.0 & Boss Framework is complete (M12.1–M12.9). See
 `shadow-ascension/docs/ROADMAP.md` for the M12–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today, and
 *Enemy AI (M12.1)* for the enemy AI foundation, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)*,
@@ -99,6 +108,8 @@ Repo root:
 CLAUDE.md
 README.md
 shadow-ascension/          # Godot project root
+art_source/                # (from M13.2) art working files — .blend, sculpts, bakes; never
+                           # imported by Godot. Runtime exports go to shadow-ascension/assets/
 ```
 
 Godot project (`shadow-ascension/`):
@@ -109,7 +120,7 @@ icon.svg
 addons/
     godot_mcp/             # editor integration
 
-assets/                    # raw art/audio (import source)
+assets/                    # runtime art/audio — what Godot imports (VISUAL_BIBLE §17)
     audio/
     characters/
     environments/

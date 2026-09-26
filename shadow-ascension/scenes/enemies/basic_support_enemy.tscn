@@ -68,7 +68,8 @@ surface_material_override/0 = SubResource("body_mat")
 [node name="ProjectileSpawn" type="Marker3D" parent="VisualRoot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, -0.55)
 
-[node name="Orb" type="MeshInstance3D" parent="VisualRoot/ProjectileSpawn"]
+[node name="Orb" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, -0.55)
 mesh = SubResource("orb_mesh")
 material_override = SubResource("orb_mat")
 

@@ -14,8 +14,8 @@ systems and their structure in `ARCHITECTURE.md`, and the record of what actuall
 | Phase | Milestones | What it is |
 | --- | --- | --- |
 | **Prototype / Core Foundation** | **M0–M9** — *complete* | Building and validating the fundamental mechanics. Closed at the vertical slice, RC1. |
-| **Core Production Foundation** | M10–M12 | Technical consolidation before any definitive art is produced. |
-| **Visual Production** | M13–M15 | Producing ShadowAscension's real visual identity. |
+| **Core Production Foundation** | **M10–M12** — *complete* | Technical consolidation before any definitive art is produced. |
+| **Visual Production** | M13–M15 — *in progress* (M13) | Producing ShadowAscension's real visual identity. |
 | **RPG & Content Production** | M16–M19 | Expanding the RPG systems, content, dungeons and progression to production shape. |
 | **Alpha 1** | M20 | The first complete, playable end-to-end version. |
 
@@ -442,9 +442,12 @@ tool. The pipeline is documented in `ARCHITECTURE.md`.
 
 ## M13 — Art Direction & Character Production
 
-**Status:** not started. M12.9 left the gameplay ready for it: no AI or combat script needs a
-placeholder mesh, a clip name or a model hierarchy (`ARCHITECTURE.md`, *Model and animation decoupling
-(M12.9, for M13)*).
+**Status: In progress** — M13.1 (Art Direction & Visual Bible) is complete; **M13.2 has not started**.
+M12.9 left the gameplay ready for it: no AI or combat script needs a placeholder mesh, a clip name or a
+model hierarchy (`ARCHITECTURE.md`, *Model and animation decoupling (M12.9, for M13)*). M13.1 wrote the
+direction down: **`VISUAL_BIBLE.md` is the official visual reference** — identity, pillars, palette,
+materials, silhouettes, the shadow's look, telegraph language, scale and the technical-art standards
+M13.2 turns into a pipeline.
 
 **Goal**
 Establish the visual identity and produce the first definitive characters.
@@ -458,20 +461,26 @@ Concept / Reference -> 3D asset -> Blender (rig, materials, animation prep) -> G
 
 **Sub-milestones**
 
-| | |
-| --- | --- |
-| M13.1 | Definitive art direction |
-| M13.2 | Blender setup and the Blender/Godot pipeline |
-| M13.3 | First definitive Player |
-| M13.4 | Player rig and animation integration |
-| M13.5 | First definitive weapon |
-| M13.6 | First definitive Enemy |
-| M13.7 | Shadow visual system |
-| M13.8 | Further enemies |
-| M13.9 | First definitive Elite |
-| M13.10 | First definitive Boss |
-| M13.11 | Replacement of the main placeholders |
-| M13.12 | Import optimisation, LOD, cleanup |
+| | | Status |
+| --- | --- | --- |
+| M13.1 | Definitive art direction — Art Direction & Visual Bible (`VISUAL_BIBLE.md`) | **Complete** |
+| M13.2 | Blender setup and the Blender/Godot pipeline — Blender → Godot Asset Pipeline Setup | Not started |
+| M13.3 | First definitive Player | Not started |
+| M13.4 | Player rig and animation integration | Not started |
+| M13.5 | First definitive weapon | Not started |
+| M13.6 | First definitive Enemy | Not started |
+| M13.7 | Shadow visual system | Not started |
+| M13.8 | Further enemies | Not started |
+| M13.9 | First definitive Elite | Not started |
+| M13.10 | First definitive Boss | Not started |
+| M13.11 | Replacement of the main placeholders | Not started |
+| M13.12 | Import optimisation, LOD, cleanup | Not started |
+
+**M13.2 starts from** the Visual Bible's §22: Blender scene setup (metres, Z up, −Y front, origin at
+the feet), the GLB export preset, the Godot import preset (scale 1.0, LODs, materials, textures, the
+humanoid `BoneMap`), the 180° forward correction on the model instance, `art_source/` and Git LFS,
+the asset register, texel density and budgets, and a round-trip mannequin under the player's
+`VisualRoot/Model` that changes no gameplay test.
 
 **Exit criteria**
 - The art direction is written down and specific enough to judge a new asset against
@@ -510,7 +519,9 @@ Real environments, and a hub that no longer reads as a prototype.
 
 **Deliverables**
 - Hub areas: Hunter Association, Gate Area, Training Area, Blacksmith, Merchant, Quest NPC,
-  Shadow Management, Storage
+  Shadow Management, Storage (working titles; final names are chosen for originality when the
+  areas are made — `VISUAL_BIBLE.md`, D21)
+- Hub and dungeon art to the Visual Bible's environment direction (§13)
 - A generic **NPC Framework**: dialogue, shop, quest, interaction, and room for future reputation
 - Modular environment kits rather than monolithic levels — a dungeon kit of wall, floor, arch,
   column, door, stairs, statue and props, assembled in Godot

@@ -6,9 +6,19 @@
 
 ## Current Milestone
 
-**None in progress.** M12 is complete; the next milestone, **M13 — Art Direction & Character
-Production**, has **not started** — it opens the Visual Production phase with an art direction decision,
-and nothing of it (pipeline, models, rigs, textures) has been begun.
+**M13 — Art Direction & Character Production** (In progress). **M13.1 — Art Direction & Visual Bible
+is complete; M13.2 — Blender → Godot Asset Pipeline Setup has not started.** M13.1 decided the visual
+identity and wrote it into **`VISUAL_BIBLE.md`**, the project's official visual reference: *dark urban
+fantasy + supernatural military/arcane + clean action-RPG readability* as stylized realism; six visual
+pillars (combat readability first); a 14-colour palette in which the values the placeholders already
+used for a role are adopted (warm is hostile, cold is ours); material families and a roughness
+hierarchy; silhouette rules for the player, the five archetypes, the elite overlay, the shadow (its
+source's mesh at 0.9×, opaque, a violet rim, one Core and its Seams) and the boss; the telegraph
+language; hub, dungeon and Gate direction; scale (1 unit = 1 m, verified) and the technical-art
+standards (the −Z / +Z forward axes, verified; origin at the feet; the `VisualRoot` structure;
+`TargetAnchor`; hitboxes and colliders apart from the mesh; source outside the project, runtime in
+`assets/`); naming, folders and licensing. No model, texture, rig, animation or shader was made —
+nothing of the pipeline, models or rigs has been begun.
 
 **M12 — Enemy AI 2.0 & Boss Framework** (Completed). **M12.1–M12.9 are complete, and M12.9 — Boss Phase
 Mechanics & M12 Closure — closed the milestone.** Every enemy runs one explicit state machine,
@@ -46,13 +56,14 @@ is its *Combat System 2.0 at the close of M11*.
 | --- | --- | --- |
 | Prototype / Core Foundation | M0–M9 | **Complete** — vertical slice at RC1 |
 | Core Production Foundation | M10–M12 | **Complete** — M10, M11 and M12 complete |
-| Visual Production | M13–M15 | Not started — **definitive art begins at M13** |
+| Visual Production | M13–M15 | **In progress** — M13.1 (art direction, `VISUAL_BIBLE.md`) complete; M13.2 next |
 | RPG & Content Production | M16–M19 | Not started |
 | Alpha 1 | M20 | Not started |
 
 **Everything visible in the game is a placeholder.** That is the plan, not a shortfall: definitive
 assets are produced from M13, once combat, hitboxes, skeleton and animation requirements, AI,
-movement, interaction and architecture have stopped moving. `ROADMAP.md` explains why.
+movement, interaction and architecture have stopped moving. `ROADMAP.md` explains why. Since M13.1
+they are replaced to `VISUAL_BIBLE.md`, one category at a time, without touching gameplay.
 
 M9 closed on M9.2, which measured the game before touching it, changed one number, fixed four
 bugs, and ran the loop end to end three ways. See *Done* below for the milestone record and
@@ -61,6 +72,46 @@ bugs, and ran the loop end to end three ways. See *Done* below for the milestone
 ---
 
 ## Done
+
+- **M13.1 — Art Direction & Visual Bible** (Completed; **M13 — Art Direction & Character Production
+  in progress**). Before it, `GAME_DESIGN.md`'s *Art direction* said "Not yet decided": a direction
+  (original, dark fantasy, urban, legible), deliberately not enough to model from. M13.1 decided it,
+  documentation and decisions only:
+  - **`docs/VISUAL_BIBLE.md`** (new, authoritative): vision, six pillars, mood, shape language, a
+    14-colour palette with HEX values and owners (five neutrals; Arc Cyan and Signal Steel for the
+    player; Umbral Violet and Abyss Indigo for the shadows; Warning Yellow and Danger Red for hostile
+    telegraphs; Vital Green; Elite Gold; Boss Crimson — the six role colours are the values already in
+    the data), the colour hierarchy, combat colours and accessibility rules; material families with
+    PBR ranges, the roughness hierarchy and emission discipline; the player (1.80 m, 7.75 heads, the
+    cyan Arc Line across the back, a visual evolution on one silhouette); weapons; the five archetype
+    silhouettes and the faction rule; the elite overlay kit; the shadow (Shadow Version at 0.9× its
+    source, opaque, rim, Core and Seams, army-scale rules); the boss; hub, dungeon and Gate; the
+    telegraph language; scale; technical art (axes, origin, camera readability, texel density tiers,
+    scene structure, anchors, colliders, LOD, instancing, skeleton, root motion, animation hooks,
+    source vs runtime); naming and folders; licensing, AI-generated assets and references; production
+    priorities, placeholder migration, the placeholder audit, a decision log (D1–D21), the validation
+    checklist and M13.2's inputs.
+  - **Measured and verified**, not assumed: 1 Godot unit = 1 m (no unit override, default gravity,
+    human-sized capsules); gameplay forward −Z (`Vector3.FORWARD`, every facing in the code) against
+    an imported model's +Z (`Vector3.MODEL_FRONT`, printed by the engine; the glTF spec) — so the 180°
+    turn lives on the model instance, never on a pivot scripts reset; the sizes of every placeholder,
+    anchor, hitbox, room, door and the Gate; the camera (1.5 m rig, 4 m arm, 72° vertical FOV) and
+    what it means in pixels at gameplay distances.
+  - **Placeholder audit**: scale coherent (nothing resized); `TargetAnchor` mesh-independent on every
+    enemy and the boss; the player's weapon hitbox independent of the placeholder; attack and animation
+    ids logical (from M11). **One structural fix**: the ranged's and the support's placeholder `Orb` was
+    a child of the gameplay marker `ProjectileSpawn` — now a sibling under `VisualRoot` at the same
+    position (no script referenced it). The remaining visual/gameplay coupling and six placeholder
+    colours that contradict the palette are recorded with the milestone that removes each.
+  - **Docs**: `GAME_DESIGN.md` *Art direction* rewritten at design level (identity, originality,
+    player fantasy, shadow fantasy); `ARCHITECTURE.md` (the `VisualRoot` standard, model-independent
+    gameplay nodes, the axes, source vs runtime); `ROADMAP.md` (M13 in progress, M13.1 complete,
+    M13.2 not started); `CLAUDE.md`; `README.md`.
+
+  Validation: the ranged (43), support (56) and mixed-encounter (14) suites pass on the moved `Orb`;
+  **2514 assertions across 72 suites, zero failures, zero runtime errors, zero exit-time leaks**
+  (`tests/run_all.gd`, unchanged from M12.9 — no suite was added or changed); cold-cache reimport and
+  headless boot are clean.
 
 - **M12.9 — Boss Phase Mechanics & M12 Closure** (Completed; **M12 — Enemy AI 2.0 & Boss Framework
   closed**). Phase 2 as it was after M12.8: the same three attacks plus Double Strike, and a
@@ -2296,13 +2347,13 @@ M4.2 deliverable status (verified by `dungeon_loop_test.tscn` 34/34 and the real
 
 ## In Progress
 
-Nothing in flight. M0–M12 are complete and the slice is at RC1 on its production foundation;
-**M13 — Art Direction & Character Production is next and has not started.**
+**M13 — Art Direction & Character Production.** M13.1 is complete; **M13.2 — Blender → Godot Asset
+Pipeline Setup is next and has not started** (its inputs: `VISUAL_BIBLE.md`, §22).
 
-One definition stays deliberately open: the **definitive art direction**, which is decided at M13
-and written into `GAME_DESIGN.md` then. Everything else that was open during the prototype phase —
-camera, movement, aim, combat feel, progression, loot and equipment, the shadow mechanic, the run
-loop — is settled and recorded.
+The last definition left open by the prototype phase — the **definitive art direction** — was decided
+in M13.1 and written into `VISUAL_BIBLE.md` (with its high-level identity in `GAME_DESIGN.md`).
+Camera, movement, aim, combat feel, progression, loot and equipment, the shadow mechanic and the run
+loop were already settled and recorded.
 
 `GAME_DESIGN.md` and `ARCHITECTURE.md` are living documents that grow with each milestone; that is
 their normal condition, not an outstanding task.
@@ -2356,7 +2407,8 @@ Findings and decisions from the prototype phase that were deliberately left alon
 - **INT does nothing yet.** → **M17**, when skills arrive to read the ability power it scales.
   As designed in M6.2.
 - **The shadow has no art of its own.** → **M13.7**, as a material and shader pass over the source
-  enemy's mesh rather than a second model. See `GAME_DESIGN.md`, *Shadow visual system*.
+  enemy's mesh rather than a second model. See `GAME_DESIGN.md`, *Shadow visual system*; its look is
+  decided since M13.1 (`VISUAL_BIBLE.md`, §11).
 
 ---
 
