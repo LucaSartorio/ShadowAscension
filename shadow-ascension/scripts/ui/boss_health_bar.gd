@@ -21,9 +21,13 @@ extends CanvasLayer
 ## The phase caption, numbered from 1 — the boss reports indices, the wording
 ## lives here, in the player's language. Empty hides the caption.
 @export var phase_text_format: String = "FASE %d"
+## Called out when the boss enrages, and kept beside the phase caption after
+## (M12.9). The same bar: an enrage is not a new pool.
+@export var enrage_text: String = "FURIA"
 
 var _health: HealthComponent = null
 var _banner_tween: Tween = null
+var _phase_index: int = -1
 
 
 func _ready() -> void:
@@ -35,6 +39,8 @@ func _ready() -> void:
 	boss.encounter_started.connect(_on_encounter_started)
 	boss.phase_transition_started.connect(_on_phase_transition_started)
 	boss.phase_changed.connect(_on_phase_changed)
+	boss.enrage_started.connect(_on_enrage_started)
+	boss.enraged.connect(_on_enraged)
 	boss.enemy_died.connect(_on_boss_died)
 
 
@@ -66,15 +72,28 @@ func is_banner_showing() -> bool:
 	return banner.visible
 
 
+func get_banner_text() -> String:
+	return banner.text
+
+
 ## The boss says which phase it is in; the wording lives here, with the UI.
 func _on_phase_changed(index: int) -> void:
+	_phase_index = index
 	phase_label.text = _phase_text(index)
 
 
 ## The callout announces what is coming, during the beat itself.
 func _on_phase_transition_started(to_index: int) -> void:
 	phase_label.text = _phase_text(to_index)
-	_flash_banner()
+	_flash_banner(phase_label.text)
+
+
+func _on_enrage_started() -> void:
+	_flash_banner(enrage_text)
+
+
+func _on_enraged() -> void:
+	phase_label.text = "%s — %s" % [_phase_text(_phase_index), enrage_text]
 
 
 func _phase_text(index: int) -> String:
@@ -83,9 +102,10 @@ func _phase_text(index: int) -> String:
 	return phase_text_format % (index + 1)
 
 
-func _flash_banner() -> void:
+func _flash_banner(text: String) -> void:
 	if _banner_tween != null and _banner_tween.is_running():
 		_banner_tween.kill()
+	banner.text = text
 	banner.visible = true
 	banner.modulate.a = 1.0
 	# Node-bound, so leaving the scene mid-flash cannot strand a coroutine.

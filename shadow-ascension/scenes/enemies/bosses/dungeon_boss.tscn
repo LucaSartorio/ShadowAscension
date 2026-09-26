@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/bosses/dungeon_boss.gd" id="1_boss"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="2_hitbox"]
@@ -68,6 +68,24 @@ height = 2.6
 [sub_resource type="StandardMaterial3D" id="slam_mat"]
 transparency = 1
 albedo_color = Color(1, 0.25, 0.2, 0.3)
+
+[sub_resource type="BoxShape3D" id="heavy_shape"]
+size = Vector3(2.4, 1.8, 4.2)
+
+[sub_resource type="BoxMesh" id="heavy_mesh"]
+size = Vector3(2.4, 1.8, 4.2)
+
+[sub_resource type="StandardMaterial3D" id="heavy_mat"]
+transparency = 1
+albedo_color = Color(0.75, 0.3, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="heavy_marker_mesh"]
+size = Vector3(2.4, 0.04, 4.2)
+
+[sub_resource type="StandardMaterial3D" id="heavy_marker_mat"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.75, 0.3, 1, 0.45)
 
 [node name="DungeonBoss" type="CharacterBody3D" node_paths=PackedStringArray("target_anchor")]
 collision_layer = 4
@@ -154,6 +172,28 @@ shape = SubResource("double_shape")
 mesh = SubResource("double_mesh")
 material_override = SubResource("double_mat")
 visible = false
+
+[node name="HeavySlamHitbox" type="Area3D" parent="VisualRoot/AttackOrigins"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -2.4)
+collision_layer = 32
+collision_mask = 320
+monitoring = false
+monitorable = true
+script = ExtResource("2_hitbox")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VisualRoot/AttackOrigins/HeavySlamHitbox"]
+shape = SubResource("heavy_shape")
+
+[node name="DebugMesh" type="MeshInstance3D" parent="VisualRoot/AttackOrigins/HeavySlamHitbox"]
+mesh = SubResource("heavy_mesh")
+material_override = SubResource("heavy_mat")
+visible = false
+
+[node name="HeavySlamMarker" type="MeshInstance3D" parent="VisualRoot/AttackOrigins"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, -2.4)
+visible = false
+mesh = SubResource("heavy_marker_mesh")
+material_override = SubResource("heavy_marker_mat")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 path_desired_distance = 0.4

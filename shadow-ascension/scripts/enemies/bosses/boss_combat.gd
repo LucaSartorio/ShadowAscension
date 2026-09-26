@@ -16,9 +16,11 @@ extends Node
 ##   band, and it has not already run max_consecutive_repeats times in a row.
 ##   Among those, weighted by BossAttack.weight, from a seeded generator, so a
 ##   run can be reproduced.
-## - Each attack has its own cooldown, started when it starts; the phase's tempo
-##   scales its windup, recovery and cooldown. All of it is this node's, one per
-##   boss: the BossAttack and AttackData assets are only read.
+## - Each attack has its own cooldown, started when it starts. The boss's pace —
+##   its phase's and its enrage's scale on recovery and cooldown (set_pace()) —
+##   scales them; the telegraph is always the attack's own, never shortened. All
+##   of it is this node's, one per boss: the BossAttack and AttackData assets are
+##   only read.
 ## - Timed on delta alone — no Timer, no callback — so a cancelled attack leaves
 ##   nothing behind to fire later.
 ##
@@ -28,8 +30,9 @@ extends Node
 ## hurtbox decides, i-frames included.
 ##
 ## The wind-up's look is here too (PLACEHOLDER until M14): each telegraph shape
-## deforms a different channel of the mesh, and the body takes the attack's
-## colour.
+## deforms a different channel of the mesh, the body takes the attack's colour,
+## and an attack may name a marker — a node under the attack origins, shown on
+## the ground where it will land for as long as it winds up.
 
 ## An attack began its telegraph.
 signal attack_started(attack: BossAttack)
@@ -49,6 +52,8 @@ const RECOIL_SCALE: Vector3 = Vector3(0.78, 1.22, 0.78)
 const REWIND_BACK: float = 0.5
 const REWIND_SCALE: Vector3 = Vector3(0.7, 1.3, 0.7)
 const REWIND_COLOR: Color = Color(1.0, 1.0, 0.85)
+const RAISE_HEIGHT: float = 0.6
+const RAISE_SCALE: Vector3 = Vector3(1.15, 1.3, 1.15)
 const SETTLE_TIME: float = 0.25
 
 # Handed over by the boss in setup().
@@ -59,8 +64,10 @@ var _max_repeats: int = 1
 var _base_damage: float = 0.0
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
-## Per attack: its hitbox, and the seconds before it may be chosen again.
+## Per attack: its hitbox, its telegraph marker (if it has one), and the seconds
+## before it may be chosen again.
 var _hitboxes: Dictionary = {}
+var _markers: Dictionary = {}
 var _cooldowns: Dictionary = {}
 
 ## The attack under way, or null; where it is.
@@ -68,8 +75,13 @@ var _attack: BossAttack = null
 var _phase: Phase = Phase.NONE
 var _phase_remaining: float = 0.0
 var _hits_done: int = 0
-## The tempo it started with: its phase's, fixed for the whole attack.
-var _tempo: float = 1.0
+## The recovery scale it started with, fixed for the whole attack.
+var _attack_recovery_scale: float = 1.0
+
+## The boss's pace (set_pace()): what the next attack's recovery and cooldown are
+## scaled by — its phase's and its enrage's, multiplied by the boss.
+var _recovery_scale: float = 1.0
+var _cooldown_scale: float = 1.0
 
 # Repeat history.
 var _last: BossAttack = null
@@ -98,7 +110,10 @@ func setup(boss: CharacterBody3D, origins: Node3D, mesh_root: Node3D, body_mater
 	_base_damage = base_damage
 	_rng.seed = decision_seed
 	_hitboxes.clear()
+	_markers.clear()
 	_cooldowns.clear()
+	_recovery_scale = 1.0
+	_cooldown_scale = 1.0
 	for attack in all_attacks:
 		if attack == null or _cooldowns.has(attack):
 			continue
@@ -111,6 +126,11 @@ func setup(boss: CharacterBody3D, origins: Node3D, mesh_root: Node3D, body_mater
 			hitbox.use_attack(attack.attack, base_damage)
 		_hitboxes[attack] = hitbox
 		_cooldowns[attack] = 0.0
+		if attack.telegraph_marker_name != &"" and origins != null:
+			var marker: Node3D = origins.get_node_or_null(String(attack.telegraph_marker_name)) as Node3D
+			if marker != null:
+				marker.visible = false
+				_markers[attack] = marker
 
 
 # --- queries ------------------------------------------------------------------------
@@ -164,6 +184,24 @@ func is_hit_window_open() -> bool:
 ## Attacks started — telegraphs shown.
 func get_started_count() -> int:
 	return _started
+
+
+func get_recovery_scale() -> float:
+	return _recovery_scale
+
+
+func get_cooldown_scale() -> float:
+	return _cooldown_scale
+
+
+## The cooldown `attack` starts with now: its own, at the boss's pace.
+func get_effective_cooldown(attack: BossAttack) -> float:
+	return attack.cooldown * _cooldown_scale
+
+
+## The attack's telegraph marker, or null when it has none.
+func get_marker(attack: BossAttack) -> Node3D:
+	return _markers.get(attack, null)
 
 
 ## How many times a choice has been weighed. Only the boss's DECIDE asks, so
@@ -230,19 +268,28 @@ func _collect(pool: Array[BossAttack], distance: float) -> void:
 
 # --- the attack -----------------------------------------------------------------------
 
-## Starts `attack` at `tempo` (its phase's): its telegraph, and its cooldown.
-func start(attack: BossAttack, tempo: float) -> bool:
+## The boss's pace from now on: the scale on every attack's recovery and
+## cooldown. An attack under way keeps the pace it started with.
+func set_pace(recovery_scale: float, cooldown_scale: float) -> void:
+	_recovery_scale = recovery_scale
+	_cooldown_scale = cooldown_scale
+
+
+## Starts `attack` at the boss's pace: its telegraph — its own length, never
+## scaled — and its cooldown.
+func start(attack: BossAttack) -> bool:
 	if attack == null or _phase != Phase.NONE:
 		return false
 	_attack = attack
-	_tempo = tempo
+	_attack_recovery_scale = _recovery_scale
 	_consecutive = _consecutive + 1 if attack == _last else 1
 	_last = attack
-	_cooldowns[attack] = attack.cooldown * tempo
+	_cooldowns[attack] = get_effective_cooldown(attack)
 	_hits_done = 0
 	_started += 1
-	_enter(Phase.TELEGRAPH, attack.attack.windup * tempo)
+	_enter(Phase.TELEGRAPH, attack.attack.windup)
 	_play_telegraph()
+	_show_marker(true)
 	attack_started.emit(attack)
 	return true
 
@@ -267,7 +314,7 @@ func advance(delta: float) -> bool:
 				# Another swing to come: committed, but harmless in the gap.
 				_enter(Phase.BETWEEN_HITS, _attack.delay_between_hits)
 				return false
-			_enter(Phase.RECOVERY, _attack.attack.recovery * _tempo)
+			_enter(Phase.RECOVERY, _attack.attack.recovery * _attack_recovery_scale)
 			settle_look(false)
 		Phase.RECOVERY:
 			var done: BossAttack = _attack
@@ -283,6 +330,7 @@ func interrupt() -> void:
 	_close_swing()
 	if _attack == null:
 		return
+	_show_marker(false)
 	var cut: BossAttack = _attack
 	_finish()
 	settle_look(true)
@@ -323,8 +371,9 @@ func _finish() -> void:
 
 
 ## Opens one swing. activate() forgets whom the last swing hit, so each swing can
-## land on each target once.
+## land on each target once. The marker has said its piece by now.
 func _open_swing() -> void:
+	_show_marker(false)
 	_enter(Phase.ACTIVE, _attack.attack.active)
 	var hitbox: Hitbox = _hitboxes.get(_attack, null)
 	if hitbox != null:
@@ -393,8 +442,18 @@ func _play_telegraph() -> void:
 			_telegraph_tween.tween_property(_mesh_root, "position:z", RECOIL_BACK, duration)
 			_telegraph_tween.tween_property(_mesh_root, "rotation:x", deg_to_rad(RECOIL_DEGREES), duration)
 			_telegraph_tween.tween_property(_mesh_root, "scale", RECOIL_SCALE, duration)
+		BossAttack.Telegraph.RAISE:
+			# Rears up and swells: the body towers over where it will come down.
+			_telegraph_tween.tween_property(_mesh_root, "position:y", RAISE_HEIGHT, duration)
+			_telegraph_tween.tween_property(_mesh_root, "scale", RAISE_SCALE, duration)
 	if _body_material != null:
 		_telegraph_tween.tween_property(_body_material, "albedo_color", _attack.telegraph_color, duration)
+
+
+func _show_marker(shown: bool) -> void:
+	var marker: Node3D = _markers.get(_attack, null) if _attack != null else null
+	if marker != null:
+		marker.visible = shown
 
 
 ## In the gap between two swings, so the next is announced rather than arriving

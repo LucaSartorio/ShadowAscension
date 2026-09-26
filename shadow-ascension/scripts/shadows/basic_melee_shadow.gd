@@ -87,7 +87,9 @@ const GROUP: StringName = &"active_shadow"
 @export var recovery_cooldown: float = 6.0
 
 @onready var visual_root: Node3D = $VisualRoot
-@onready var mesh_instance: MeshInstance3D = $VisualRoot/MeshInstance3D
+## The PLACEHOLDER body its accent tints. Optional: a definitive model without
+## it keeps the shadow's behaviour whole (M13.7's shadow visual system replaces it).
+@onready var mesh_instance: MeshInstance3D = get_node_or_null(^"VisualRoot/MeshInstance3D") as MeshInstance3D
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var health_component: HealthComponent = $HealthComponent
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -327,6 +329,8 @@ func _validate_targets() -> void:
 # --- setup ------------------------------------------------------------------------------
 
 func _setup_material() -> void:
+	if mesh_instance == null:
+		return
 	var mat: StandardMaterial3D = mesh_instance.get_surface_override_material(0) as StandardMaterial3D
 	if mat == null:
 		return

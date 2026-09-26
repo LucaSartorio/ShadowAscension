@@ -149,9 +149,9 @@ ally it supports and of what it means to do for it. Any of them can be made elit
 to M12.6, and *Elite framework (M12.7)*.
 
 A boss (M12.8) is its own category: `DungeonBoss`'s state machine with a `BossData`, and three parts —
-**`BossPhaseController`** (`scripts/enemies/bosses/boss_phase_controller.gd`), the one owner of the phase
-it is in; **`BossCombat`** (`scripts/enemies/bosses/boss_combat.gd`), the one owner of its attack choice,
-the attack under way and the cooldowns; and the same **`EnemyTargeting`**. See *Boss framework (M12.8)*.
+**`BossPhaseController`** (`scripts/enemies/bosses/boss_phase_controller.gd`), the one owner of how far
+the fight has escalated — the phase it is in and, since M12.9, whether it has enraged; **`BossCombat`** (`scripts/enemies/bosses/boss_combat.gd`), the one owner of its attack choice,
+the attack under way and the cooldowns; and the same **`EnemyTargeting`**. See *Boss framework (M12.8–M12.9)*.
 
 - **`Projectile`** (`scripts/combat/projectile.gd`, M12.3) — a shot in flight: launched with a source, a direction and its `AttackData`, it flies straight until a hit counts, it strikes the world, or its lifetime runs out, and frees itself. Its hit is a `Hitbox` child's — the same `DamageInfo`, source filtering and one hit per target as a swing. The enemy's projectile scene is `scenes/enemies/enemy_projectile.tscn`.
 
@@ -227,8 +227,9 @@ navigation mesh, a collision shape — is duplicated by its owner before it is c
 | `EnemySupportData` (`scripts/enemies/enemy_support_data.gd`, M12.6) | what a support does for its allies — a sub-resource of `basic_support_enemy.tres` | the ally layer, the ranges (notice, reach, the cast's break margin), the look-around interval, the approach timeout; the heal (its `AttackData`, threshold, share of the ally's maximum, cooldown, colour); the buff (its `AttackData`, damage bonus, duration, cooldown, colour) | `EnemySupport.configure()` | whom it supports, a cast under way, a cooldown left, a buff on anyone — `EnemySupport`'s and `EnemyAttack`'s runtime state |
 | `EliteModifierData` (`scripts/enemies/elite_modifier_data.gd`, M12.7) | what makes an enemy elite — `resources/enemies/elite_standard.tres`; assigned per enemy (`BasicEnemy.elite_profile`) where it is placed | seven multipliers on the archetype's own numbers — health, movement speed, attack damage, attack cooldown, stagger resistance, knockback taken, XP reward — and the getters that apply them, clamped (`effective_*()`) | `BasicEnemy._apply_stats()` and `get_xp_reward()`, `EnemyAttack.configure()` | any base value (they stay in `EnemyData`), attack timings, distances, a support's heal or buff, anything that changes during a fight |
 | `BossData` (`scripts/enemies/bosses/boss_data.gd`, M12.8 — replaced `BossStats`) | one boss — `resources/enemies/bosses/dungeon_boss_data.tres` | `id`, `display_name`, `xp_reward`, `max_health`, the base `attack_damage`, movement, perception (target groups, detection range), spacing, decision (facing cone, repeat ceiling, reposition), hit reactions (stagger resistance / duration / immunity, knockback multiplier and deceleration), its `phases` (`BossPhaseData`, in order), the encounter beats | `DungeonBoss._apply_data()`; `get_problems()` validates it | current health, the phase it is in, the attack under way, a cooldown, the target — `DungeonBoss`'s, `BossPhaseController`'s and `BossCombat`'s runtime state |
-| `BossPhaseData` (`scripts/enemies/bosses/boss_phase_data.gd`, M12.8) | one phase — sub-resources of the `BossData` | stable `id`, `health_threshold` (share of max health), `transition_duration`, its `attacks` (`BossAttack`s), modifiers (movement speed, reposition timeout, tempo), a placeholder body colour | `BossPhaseController`, `DungeonBoss._apply_phase()` | whether it is the current phase; anything written during the fight |
-| `BossAttack` (`scripts/enemies/bosses/boss_attack.gd`, refit M12.8) | one boss attack: an `AttackData` composed with what only a boss needs | its `attack` (`AttackData`: id, damage multiplier, windup / active / recovery, impact), the hitbox it swings, the range band, its own cooldown, its weight, multi-hit, telegraph shape, colour and facing correction | `BossCombat` | the cooldown left, the swing under way or its history — `BossCombat`'s |
+| `BossPhaseData` (`scripts/enemies/bosses/boss_phase_data.gd`, M12.8) | one phase — sub-resources of the `BossData` | stable `id`, `health_threshold` (share of max health), `transition_duration`, its `attacks` (`BossAttack`s), modifiers (movement speed, reposition timeout, recovery, cooldown — never the telegraph, M12.9), a placeholder body colour | `BossPhaseController`, `DungeonBoss._apply_modifiers()` | whether it is the current phase; anything written during the fight |
+| `BossEnrageData` (`scripts/enemies/bosses/boss_enrage_data.gd`, M12.9) | a boss's enrage — a sub-resource of the `BossData` (`enrage`) | `health_threshold`, `transition_duration`, movement speed and cooldown multipliers, the placeholder look | `BossPhaseController`, `DungeonBoss._apply_modifiers()` | whether the boss has enraged — the controller's |
+| `BossAttack` (`scripts/enemies/bosses/boss_attack.gd`, refit M12.8) | one boss attack: an `AttackData` composed with what only a boss needs | its `attack` (`AttackData`: id, damage multiplier, windup / active / recovery, impact), the hitbox it swings, the range band, its own cooldown, its weight, multi-hit, telegraph shape, colour, marker (M12.9) and facing correction | `BossCombat` | the cooldown left, the swing under way or its history — `BossCombat`'s |
 | `ProgressionStats` (`scripts/player/`) | the player's progression rules | starting level and stat block, XP curve, points per level, cap, derived-stat rates | `PlayerProgression._apply_tuning()`; `PlayerProgressionData.from_stats()`, once per session | level, XP or allocated points — those are `PlayerProgressionData`, runtime state |
 | `PlayerTargetingData` (`scripts/player/`, M11.8) | the player's target lock | acquisition and lose ranges, the distance weight of the pick, the facing turn speed, the body and line-of-sight masks, eye height, candidate cap | `PlayerTargeting` | which target is locked — `PlayerTargeting`'s runtime state |
 | `PlayerCombatFeedbackData` (`scripts/player/`, M11.9) | how the player's hits are felt | the hit stop's time scale and ceiling, a critical's stop bonus and shake multiplier, the shake's ceilings, the critical mark's text, colour, rise, duration and cap, the accessibility scales' defaults | `PlayerCombatFeedback` | a stop or a shake in progress, or the scales in use — `PlayerCombatFeedback`'s and `CameraRig`'s runtime state |
@@ -1453,7 +1454,7 @@ all neither interrupts its attack nor moves it. That is deliberate — a boss th
 heavy is no boss — and whether it gets a poise it can break is M12's boss framework. **Since M12.8**
 it reads both values through the same rules as an enemy (`HitReaction`), against its own numbers: a
 resistance of 60 that only the heavy reaches, a 5 s immunity after a stagger, a tenth of any push —
-see *Boss framework (M12.8)*.
+see *Boss framework (M12.8–M12.9)*.
 
 **The shadow's** hits go through the same flow with no stagger power and no push, so they flinch what
 they hit and nothing more; its AI is untouched, and its kills still pay 70/30.
@@ -2360,7 +2361,9 @@ Checked where a decision needs it, never scanned:
   ray at most every `line_of_sight_interval` (0.2 s) — for every archetype;
 - **at the fire moment**: a fresh ray, spawn point to aim point.
 Blocked at the start, no telegraph begins and the enemy closes in (`LS1`: it walks 5.9 m round a wall,
-then shoots and hits). Blocked at the fire, the shot is withheld (above). A shot fired in an edge case
+then shoots and hits). "On the ring" counts within `reposition_arrive_tolerance` (M12.9): the mixed
+encounter caught a ranged that had stopped at 7.03 m of its 7, behind a pillar — just outside the ring,
+so never "blind on it" — holding there for good; now it walks round the pillar and fires. Blocked at the fire, the shot is withheld (above). A shot fired in an edge case
 that still meets a wall ends against it (`WL1`).
 
 ### Dodge
@@ -2897,14 +2900,15 @@ The profile is a resource the enemy reads once at spawn, and runtime modifiers (
 after it without writing it; further profiles (offensive, defensive, fast) are new `.tres` files, and
 affixes could extend the same pipeline later. None is implemented.
 
-## Boss framework (M12.8)
+## Boss framework (M12.8–M12.9)
 
-M12.8 (Boss Framework Foundation) gives bosses a foundation of their own. A boss is not an enemy with a
-lot of health, not a tank elite and not a scene of hardcoded timers and `if health < 50%`: it is a
-`DungeonBoss` scene with a `BossData` — the same lifecycle, phases, attack choice and reactions for
-every boss, other numbers, other phases and other attacks for each. The shipped boss is the first on
-it, with the moveset it had (Quick Strike, Wide Sweep, Ground Slam; Double Strike in phase 2); a new
-boss is a new `BossData` (and its hitboxes in its scene), with no boss-specific code.
+M12.8 (Boss Framework Foundation) gave bosses a foundation of their own, and M12.9 (Boss Phase Mechanics
+& M12 Closure) used it: a phase 2 that is a real escalation, a phase-2-only special attack and an
+enrage — all data, on the same framework. A boss is not an enemy with a lot of health, not a tank elite
+and not a scene of hardcoded timers and `if health < 50%`: it is a `DungeonBoss` scene with a `BossData`
+— the same lifecycle, phases, attack choice, enrage and reactions for every boss, other numbers, phases
+and attacks for each. A new boss is a new `BossData` (and its hitboxes in its scene), with no
+boss-specific code.
 
 ### Boss framework
 
@@ -2917,18 +2921,23 @@ hit feedback.
 
 | Part | Owner | Owns |
 | --- | --- | --- |
-| Configuration | `BossData` (+ `BossPhaseData`, `BossAttack`) | every number, the phases, the attacks — read, never written |
+| Configuration | `BossData` (+ `BossPhaseData`, `BossAttack`, `BossEnrageData`) | every number, the phases, the attacks, the enrage — read, never written |
 | Lifecycle | `DungeonBoss` (`dungeon_boss.gd`) | the state: `_state`, changed only through `_change_state()`, legal moves in `TRANSITIONS` |
-| Phases | `BossPhaseController` (`boss_phase_controller.gd`, pure logic) | the phase it is in, which phase is due — forward only |
-| Attacks | `BossCombat` (child node `BossCombat`) | the choice, the attack under way and its place in it, the per-attack cooldowns, the repeat history, the hitboxes, the telegraph's look |
+| Escalation | `BossPhaseController` (`boss_phase_controller.gd`, pure logic) | the phase it is in, whether it has enraged, what is due next — forward only |
+| Attacks | `BossCombat` (child node `BossCombat`) | the choice, the attack under way and its place in it, the per-attack cooldowns, the pace, the repeat history, the hitboxes and markers, the telegraph's look |
 | Target | `EnemyTargeting` (child node `EnemyTargeting`, M12.1's) | whom it fights |
 | Movement | `DungeonBoss` | navigation, facing, the one `move_and_slide()` |
 | Health | `HealthComponent` | heard through `health_changed`, `damaged`, `died` |
 | Completion | `RoomCombatant.report_death()` → `enemy_died` | reported once; the room and the dungeon take it from there |
 
+**One source for each answer**: the phase (`get_phase_index()`) and the enrage (`is_enraged()`) are
+the controller's; the attack under way (`get_current_attack()`) and where it is (`get_attack_phase()`)
+are `BossCombat`'s; the target is `EnemyTargeting`'s; the state is `_state`. No flag beside any of them.
+
 **States.** `INACTIVE`, `INTRO`, `DECIDE`, `CHASE`, `REPOSITION`, `ATTACK`, `STAGGERED`, `TRANSITION`,
-`DEAD`. Each has an enter / update / exit; `_change_state()` refuses a move `TRANSITIONS` does not list
-(and a state re-entering itself), and `state_changed(from, to)` reports every move after it.
+`ENRAGING`, `DEAD`. Each has an enter / update / exit; `_change_state()` refuses a move `TRANSITIONS`
+does not list (and a state re-entering itself), and `state_changed(from, to)` reports every move after
+it.
 
 ```
 INACTIVE --start_encounter()--> INTRO --intro_duration--> DECIDE
@@ -2936,33 +2945,33 @@ DECIDE --> CHASE (far) / REPOSITION (too close, nothing valid, facing away) / AT
 ATTACK --its recovery over--> DECIDE
 INTRO, DECIDE, CHASE, REPOSITION, ATTACK --a hit that breaks through--> STAGGERED --over--> DECIDE
 any living state --a later phase due--> TRANSITION --beat over--> DECIDE
+any living state --the enrage due, no phase due--> ENRAGING --beat over--> DECIDE
 any --died--> DEAD (nothing leaves it);  any living --parked by its room--> INACTIVE
 ```
 
-**Priority** — DEAD > TRANSITION > STAGGERED > ATTACK > movement — is structural, not a chain of `if`s:
-nothing leaves `DEAD`; a stagger never starts in `TRANSITION` (it is not in `STAGGERABLE`) while a
-transition cuts a stagger short; a stagger cuts an attack off; an attack stands the boss still. A
-killing blow is a death: `HealthComponent` reports `died` instead of `damaged`, and a phase is never
-checked at 0 health, so a lethal hit through a threshold goes to `DEAD` with no transition.
+**Priority** — DEAD > TRANSITION > ENRAGING > STAGGERED > ATTACK > movement — is structural, not a
+chain of `if`s: nothing leaves `DEAD`; the two beats lead only back to `DECIDE`, so one never runs
+inside the other; a stagger never starts in a beat (neither is in `STAGGERABLE`) while a beat cuts a
+stagger short; a stagger cuts an attack off; an attack stands the boss still.
 
 **The encounter.** `start_encounter()` starts it — the room calls it through `set_combat_enabled(true)`
 when the player walks in, and a boss with no room (a test bench, a sandbox) calls it on itself once it
-has readied. It enters the first phase (its numbers applied), clears every cooldown and the repeat
+has readied. It enters the first phase (its modifiers applied), clears every cooldown and the repeat
 history, takes a target, plays the intro beat and emits `encounter_started(display_name, health)` and
 `phase_changed(0)`. Only an `INACTIVE` boss starts one, so asking twice changes nothing. Before it, a
 parked boss does nothing: no perception, no decision, no attack. The room parks it again
 (`set_combat_enabled(false)` → `INACTIVE`) when the run ends — the player's death: the attack is cut
-off, the target released, and a resumed fight keeps its phase.
+off, the target released, and a resumed fight keeps its phase and its enrage.
 
-**The end.** On `died`: `DEAD` — the attack cut off (no hitbox open, no delayed swing: every timer is
-`BossCombat`'s own delta, and it is torn down), the target released, the navigation stopped, the body's
-collision off, the phase controller no longer asked (a dead boss's health never changes), the death
+**The end.** On `died`: `DEAD` — the attack cut off (no hitbox open, no marker, no delayed swing: every
+timer is `BossCombat`'s own delta, and it is torn down), the target released, the navigation stopped,
+the body's collision off, the escalation no longer asked (a dead boss's health never changes), the death
 reported once. The lock lets go (it hears `enemy_died`), the health bar hides.
 
 ### BossData
 
 `scripts/enemies/bosses/boss_data.gd`; the shipped boss's is `resources/enemies/bosses/dungeon_boss_data.tres`,
-with its phases as sub-resources. Every field is read:
+with its phases and its enrage as sub-resources. Every field is read:
 
 | Group | Fields | Shipped boss |
 | --- | --- | --- |
@@ -2976,138 +2985,222 @@ with its phases as sub-resources. Every field is read:
 | Decision | `max_attack_facing_angle`, `max_consecutive_repeats`, `reposition_timeout`, `reposition_speed_fraction`, `target_update_interval` | 30°, 2, 1.4 s, 0.85, 0.2 s |
 | Hit reactions | `stagger_resistance`, `stagger_duration`, `stagger_immunity_time`, `knockback_multiplier`, `knockback_deceleration` | 60, 0.5 s, 5 s, 0.1, 60 m/s² |
 | Phases | `phases` (`BossPhaseData`, in order) | `phase_1`, `phase_2` |
+| Enrage | `enrage` (`BossEnrageData`; null: none) | at 25% |
 | Encounter | `intro_duration`, `death_topple_duration` | 0.8 s, 1.2 s |
 
 `get_problems()` validates it: a positive maximum, at least one phase, a first threshold of 1.0,
 thresholds strictly falling, every phase with an id and attacks, every attack with an `AttackData`, a
-hitbox and a sane range band. A boss whose data has problems reports them with `push_error()` and stays
-`INACTIVE` — `start_encounter()` refuses it — rather than fighting half-configured.
-
-**Runtime.** `DungeonBoss._apply_data()` copies the numbers into the boss's own fields once; a phase
-recomputes the phase-dependent ones (speed, reposition timeout) from the copied bases. Current health,
-the phase, the attack under way, the cooldowns and the target are the boss's (and its parts'), so two
-bosses on one `BossData` share nothing of a fight (`boss_framework_test` 57).
+hitbox and a sane range band, an enrage threshold between 0 and 1 and below the last phase's. A boss
+whose data has problems reports them with `push_error()` and stays `INACTIVE` — `start_encounter()`
+refuses it — rather than fighting half-configured.
 
 ### Phase system
 
 A `BossPhaseData` is: a stable `id` (never an animation's name), a `health_threshold` — the share of
 maximum health, `current / max`, at or below which it begins — a `transition_duration`, its `attacks`,
-and optional modifiers: `movement_speed_multiplier`, `reposition_timeout_multiplier` and
-`tempo_multiplier` (scales every attack's windup, recovery and cooldown — the rhythm, never the damage,
-the reach or the hit window), plus a placeholder `body_color`.
+and optional modifiers: `movement_speed_multiplier`, `reposition_timeout_multiplier`,
+`recovery_multiplier` and `cooldown_multiplier`, plus a placeholder `body_color`. **No modifier touches
+a telegraph**: a wind-up is always its attack's own length, so a later phase is harder by rhythm,
+movement and pool, never by being unreadable (M12.9 removed M12.8's `tempo_multiplier`, which shortened
+wind-ups too).
 
-| Phase | Health share | Transition | Attacks | Modifiers |
-| --- | --- | --- | --- | --- |
-| `phase_1` | 100% → above 50% | — | Quick Strike, Wide Sweep, Ground Slam | none |
-| `phase_2` | 50% and below | 1.5 s | the three, and Double Strike | speed ×1.19 (3.81), reposition ×0.64 (0.9 s), tempo ×0.8, a darker red body |
+**Phase 1 — the baseline** (100% down to above 50%): Quick Strike, Wide Sweep, Ground Slam; every
+modifier ×1. It teaches the moveset: three attacks, three distinct wind-ups, each its own cooldown.
+
+**Phase 2 — the escalation** (50% and below, after a 1.5 s transition):
+
+| | Phase 1 | Phase 2 |
+| --- | --- | --- |
+| Pool | Quick Strike, Wide Sweep, Ground Slam | the same three, **Double Strike** and **Heavy Slam** |
+| Cooldowns | ×1 (1.0 / 2.0 / 3.5 s) | **×0.85** (0.85 / 1.7 / 2.975 s; Double 2.34, Heavy 6.8) |
+| Recoveries | ×1 | **×0.85** — a shorter window to punish |
+| Movement speed | 3.2 m/s | **×1.19 = 3.81 m/s** |
+| Reposition timeout | 1.4 s | **×0.64 = 0.9 s** — it circles less and commits sooner |
+| Telegraphs | the attacks' own | **unchanged** |
+| Damage | 20 / 30 / 40 | unchanged (Double 18 ×2, Heavy 50) |
+| Look | the body's colour | a darker red |
 
 **The current phase** is `BossPhaseController`'s alone (`get_index()`; -1 before the fight). On every
-`health_changed` the boss asks it which phase is due: `due(share)` answers only a phase *after* the
-current one — the deepest whose threshold the share has reached — or none. So the progression is
-**monotonic**: a heal (the test heals it back to full) never brings phase 1 back, and a health that
-wobbles round a threshold never flips; `enter()` refuses anything but a later phase. There is no
-"transition spent" flag beside it: the index is the only answer.
+`health_changed` the boss asks it what is due: `due(share)` answers only a phase *after* the current one
+— the deepest whose threshold the share has reached — or none. So the progression is **monotonic**: a
+heal (the tests heal it back to full) never brings phase 1 back, and a health that wobbles round a
+threshold never flips; `enter()` refuses anything but a later phase.
 
 **The transition** is its own state, `TRANSITION`:
 - On entering it: the attack under way is **cancelled on the spot** — `BossCombat.interrupt()` shuts
-  every hit window at once and resets the telegraph's look; its cooldown stands. No hitbox, no timer
-  and no callback outlives it (the choice is deterministic: always cancelled, never finished). The
-  stagger, the path and the velocity are dropped; `phase_transition_started(to)` is emitted; the
-  placeholder beat plays — three pulses of the body and the next phase's colour.
+  every hit window at once, hides the marker and resets the telegraph's look; its cooldown stands. No
+  hitbox, no timer and no callback outlives it. The stagger, the path and the velocity are dropped;
+  `phase_transition_started(to)` is emitted; the placeholder beat plays — pulses and the next phase's
+  colour.
 - During it: no decision, no attack, no movement, no choice weighed. **The boss still takes damage**
-  (no invulnerability): the health and its bar follow, and a hit's stagger power is ignored — the beat
-  is committed.
+  (no invulnerability): the health and its bar follow, and a hit's stagger power is ignored.
 - A deeper phase due during it — a blow through a second threshold — becomes where the beat leads: one
-  beat, deterministically, the phases in between passed over (`boss_framework_test` 43).
-- At its end: the phase entered, its modifiers applied from the bases (the `BossData` is never written),
-  every cooldown and the repeat history cleared, `phase_changed(index)` emitted, `DECIDE`.
+  beat, deterministically, the phases in between passed over.
+- At its end: the phase entered, the modifiers recomputed, every cooldown and the repeat history
+  cleared, `phase_changed(index)` emitted, `DECIDE` — and the escalation asked again at once, so an
+  enrage the same blow reached begins now, after this beat.
 
-**Death beats it**: a lethal blow is a death with no transition, and a death inside the beat ends it —
-no phase 2 afterwards. `debug_log_phases` (off) prints each change: `PHASE phase_1 -> phase_2`.
+### Heavy Slam — the phase 2 special
+
+`resources/enemies/bosses/boss_heavy_slam.tres`: a `BossAttack` in phase 2's pool and in no other — no
+`if phase == 2` anywhere; it is chosen like every attack, by the same rules.
+
+| | Heavy Slam |
+| --- | --- |
+| ID | `boss_heavy_slam` |
+| Telegraph | **1.1 s** — the longest of the boss's; `Telegraph.RAISE` (it rears up and swells), purple, and a **ground marker** (`HeavySlamMarker`, `BossAttack.telegraph_marker_name`) drawing where it will land for as long as it winds up |
+| Active | 0.2 s; one hit per target (`hit_count` 1) |
+| Recovery | 1.4 s (1.19 s at phase 2's ×0.85) — a long punish window |
+| Cooldown | 8 s (6.8 s in phase 2, 5.78 s enraged) — the longest; weight 0.5, the lowest in the pool |
+| Damage | the boss's base 20 × `damage_multiplier` 2.5 = **50** — data, through the standard hitbox |
+| Range | 0–4 m; its hitbox a 2.4 × 4.2 m frontal box (`HeavySlamHitbox`) |
+| Commitment | `facing_correction_fraction` 0: it keeps the aim it started with — no tracking, no homing |
+| Answers | step out of the marked box (no damage), or dodge through it (the i-frames refuse the hit); the player's heavy (60, at its resistance) in the telegraph cuts it off; a boss killed in the telegraph never swings |
+
+### Enrage
+
+`BossEnrageData` (`scripts/enemies/bosses/boss_enrage_data.gd`), `BossData.enrage`: the fight's last
+escalation — not a phase, not a phase 3, not a second framework.
+
+| | Shipped boss |
+| --- | --- |
+| `health_threshold` | **25%** (must be below the last phase's) |
+| `transition_duration` | **1.0 s** |
+| `movement_speed_multiplier` | **×1.1** (3.81 → 4.19 m/s) |
+| `cooldown_multiplier` | **×0.85** (phase 2's ×0.85 → ×0.7225) |
+| Look | the body turns orange and glows (`body_color`, `emission_color`, `emission_energy`) |
+
+Nothing else changes: no damage multiplier, no shorter telegraph, the same pool and weights, the same
+stagger resistance (60 — the heavy still staggers it) and knockback share (×0.1).
+
+- **Due** only when no phase is (`BossPhaseController.enrage_due()`): a blow from above 50% to below
+  25% plays phase 2's transition first and the enrage right after it — never both at once.
+- **The beat** is its own state, `ENRAGING`, with a phase transition's rules: the attack cancelled on
+  the spot, no hitbox, no marker, no movement, no choice; **not interruptible** (no stagger) and **not
+  invulnerable** (it takes damage). `enrage_started` is emitted as it begins.
+- **After it** the controller records the enrage (`enrage()`, once — a second call refuses), the
+  modifiers are recomputed, `enraged` is emitted. It stays until death: a heal changes nothing, and
+  health falling again below 25% starts nothing.
+- A killing blow is a death, never an enrage; a death in the beat leaves the boss dead and not enraged.
+- `BossHealthBar` flashes `enrage_text` ("FURIA") and then reads "FASE 2 — FURIA" — the same bar.
+
+### Modifier order
+
+Every modified number is recomputed from the base by one function, `DungeonBoss._apply_modifiers()`:
+
+```
+base (BossData, AttackData)  ->  x the current phase's  ->  x the enrage's, once it has happened
+```
+
+- movement speed = `BossData.movement_speed` × phase × enrage
+- cooldown of an attack = `BossAttack.cooldown` × phase × enrage (`BossCombat.set_pace()`; an attack
+  keeps the pace it started with)
+- recovery of an attack = `AttackData.recovery` × phase
+- reposition timeout = `BossData.reposition_timeout` × phase
+- telegraph = `AttackData.windup`, never scaled
+
+It is idempotent — applied twice, nothing changes — so a phase never stacks on the one before and the
+enrage never on itself; and it only writes the boss's runtime fields and its `BossCombat`'s pace: the
+`BossData`, `BossPhaseData`, `BossEnrageData`, `BossAttack` and `AttackData` assets are never written.
+A new boss instance starts from its own copies at the baseline (phase 1, not enraged, clean cooldowns,
+pace ×1).
+
+### Threshold and death priority
+
+| Case | What happens |
+| --- | --- |
+| a hit to 60% | nothing |
+| a hit across 50% (a normal or critical hit, anyone's) | the phase 2 transition |
+| during that transition, a hit across a later phase's threshold | the same beat leads to the deeper phase |
+| a hit from above 50% to below 25%, not lethal | phase 2's transition, then at once the enrage's beat |
+| a hit in phase 2 across 25% | the enrage's beat |
+| any hit that kills — through any threshold | `DEAD`: no transition, no enrage |
+| death during a beat | `DEAD`; the beat's phase or enrage never takes hold |
+| a heal, at any point | nothing goes back |
+
+The rules read only the health share: the player, a critical, a shadow or anything else that lands a
+hit is the same to them (`boss_phase_mechanics_test` crosses them with a stand-in source,
+`m12_boss_run` / `m12_closure_run` with the shadow). The hit stop (M11.9) scales time, and every beat is
+timed on that time, so a critical's stop across a threshold only delays the beat by its length.
 
 ### Attack selection
 
 Centralised in `BossCombat`, asked only from `DECIDE` (the one decision point — never during a
-telegraph, a swing, a recovery or a transition: `get_evaluation_count()` stands still through them).
+telegraph, a swing, a recovery or a beat: `get_evaluation_count()` stands still through them).
 
-- **Pool**: the current phase's `attacks`. An attack may be in several phases (the three shared by
-  both here); `BossCombat` knows every attack any phase offers, once, with its hitbox resolved at setup.
+- **Pool**: the current phase's `attacks`. An attack may be in several phases; `BossCombat` knows every
+  attack any phase offers, once, with its hitbox and marker resolved at setup.
 - **Valid**: in the pool; its hitbox exists; its own cooldown over; the target within its range band
-  (`min_range`–`max_range`, flat — so a boss can have close and far attacks); not already run
-  `max_consecutive_repeats` times in a row. A valid target and the facing cone are the boss's checks
-  before it asks: with nothing valid, or the target outside the cone, it repositions instead.
-- **Weighted**: among the valid ones, by `BossAttack.weight` (Ground Slam 0.6, Double Strike 0.9, the
-  others 1.0), drawn from a generator seeded by `decision_seed`, so a run is reproducible.
+  (`min_range`–`max_range`, flat); not already run `max_consecutive_repeats` times in a row. A valid
+  target and the facing cone are the boss's checks before it asks: with nothing valid, or the target
+  outside the cone, it repositions instead.
+- **Weighted**: among the valid ones, by `BossAttack.weight` (Quick Strike and Wide Sweep 1.0, Double
+  Strike 0.9, Ground Slam 0.6, Heavy Slam 0.5), drawn from a generator seeded by `decision_seed`, so a
+  run is reproducible.
 - **Cooldowns**: one per attack, runtime (`BossCombat`'s dictionary, never the asset), started when the
-  attack starts, scaled by the phase's tempo (Quick Strike 1.0 s → 0.8 s in phase 2), ticked only while
-  the boss fights; cleared at the encounter's start and at each new phase.
-- **Repeat policy**: individual cooldowns already keep an attack from chaining; the ceiling (2) is the
-  hard rule behind them.
+  attack starts at the pace of that moment, ticked only while the boss fights; cleared at the
+  encounter's start and at each new phase (not at the enrage).
+- **Repeat policy**: individual cooldowns keep an attack from chaining; the ceiling (2) is the hard rule
+  behind them. The Heavy Slam, with the longest cooldown, cannot follow itself.
 
 ### Attack lifecycle
 
 ```
-NONE -> TELEGRAPH (windup x tempo) -> ACTIVE (hit window) -> RECOVERY (recovery x tempo) -> NONE
-                                        | a multi-hit attack:
-                                        +-> BETWEEN_HITS (delay_between_hits) -> ACTIVE ...
+NONE -> TELEGRAPH (windup, never scaled) -> ACTIVE (hit window) -> RECOVERY (recovery x pace) -> NONE
+                                              | a multi-hit attack:
+                                              +-> BETWEEN_HITS (delay_between_hits) -> ACTIVE ...
 ```
 
-- **The attack under way** is `BossCombat`'s `_attack`, and where it is `_phase`: one source; nothing
-  keeps a name, an index or a flag beside them (`get_current_attack()`, `get_attack_phase()`).
+- **The attack under way** is `BossCombat`'s `_attack`, and where it is `_phase`: one source.
 - **`BossAttack`** composes an `AttackData` — the same resource as every attack in the game: its `id`,
   `damage_multiplier`, windup / active / recovery and impact — with what only a boss needs (the hitbox
-  it swings, the range band, its cooldown and weight, multi-hit, the telegraph's shape and colour, the
-  facing correction). `AttackData` gained nothing for it.
+  it swings, the range band, its cooldown and weight, multi-hit, the telegraph's shape, colour and
+  marker, the facing correction). `AttackData` gained nothing for it.
 - **Telegraph**: no hitbox, no damage; each shape deforms a different channel of the mesh (lean, spin,
-  compression, recoil) and tints the body the attack's colour. It may turn by its
-  `facing_correction_fraction`, then commits.
+  compression, recoil, rise), tints the body the attack's colour, and shows its marker if it has one. It
+  may turn by its `facing_correction_fraction`, then commits.
 - **Active**: the hitbox takes the attack (`Hitbox.use_attack()`: base damage × multiplier, its stagger
   and push) and opens; the standard `DamageInfo` goes to the target's hurtbox, which decides — i-frames
-  included (the boss never asks whether the player is dodging). One landing per target per swing; a
-  multi-hit attack reopens the hitbox for each swing. Facing is locked.
+  included (the boss never asks whether the player is dodging). One landing per target per swing.
 - **Recovery**: nothing opens, nothing starts; then `attack_ended(attack, true)` and `DECIDE`.
-- **Cut off** (a stagger, a transition, a death, the room parking it): `attack_ended(attack, false)`,
-  every hit window shut, the look reset, its cooldown kept.
-- Everything is timed on the physics delta — no `Timer`, no deferred callback — so nothing can fire
-  after the attack is gone.
+- **Cut off** (a stagger, a beat, a death, the room parking it): `attack_ended(attack, false)`, every
+  hit window shut, the marker hidden, the look reset, its cooldown kept.
+- Everything is timed on the physics delta — no `Timer`, no deferred callback.
 
 ### Stagger / knockback
 
-The M11.6 rules, now in one place for everyone who takes hits: `HitReaction.breaks_through(hit,
-resistance)` (a hit with stagger power at least the resistance) and `HitReaction.push_velocity(hit,
-multiplier)` (the hit's push, scaled). `BasicEnemy` and `DungeonBoss` both call them; each keeps its own
-numbers and its own answer.
+The M11.6 rules, in one place for everyone who takes hits: `HitReaction.breaks_through(hit,
+resistance)` and `HitReaction.push_velocity(hit, multiplier)`. `BasicEnemy` and `DungeonBoss` both call
+them; each keeps its own numbers.
 
-- **Resistance 60**, high but not immunity. With the player's current attacks: Light 1 (10), Light 2
-  (15) and Light 3 (30) never stagger the boss — its attack goes on; **the heavy (60) does**: in a
-  telegraph or a swing, the attack is cut off, no hitbox left, the boss `STAGGERED` for 0.5 s, then
-  immune for 5 s — a second heavy inside that window lands its damage and nothing else. A critical
-  changes the damage, not the stagger power.
-- **Knockback ×0.1, deceleration 60 m/s²**: the heavy's 8 m/s push becomes 0.8 m/s, gone within a frame
-  or two — about a centimetre. A light nudges it by millimetres. No `if boss: ignore knockback`: the
-  data does it.
-- A parked (`INACTIVE`) boss is not in a fight and is never staggered; in `TRANSITION` the beat wins.
+- **Resistance 60**, high but not immunity, the same in every phase and enraged. With the player's
+  current attacks: Light 1 (10), Light 2 (15) and Light 3 (30) never stagger the boss; **the heavy (60)
+  does** — in any telegraph or swing, the Heavy Slam's included: the attack is cut off, the boss
+  `STAGGERED` for 0.5 s, then immune for 5 s. A critical changes the damage, not the stagger power.
+- **Knockback ×0.1, deceleration 60 m/s²**: the heavy's 8 m/s push becomes 0.8 m/s — about a
+  centimetre.
+- A parked (`INACTIVE`) boss is never staggered; in `TRANSITION` and `ENRAGING` the beat wins.
 
 ### Targeting
 
-`EnemyTargeting` (M12.1's component) with `BossData.target_groups` — the player's group: the player is
-the boss's target, as it always was; shadows are not candidates (no threat system). The target is taken
-when the encounter starts, kept until it dies or leaves, and let go on death or when the boss is parked;
-while it holds one the boss never searches the tree. Shadows hit the boss normally — the same hitbox,
-`DamageInfo` and health — and a shadow's killing blow still pays 70/30 (140 / 60 of its 200 XP), through
-`PlayerProgression` as every kill: the boss awards nothing itself.
+`EnemyTargeting` with `BossData.target_groups` — the player's group: the player is the boss's target;
+shadows are not candidates (no threat system). Shadows hit the boss normally — the same hitbox,
+`DamageInfo` and health — cross its thresholds, can enrage it and can kill it; a shadow's killing blow
+pays 70/30 (140 / 60 of its 200 XP), through `PlayerProgression` as every kill: the boss awards nothing
+itself.
 
 **Target lock**: the boss is a `RoomCombatant` like any other target, its ring on its `TargetAnchor`
-(1.5 m up). The lock holds through phase 1, the transition and phase 2, and lets go on death
-(`enemy_died`).
+(1.5 m up). The lock holds through phase 1, the transition, phase 2, the enrage's beat and the enrage,
+and lets go on death (`enemy_died`).
 
 ### Boss Health Bar
 
 `BossHealthBar` finds the boss through `DungeonBoss.GROUP` on ready and listens; the boss knows no UI.
 Hidden until `encounter_started` (name, current and maximum health, full); then it follows
-`health_changed`. The phase caption is `phase_text_format` ("FASE %d") with the boss's phase index;
-`phase_transition_started` flashes the callout and announces the next phase during the beat. One bar
-for one pool: a phase never refills or resets it. It hides on `enemy_died`. No multi-bar.
+`health_changed`. The phase caption is `phase_text_format` ("FASE %d"); `phase_transition_started`
+flashes the next phase's caption, `enrage_started` flashes `enrage_text` ("FURIA"), and once enraged the
+caption reads "FASE 2 — FURIA". One bar for one pool: a phase or the enrage never refills or resets it.
+It hides on `enemy_died`. No multi-bar.
 
 ### Dungeon integration
 
@@ -3117,24 +3210,79 @@ boss died -> DungeonBoss.report_death() -> enemy_died (once)
           -> exit portal enabled, RunSummary opens
 ```
 
-The boss never knows a room or a dungeon exists — no `get_node("../../…")`. The boss room's entry
-trigger starts the encounter; the player's death suspends the room, which parks the boss; leaving the
-scene frees it with everything it owned (its tweens, its parts): no timer, callback, target or UI
-reference survives (`m12_boss_run` 65).
+The boss never knows a room or a dungeon exists. The boss room's entry trigger starts the encounter;
+the player's death suspends the room, which parks the boss; leaving the scene frees it with everything
+it owned: no timer, callback, target, modifier or UI reference survives (`m12_boss_run` 65,
+`m12_closure_run` L.9).
 
 ### Debug
 
-`debug_state_label` (off by default, built only when on): the state and phase, the attack and where it
-is, the target and the health share, and each cooldown running. `debug_log_phases` (off): one line per
-phase change. Neither costs anything when off.
+`debug_state_label` (off by default, built only when on): the state, the phase and `ENRAGED`, the
+attack and where it is, the target and the health share, and each cooldown running.
+`debug_log_phases` (off): one line per phase change and one for the enrage. Neither costs anything when
+off.
 
 ### Future boss features
 
-The framework is ready for, and does **not** implement: an enrage (a later phase's speed, tempo and
-pool already change by data; a damage modifier would sit beside them), special attacks and an
-ultimate (a `BossAttack` in a later phase's pool — no FSM change), phase-specific mechanics, a third
-phase (the controller and the data take any number; a three-phase boss is exercised in the test), and
-summons, hazards or cinematics — none of which exist.
+Implemented now: phases with their own pools and modifiers, one phase-2 special attack, a data-driven
+enrage. The framework is ready for, and does **not** implement: an ultimate (a `BossAttack` in a later
+phase's pool — no FSM change), phase-specific mechanics beyond pool and pace, a damage modifier on a
+phase or the enrage, a third phase on the shipped boss (the controller and the data take any number; a
+three-phase boss is exercised in the tests), summons, hazards and cinematics — none of which exist.
+
+## Enemy AI at the close of M12 (M12.9)
+
+M12 closes with one enemy AI foundation and one boss framework, every combatant tuned by data. What each
+is, as it stands (`resources/enemies/`), and where it is proven:
+
+| | Composition | Role | Numbers | Stagger / push |
+| --- | --- | --- | --- | --- |
+| **Melee** | `basic_melee_enemy.tscn` / `.tres`, `EnemyMeleeAttack`, `melee_basic_attack.tres` | closes to 1.6 m, swings from 1.8 m; telegraph 0.35 s, active 0.15 s, recovery 0.65 s, then 0.4 s | 100 HP, 3.8 m/s, 15 damage, 25 XP | resistance 25 (Light 3 and the heavy), push ×1 |
+| **Ranged** | `basic_ranged_enemy.tscn` / `.tres`, `EnemyRangedAttack`, `ranged_basic_bolt.tres`, `Projectile` | keeps 4–10 m (7 by preference), fires a straight bolt from its `ProjectileSpawn` when it sees the target, walks round cover when it does not | 70 HP, 3.4 m/s, 12 damage, 1.6 s, 25 XP | resistance 25, push ×1.2 |
+| **Tank** | `basic_tank_enemy.tscn` / `.tres`, `EnemyMeleeAttack`, `tank_heavy_swing.tres` | the front line: slow, reach 2.3 m, a 0.8 s telegraph and a 1.1 s recovery | 260 HP, 2.4 m/s, 30 damage, 50 XP | resistance 45 (the heavy only), push ×0.35 |
+| **Assassin** | `basic_assassin_enemy.tscn` / `.tres`, `EnemyMeleeAttack`, `assassin_quick_strike.tres` | fast and fragile: strikes with a 6 m/s lunge along its locked facing, backs out to 4.5 m while its attack cools down, comes back — no teleport, no homing | 60 HP, 5.6 m/s, 18 damage, 30 XP | resistance 20, push ×1.2 |
+| **Support** | `basic_support_enemy.tscn` / `.tres`, `EnemySupportAttack` + `EnemySupport` (`EnemySupportData`) | keeps 6.5 m; heals the most hurt ally (by share, under 70%) for 25% of its maximum after a 1.2 s cast (6 s cooldown), buffs a fighter +20% for 6 s, fires an 8-damage bolt with nothing to do | 65 HP, 3.6 m/s, 30 XP | resistance 20, push ×1.2 |
+| **Elite** | any of the five with `elite_profile` = `elite_standard.tres` | the same archetype, more dangerous: health ×1.6, speed ×1.05, damage ×1.2, cooldown ×0.85, resistance ×1.3, push taken ×0.7, XP ×2 | computed once, at spawn, into runtime copies | the heavy still staggers every elite |
+| **Boss** | `dungeon_boss.tscn`, `dungeon_boss_data.tres` | see *Boss framework (M12.8–M12.9)* | 900 HP, 200 XP | resistance 60 (the heavy only), push ×0.1 |
+
+**Shared, never per archetype**: the state machine (`IDLE, ALERT, CHASE, REPOSITION, ATTACK, STAGGERED,
+DEAD`, every state used), `EnemyTargeting` (one hostile target; the support's ally is a separate,
+named role in `EnemySupport`), the attack lifecycle (`EnemyAttack`), the hit (`Hitbox` / `Projectile` →
+`DamageInfo` → `Hurtbox`: i-frames are the hurtbox's, no enemy asks about a dodge), the reactions
+(`HitReaction`), the reward (`RoomCombatant.claim_xp()` once → `PlayerProgression`: 70/30 for a shadow's
+kill, on the effective XP). No `if archetype == …` exists: an archetype's difference is its attack
+component and its data; the one optional part, the support's, is a component the foundation checks for,
+not a type.
+
+**Audited at the close** (M12.9): no `Timer` node and no `await` in enemy, boss, combat or shadow code
+(everything is timed on delta); no per-frame tree scan (the only group read is `EnemyTargeting`'s, once a
+second while it has no target; the support's allies come from a physics query every 0.5 s; line of
+sight is one ray per 0.2 s); no shared resource written during play; no connection outliving what it
+serves (`EnemyTargeting` drops its target's explicitly, a projectile's to its source is one-shot and
+goes with it); debug output behind flags that are off in every scene. `mixed_encounter_test` and `m12_closure_run` are the stress proofs.
+
+## Model and animation decoupling (M12.9, for M13)
+
+M13's exit criterion is that a definitive model replaces a placeholder **without any gameplay script
+changing**. What gameplay needs of a combatant's scene, and what it does not:
+
+| Needed by gameplay (kept when the model changes) | Where |
+| --- | --- |
+| the body's collider and the hurtbox's shape | `CollisionShape3D`, `Hurtbox/CollisionShape3D` on the root — not under the mesh |
+| the facing node | `VisualRoot` (turns with the facing; nothing else turns) |
+| where a swing lands | `VisualRoot/AttackOrigin(s)` → the `Hitbox` areas (the enemy's `EnemyMeleeAttack.hitbox`, the boss's by `BossAttack.hitbox_name`) — beside the model, never under it |
+| where a shot leaves | `EnemyRangedAttack.projectile_spawn`, an exported marker (`ProjectileSpawn`) |
+| where the lock's ring sits | `RoomCombatant.target_anchor`, an exported marker (`TargetAnchor`); the root's position without one |
+| a boss telegraph marker | a node under `AttackOrigins`, named by `BossAttack.telegraph_marker_name` |
+
+| Not needed (presentation, replaceable) | What happens without it |
+| --- | --- |
+| the placeholder mesh (`VisualRoot/MeshInstance3D`, the boss's `VisualRoot/MeshRoot/MeshInstance3D`, the shadow's) | found with `get_node_or_null()` since M12.9: a model without it keeps every rule of AI and combat and only loses the placeholder looks (flinch squash, stagger lean, telegraph tint, the boss's colours) until M14 animates the real one. The boss's telegraph shapes deform `MeshRoot`, a pivot a model goes under; the player's tilts deform `VisualRoot/Model`, the same kind of pivot |
+| animation clips | none are played by any AI or combat script. An attack names its animation by id (`AttackData.animation`, a `StringName` the presentation resolves — the player's placeholder tilts now, clips at M14); phases are ids, never clip names |
+
+`mixed_encounter_test` (M13) swaps each archetype's mesh for a bare `Model` node before it enters the
+tree, and `boss_phase_mechanics_test` (M13) does the same to the boss: each still fights, reacts, keeps
+its lock anchor, escalates and dies. Before M12.9 each of them failed on its first frame.
 
 ## Content pipeline (M13+)
 

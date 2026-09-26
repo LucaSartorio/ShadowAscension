@@ -125,17 +125,22 @@ func _report_static() -> void:
 	print("  stagger resistance   %.0f (%.1fs immune after)" % [
 		_boss_data.stagger_resistance, _boss_data.stagger_immunity_time])
 	for phase in _boss_data.phases:
-		var tempo: float = phase.tempo_multiplier
-		print("  %-8s at %3.0f%% health | transition %.2fs | tempo x%.2f | speed x%.2f" % [
-			phase.id, phase.health_threshold * 100.0, phase.transition_duration, tempo,
-			phase.movement_speed_multiplier])
+		var recovery: float = phase.recovery_multiplier
+		var cooldown: float = phase.cooldown_multiplier
+		print("  %-8s at %3.0f%% health | transition %.2fs | speed x%.2f | recovery x%.2f | cooldown x%.2f" % [
+			phase.id, phase.health_threshold * 100.0, phase.transition_duration,
+			phase.movement_speed_multiplier, recovery, cooldown])
 		for attack in phase.attacks:
 			print("    %-20s %3.0f dmg x%d | %.2f/%.2f/%.2f | w %.1f" % [
 				attack.get_id(), DamageModel.attack_damage(_boss_data.attack_damage, attack.attack.damage_multiplier),
-				attack.hit_count, attack.attack.windup * tempo, attack.attack.recovery * tempo,
-				attack.cooldown * tempo, attack.weight])
+				attack.hit_count, attack.attack.windup, attack.attack.recovery * recovery,
+				attack.cooldown * cooldown, attack.weight])
+	if _boss_data.enrage != null:
+		print("  enrage   at %3.0f%% health | transition %.2fs | speed x%.2f | cooldown x%.2f" % [
+			_boss_data.enrage.health_threshold * 100.0, _boss_data.enrage.transition_duration,
+			_boss_data.enrage.movement_speed_multiplier, _boss_data.enrage.cooldown_multiplier])
 	print("  worst single hit     %.0f of %.0f player HP (%.0f%%)" % [
-		40.0, p.health_component.max_health, 4000.0 / p.health_component.max_health])
+		50.0, p.health_component.max_health, 5000.0 / p.health_component.max_health])
 	print("  boss loot: any drop  %.1f%% (%s)" % [
 		_any_drop_chance(_boss_loot) * 100.0,
 		"guaranteed floor" if _boss_loot.guarantee_at_least_one else "can drop nothing"])

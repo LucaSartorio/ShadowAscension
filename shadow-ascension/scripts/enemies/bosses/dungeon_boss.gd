@@ -16,7 +16,8 @@ extends RoomCombatant
 ##                    the asset is never written.
 ##     Lifecycle      this script's state machine: `_state`, changed only through
 ##                    _change_state(), legal moves in TRANSITIONS.
-##     Phases         BossPhaseController: which phase, which is due — forward only.
+##     Escalation     BossPhaseController: which phase, whether enraged, what is
+##                    due next — forward only.
 ##     Attacks        BossCombat (child `BossCombat`): which attack next, the one
 ##                    under way, the cooldowns, the hitboxes, the telegraph's look.
 ##     Target         EnemyTargeting (child `EnemyTargeting`): whom it fights.
@@ -32,11 +33,18 @@ extends RoomCombatant
 ##            --> ATTACK (an attack chosen) --its recovery over--> DECIDE
 ##     any fighting state --a hit that breaks through--> STAGGERED --over--> DECIDE
 ##     any living state --health reaches a later phase--> TRANSITION --beat over--> DECIDE
+##     any living state --health reaches the enrage, no phase due--> ENRAGING --beat over--> DECIDE
 ##     any --died--> DEAD, which nothing leaves;  any living --parked--> INACTIVE
 ##
-## Priority, by construction: DEAD over everything; TRANSITION over STAGGERED (a
-## stagger never starts in the beat, and the beat cuts one short); STAGGERED over
-## ATTACK (the attack is cut off); ATTACK over movement.
+## Priority, by construction: DEAD over everything; the two beats — TRANSITION,
+## then ENRAGING, which never run together — over STAGGERED (a stagger never
+## starts in a beat, and a beat cuts one short); STAGGERED over ATTACK (the attack
+## is cut off); ATTACK over movement.
+##
+## Every modifier is recomputed from the base (_apply_modifiers()):
+##     base (BossData) -> x the phase's -> x the enrage's, once it has happened
+## so nothing compounds, a phase entered never stacks on the one before, and the
+## assets are never written.
 
 ## Carries what a health bar needs without the boss knowing a UI exists.
 signal encounter_started(display_name: String, health: HealthComponent)
@@ -44,22 +52,29 @@ signal encounter_started(display_name: String, health: HealthComponent)
 signal phase_transition_started(to_index: int)
 ## Phase `index` began — the first one when the encounter starts.
 signal phase_changed(index: int)
+## The enrage beat began.
+signal enrage_started
+## The boss is enraged, for the rest of its life: its modifiers are applied.
+signal enraged
 ## The state changed; after the new state's enter logic has run.
 signal state_changed(from: State, to: State)
 
-enum State { INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, STAGGERED, TRANSITION, DEAD }
+enum State { INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, STAGGERED, TRANSITION, ENRAGING, DEAD }
 
-## The legal transitions, from each state. Anything missing is refused.
+## The legal transitions, from each state. Anything missing is refused. The two
+## beats lead only back to DECIDE, so one never runs inside the other.
 const TRANSITIONS: Dictionary = {
 	State.INACTIVE: [State.INTRO, State.DEAD],
-	State.INTRO: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.INACTIVE, State.DEAD],
+	State.INTRO: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.ENRAGING, State.INACTIVE, State.DEAD],
 	State.DECIDE: [State.CHASE, State.REPOSITION, State.ATTACK, State.STAGGERED, State.TRANSITION,
-		State.INACTIVE, State.DEAD],
-	State.CHASE: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.INACTIVE, State.DEAD],
-	State.REPOSITION: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.INACTIVE, State.DEAD],
-	State.ATTACK: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.INACTIVE, State.DEAD],
-	State.STAGGERED: [State.DECIDE, State.TRANSITION, State.INACTIVE, State.DEAD],
+		State.ENRAGING, State.INACTIVE, State.DEAD],
+	State.CHASE: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.ENRAGING, State.INACTIVE, State.DEAD],
+	State.REPOSITION: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.ENRAGING, State.INACTIVE,
+		State.DEAD],
+	State.ATTACK: [State.DECIDE, State.STAGGERED, State.TRANSITION, State.ENRAGING, State.INACTIVE, State.DEAD],
+	State.STAGGERED: [State.DECIDE, State.TRANSITION, State.ENRAGING, State.INACTIVE, State.DEAD],
 	State.TRANSITION: [State.DECIDE, State.INACTIVE, State.DEAD],
+	State.ENRAGING: [State.DECIDE, State.INACTIVE, State.DEAD],
 	State.DEAD: [],
 }
 ## The states a hit may stagger it out of.
@@ -73,6 +88,8 @@ const INTRO_SCALE: Vector3 = Vector3(1.15, 1.2, 1.15)
 const TRANSITION_PULSES: int = 3
 const TRANSITION_SCALE_UP: Vector3 = Vector3(1.3, 1.3, 1.3)
 const TRANSITION_SCALE_DOWN: Vector3 = Vector3(0.9, 0.9, 0.9)
+const ENRAGE_PULSES: int = 2
+const ENRAGE_SCALE_UP: Vector3 = Vector3(1.4, 1.15, 1.4)
 const FLASH_COLOR: Color = Color(1.0, 1.0, 1.0)
 const FLASH_IN: float = 0.04
 const FLASH_OUT: float = 0.16
@@ -88,7 +105,8 @@ const DEBUG_LABEL_HEIGHT: float = 3.4
 ## DEBUG ONLY. Off by default. A label over the boss: its state, phase, attack and
 ## where in it, target, cooldowns and health share.
 @export var debug_state_label: bool = false
-## DEBUG ONLY. Off by default. Prints each phase change: `PHASE phase_1 -> phase_2`.
+## DEBUG ONLY. Off by default. Prints each phase change (`PHASE phase_1 ->
+## phase_2`) and the enrage (`ENRAGE in phase_2`).
 @export var debug_log_phases: bool = false
 
 # RUNTIME tuning: this boss's own values, seeded from `data` in _apply_data();
@@ -121,7 +139,9 @@ var death_topple_duration: float
 ## Telegraphs deform this, below the facing node, so a wind-up can lean or spin
 ## the body without moving the hitboxes or changing where the boss aims.
 @onready var mesh_root: Node3D = $VisualRoot/MeshRoot
-@onready var mesh_instance: MeshInstance3D = $VisualRoot/MeshRoot/MeshInstance3D
+## The PLACEHOLDER body the looks tint. Optional: a definitive model under
+## MeshRoot without it keeps every rule of the fight and only loses the tints.
+@onready var mesh_instance: MeshInstance3D = get_node_or_null(^"VisualRoot/MeshRoot/MeshInstance3D") as MeshInstance3D
 @onready var attack_origins: Node3D = $VisualRoot/AttackOrigins
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var health_component: HealthComponent = $HealthComponent
@@ -142,6 +162,7 @@ var _intro_timer: float = 0.0
 var _reposition_timer: float = 0.0
 var _stagger_timer: float = 0.0
 var _transition_timer: float = 0.0
+var _enrage_timer: float = 0.0
 ## The phase the running transition leads to.
 var _transition_to: int = -1
 ## Every attack any phase offers, once each — gathered once, at _ready().
@@ -231,7 +252,7 @@ func _apply_data() -> void:
 	knockback_deceleration = source.knockback_deceleration
 	intro_duration = source.intro_duration
 	death_topple_duration = source.death_topple_duration
-	_phases.configure(source.phases)
+	_phases.configure(source.phases, source.enrage)
 
 
 func _gather_attacks() -> Array[BossAttack]:
@@ -255,6 +276,8 @@ func _setup_navigation() -> void:
 
 
 func _setup_material() -> void:
+	if mesh_instance == null:
+		return
 	var mat: StandardMaterial3D = mesh_instance.get_surface_override_material(0) as StandardMaterial3D
 	if mat == null:
 		return
@@ -291,13 +314,13 @@ func start_encounter() -> void:
 		super.set_combat_enabled(true)
 	if not _phases.is_started():
 		_phases.start()
-		_apply_phase(_phases.get_phase())
+		_apply_modifiers()
 	combat.clear_cooldowns()
 	targeting.acquire(detection_range, 0.0)
 	_change_state(State.INTRO)
 	encounter_started.emit(data.display_name, health_component)
 	phase_changed.emit(_phases.get_index())
-	_check_phase()
+	_check_escalation()
 
 
 func _start_if_awake() -> void:
@@ -338,6 +361,16 @@ func get_phase_count() -> int:
 
 func is_in_transition() -> bool:
 	return _state == State.TRANSITION
+
+
+## Enraged: for good, once its beat is over.
+func is_enraged() -> bool:
+	return _phases.is_enraged()
+
+
+## In the enrage's beat.
+func is_enraging() -> bool:
+	return _state == State.ENRAGING
 
 
 ## The phase the running transition leads to; -1 outside one.
@@ -408,6 +441,8 @@ func _physics_process(delta: float) -> void:
 			_update_staggered(delta)
 		State.TRANSITION:
 			_update_transition(delta)
+		State.ENRAGING:
+			_update_enraging(delta)
 
 
 ## The one way the state changes: the old state's exit, the new one's enter, the
@@ -443,13 +478,15 @@ func _enter_state(state: State) -> void:
 			_target_update_accum = target_update_interval
 		State.ATTACK:
 			_desired_horizontal = Vector3.ZERO
-			combat.start(_pending_attack, _tempo())
+			combat.start(_pending_attack)
 			_pending_attack = null
 		State.STAGGERED:
 			_stagger_timer = stagger_duration
 			_desired_horizontal = Vector3.ZERO
 		State.TRANSITION:
 			_enter_transition()
+		State.ENRAGING:
+			_enter_enraging()
 		State.DEAD:
 			_enter_dead()
 
@@ -466,6 +503,8 @@ func _exit_state(state: State) -> void:
 			_stagger_immunity_timer = stagger_immunity_time
 		State.TRANSITION:
 			_transition_timer = 0.0
+		State.ENRAGING:
+			_enrage_timer = 0.0
 
 
 func _update_intro(delta: float) -> void:
@@ -564,6 +603,14 @@ func _update_transition(delta: float) -> void:
 		_finish_transition()
 
 
+## The enrage's beat: the same rules as a phase's.
+func _update_enraging(delta: float) -> void:
+	_hold_position(delta)
+	_enrage_timer -= delta
+	if _enrage_timer <= 0.0:
+		_finish_enrage()
+
+
 ## The target it fights, taking the nearest candidate if it holds none; null
 ## while there is nobody.
 func _fight_target(delta: float) -> Node3D:
@@ -574,21 +621,29 @@ func _fight_target(delta: float) -> Node3D:
 	return null
 
 
-# --- phases -----------------------------------------------------------------------------
+# --- phases and the enrage --------------------------------------------------------------
 
-## The tempo of the phase the fight is in.
-func _tempo() -> float:
+## Every modified number, recomputed from the bases:
+##     base (BossData) -> x the phase's -> x the enrage's, once it has happened
+## Idempotent — calling it twice changes nothing — so a phase never stacks on the
+## one before and nothing compounds; the data is never written.
+func _apply_modifiers() -> void:
 	var phase: BossPhaseData = _phases.get_phase()
-	return phase.tempo_multiplier if phase != null else 1.0
-
-
-## The phase's numbers, from the bases — never from the previous phase's, and
-## never written back into the data.
-func _apply_phase(phase: BossPhaseData) -> void:
-	movement_speed = _base_movement_speed * phase.movement_speed_multiplier
+	if phase == null:
+		return
+	var speed: float = phase.movement_speed_multiplier
+	var cooldown: float = phase.cooldown_multiplier
+	var resting: Color = phase.body_color if phase.body_color.a > 0.0 else _base_albedo
+	var enrage: BossEnrageData = _phases.get_enrage()
+	if _phases.is_enraged() and enrage != null:
+		speed *= enrage.movement_speed_multiplier
+		cooldown *= enrage.cooldown_multiplier
+		resting = enrage.body_color
+	movement_speed = _base_movement_speed * speed
 	reposition_timeout = _base_reposition_timeout * phase.reposition_timeout_multiplier
 	nav_agent.max_speed = movement_speed
-	combat.set_resting_color(phase.body_color if phase.body_color.a > 0.0 else _base_albedo)
+	combat.set_pace(phase.recovery_multiplier, cooldown)
+	combat.set_resting_color(resting)
 
 
 ## Drops everything the boss was doing — the attack cut off, no hit window left,
@@ -609,7 +664,7 @@ func _finish_transition() -> void:
 	var from: StringName = get_phase_id()
 	_phases.enter(_transition_to)
 	var phase: BossPhaseData = _phases.get_phase()
-	_apply_phase(phase)
+	_apply_modifiers()
 	# A new phase opens on a clean slate rather than inheriting cooldowns.
 	combat.clear_cooldowns()
 	combat.settle_look(false)
@@ -618,6 +673,33 @@ func _finish_transition() -> void:
 	_change_state(State.DECIDE)
 	_transition_to = -1
 	phase_changed.emit(_phases.get_index())
+	# The next step, if one is already due — the enrage a single blow also
+	# reached plays now, after this beat, never inside it.
+	_check_escalation()
+
+
+## Like a phase's beat: the attack cut off, no hit window, the path stopped — a
+## harmless, committed beat that no stagger breaks, still hittable.
+func _enter_enraging() -> void:
+	combat.interrupt()
+	_stagger_timer = 0.0
+	velocity = Vector3.ZERO
+	_desired_horizontal = Vector3.ZERO
+	nav_agent.target_position = global_position
+	var enrage: BossEnrageData = _phases.get_enrage()
+	_enrage_timer = enrage.transition_duration if enrage != null else 0.0
+	_play_enrage_look(enrage)
+	enrage_started.emit()
+
+
+func _finish_enrage() -> void:
+	_phases.enrage()
+	_apply_modifiers()
+	combat.settle_look(false)
+	if debug_log_phases:
+		print("[%s] ENRAGE in %s" % [name, get_phase_id()])
+	_change_state(State.DECIDE)
+	enraged.emit()
 
 
 # --- movement -----------------------------------------------------------------------------
@@ -716,25 +798,34 @@ func _facing_error_to(target: Node3D) -> float:
 # nothing else — health_changed at 0 starts no phase, died ends everything.
 
 func _on_health_changed(_current: float, _maximum: float) -> void:
-	_check_phase()
+	_check_escalation()
 
 
-## A later phase due: the transition. During one, a deeper phase due (a blow
-## through two thresholds) becomes where it leads — deterministic, never back.
-## A parked boss waits: start_encounter() checks again when the fight resumes.
-func _check_phase() -> void:
+## What the health share makes due, one step at a time:
+## - a later phase: its transition. During one, a deeper phase due (a blow
+##   through two thresholds) becomes where it leads — deterministic, never back;
+## - with no phase due, the enrage: its beat. Never during a beat — a blow that
+##   reaches both plays the phase first, and the transition's end asks again.
+## A killing blow reaches none of this (health 0), and a parked boss waits:
+## start_encounter() asks again when the fight resumes.
+func _check_escalation() -> void:
 	var maximum: float = health_component.max_health
 	var current: float = health_component.current_health
 	if _state == State.DEAD or _state == State.INACTIVE or current <= 0.0 or maximum <= 0.0:
 		return
-	var due: int = _phases.due(current / maximum)
-	if due < 0:
-		return
+	var share: float = current / maximum
+	var due: int = _phases.due(share)
 	if _state == State.TRANSITION:
-		_transition_to = maxi(_transition_to, due)
+		if due >= 0:
+			_transition_to = maxi(_transition_to, due)
 		return
-	_transition_to = due
-	_change_state(State.TRANSITION)
+	if _state == State.ENRAGING:
+		return
+	if due >= 0:
+		_transition_to = due
+		_change_state(State.TRANSITION)
+	elif _phases.enrage_due(share):
+		_change_state(State.ENRAGING)
 
 
 ## A hit that leaves it standing: a flash, a stagger if it breaks through (and
@@ -816,6 +907,24 @@ func _play_transition_look(next: BossPhaseData) -> void:
 		_body_material.albedo_color = next.body_color
 
 
+## The enrage beat: a heavier pulse, and the glow it keeps from then on.
+func _play_enrage_look(enrage: BossEnrageData) -> void:
+	_kill_look()
+	mesh_root.rotation = Vector3.ZERO
+	mesh_root.position = Vector3.ZERO
+	var duration: float = enrage.transition_duration if enrage != null else 0.0
+	var beat: float = maxf(0.1, duration / (ENRAGE_PULSES * 2.0))
+	_look_tween = create_tween()
+	_look_tween.set_loops(ENRAGE_PULSES)
+	_look_tween.tween_property(mesh_root, "scale", ENRAGE_SCALE_UP, beat)
+	_look_tween.tween_property(mesh_root, "scale", Vector3.ONE, beat)
+	if _body_material != null and enrage != null:
+		_body_material.emission_enabled = true
+		_body_material.emission = enrage.emission_color
+		_body_material.emission_energy_multiplier = enrage.emission_energy
+		_body_material.albedo_color = enrage.body_color
+
+
 ## Deliberately light: a boss should not read as flinching. A brief tint pulse.
 func _hit_flash() -> void:
 	if _body_material == null:
@@ -855,7 +964,8 @@ func _process(_delta: float) -> void:
 	for a in _attacks:
 		if combat.get_cooldown(a) > 0.0:
 			cooldowns += " %s %.1f" % [a.get_id(), combat.get_cooldown(a)]
-	_debug_label.text = "%s  %s\n%s %s\n%s  %.0f%%\n%s" % [State.keys()[_state], get_phase_id(),
+	_debug_label.text = "%s  %s%s\n%s %s\n%s  %.0f%%\n%s" % [State.keys()[_state], get_phase_id(),
+		"  ENRAGED" if is_enraged() else "",
 		String(attack.get_id()) if attack != null else "-", BossCombat.Phase.keys()[combat.get_phase()],
 		String(target.name) if target != null else "no target",
 		100.0 * health_component.current_health / maxf(health_component.max_health, 1.0), cooldowns]

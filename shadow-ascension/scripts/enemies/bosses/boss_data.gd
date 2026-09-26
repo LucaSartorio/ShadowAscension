@@ -2,8 +2,8 @@ class_name BossData
 extends Resource
 
 ## CONFIGURATION of one boss (M12.8, replacing M10's BossStats): what it is,
-## how it moves and reacts, and its phases — each phase with the attacks it
-## fights with. Instances live under `resources/enemies/bosses/` as `.tres`, and
+## how it moves and reacts, its phases — each phase with the attacks it fights
+## with — and its enrage (M12.9). Instances live under `resources/enemies/bosses/` as `.tres`, and
 ## every boss of the kind shares one; the boss copies what it changes into its
 ## own fields on _ready(), so the asset is never written.
 ##
@@ -12,8 +12,8 @@ extends Resource
 ## health, the hit and its DamageInfo, the stagger and push rules (HitReaction),
 ## AttackData, the targeting (EnemyTargeting) — and nothing of an archetype.
 ##
-## What does NOT belong here: its current health, phase, attack, cooldowns or
-## target — all the boss's own, at runtime.
+## What does NOT belong here: its current health, phase, enrage, attack,
+## cooldowns or target — all the boss's own, at runtime.
 
 @export var id: StringName = &""
 ## Shown on its health bar.
@@ -77,6 +77,11 @@ extends Resource
 ## begins once health has fallen to its threshold — lower than the one before.
 @export var phases: Array[BossPhaseData] = []
 
+@export_group("Enrage")
+## The fight's last escalation, after every phase has begun; null: it never
+## enrages.
+@export var enrage: BossEnrageData = null
+
 @export_group("Encounter")
 ## The readable beat when the fight starts. No cutscene.
 @export_range(0.0, 10.0, 0.05, "or_greater") var intro_duration: float = 0.8
@@ -105,4 +110,8 @@ func get_problems() -> PackedStringArray:
 			problems.append("phase '%s' does not start below the one before it" % phase.id)
 		previous = phase.health_threshold
 		problems.append_array(phase.get_problems())
+	if enrage != null:
+		problems.append_array(enrage.get_problems())
+		if enrage.health_threshold >= previous:
+			problems.append("the enrage threshold is not below the last phase's")
 	return problems

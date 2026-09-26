@@ -21,15 +21,20 @@ extends Resource
 @export var attacks: Array[BossAttack] = []
 
 @export_group("Modifiers")
-## Scales the boss's movement speed (and its navigation's) in this phase.
+## Each scales the boss's base value while this phase lasts — from the base,
+## never from the previous phase's, so entering a phase twice changes nothing.
+## None of them touches a telegraph: a wind-up is always its attack's own, so
+## a later phase is harder by rhythm and movement, never by being unreadable.
+##
+## Movement speed (and its navigation's).
 @export_range(0.1, 5.0, 0.01) var movement_speed_multiplier: float = 1.0
-## Scales how long it may spend repositioning before it decides again: below 1
-## it circles less.
+## How long it may spend repositioning before it decides again: below 1 it
+## circles less and commits sooner.
 @export_range(0.1, 5.0, 0.01) var reposition_timeout_multiplier: float = 1.0
-## Scales every attack's windup, recovery and cooldown in this phase — the
-## fight's rhythm — never its damage, its reach or its hit window. Below 1 is
-## quicker: 0.8 is 20% quicker.
-@export_range(0.1, 5.0, 0.01) var tempo_multiplier: float = 1.0
+## Every attack's recovery: below 1 the window to punish it is shorter.
+@export_range(0.1, 5.0, 0.01) var recovery_multiplier: float = 1.0
+## Every attack's cooldown: below 1 it attacks more often.
+@export_range(0.1, 5.0, 0.01) var cooldown_multiplier: float = 1.0
 
 @export_group("Look")
 ## PLACEHOLDER: the body's resting colour in this phase. Fully transparent keeps

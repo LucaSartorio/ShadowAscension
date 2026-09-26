@@ -179,12 +179,14 @@ func _fight(n: int, die_in_phase_2: bool) -> void:
 			n, swings, damage_dealt])
 	_record(phases == ["phase_1", "transition", "phase_2"],
 		"F%d) the fight ran phase_1 -> transition -> phase_2 exactly once: %s" % [n, phases])
-	_record(attacks_used.size() == 4,
-		"F%d) all four attacks were used: %s" % [n, attacks_used.keys()])
+	# Phase 2's Heavy Slam is rare by weight and may not come up in a short
+	# phase 2; boss_phase_mechanics_test and m12_closure_run force it.
+	_record(attacks_used.size() >= 4,
+		"F%d) at least four of the five attacks were used: %s" % [n, attacks_used.keys()])
 	var shapes: Array[String] = []
 	for key in telegraphs:
 		shapes.append(_shape_of(telegraphs[key]))
-	_record(telegraphs.size() == 4 and not shapes.has("none") and _distinct(shapes),
+	_record(telegraphs.size() >= 4 and not shapes.has("none") and _distinct(shapes),
 		"F%d) each wind-up reads differently: %s" % [n, _shape_map(telegraphs)])
 	_record(locked_during_active, "F%d) facing stayed locked through every active window" % n)
 	_record(objective_held, "F%d) the objective read 'Sconfiggi il Boss' until the boss fell" % n)
@@ -244,8 +246,9 @@ func _exit_dungeon(n: int) -> void:
 ## animated must not count as readable.
 func _track_telegraph_peak(store: Dictionary, name: String, boss: DungeonBoss) -> void:
 	var mesh: Node3D = boss.mesh_root
-	var peak: Dictionary = store.get(name, {"pz": 0.0, "rx": 0.0, "ry": 0.0, "sy": 1.0})
+	var peak: Dictionary = store.get(name, {"pz": 0.0, "py": 0.0, "rx": 0.0, "ry": 0.0, "sy": 1.0})
 	peak["pz"] = maxf(peak["pz"], absf(mesh.position.z))
+	peak["py"] = maxf(peak["py"], mesh.position.y)
 	peak["rx"] = maxf(peak["rx"], absf(mesh.rotation.x))
 	peak["ry"] = maxf(peak["ry"], absf(mesh.rotation.y))
 	peak["sy"] = minf(peak["sy"], mesh.scale.y)
@@ -254,6 +257,8 @@ func _track_telegraph_peak(store: Dictionary, name: String, boss: DungeonBoss) -
 
 ## Names the shape from the peak, most specific first.
 func _shape_of(peak: Dictionary) -> String:
+	if peak["py"] > 0.3:
+		return "raise"
 	if peak["ry"] > 0.5:
 		return "spin"
 	if peak["sy"] < 0.8:

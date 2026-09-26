@@ -470,12 +470,28 @@ health** it enters its second phase: whatever it was doing is cut off at once �
 does not land — and for **1.5 s** it pulses and turns a darker red, neither moving nor attacking, while
 the bar calls **FASE 2**; the player can keep hitting it through the beat. Then it is quicker: every
 wind-up, recovery and cooldown a fifth shorter, a little faster on its feet, and a fourth attack,
-Double Strike (**18** twice, a recoil before it). The phase never goes back, whatever happens to its
+Double Strike (**18** twice, a recoil before it). (M12.9 changed how phase 2 is quicker — below.) The phase never goes back, whatever happens to its
 health; a blow that kills it through the threshold simply kills it. It is now **hard to stagger but not
 immune**: light attacks, the combo's third included, never interrupt it, but the **heavy** does — it
 cancels the attack under way and holds the boss for **0.5 s**, after which the boss cannot be staggered
 again for **5 s**. Pushes barely move it: a heavy shifts it about a centimetre. It still fights the
 player, not the shadow, which can hit it and even land the killing blow (the XP split 70/30 as usual).
+
+**M12.9 made the boss's second half an escalation you can read, and gave it a last one.** Phase 1 is
+the lesson: Quick Strike, Wide Sweep and Ground Slam, each with its own wind-up to learn. From half
+health, phase 2 keeps **every wind-up exactly as long** — nothing gets harder by getting harder to read —
+and instead waits less: its attacks come back **15% sooner** and it recovers from them **15% faster**,
+it moves about a fifth faster and circles less before committing. It adds two attacks: Double Strike,
+and the **Heavy Slam** — the boss rears up and swells, glowing purple, while a purple strip marks the
+ground in front of it for a long **1.1 s**; then it comes down on that strip for **50**, half the
+player's health, and stands spent for over a second. It does not turn to follow: stepping off the strip,
+or dodging through the blow, avoids it entirely, and a heavy landed during the wind-up cuts it off. It
+is rare — the lowest pick weight — and waits at least 6.8 s before it can come again. At a **quarter of
+its health** the boss **enrages**: for a second it swells and glows orange while the bar calls
+**FURIA** — hittable, but not stoppable — and from then on it moves a tenth faster and attacks about
+15% more often, until it dies. Nothing else changes: the same attacks, the same wind-ups, the same
+damage — more pressure, not a sudden one-shot. A blow that takes it from above half straight under a
+quarter plays the phase change first and the enrage right after; a blow that kills it simply kills it.
 
 **Not built in M11**, and not committed to: sprint (stamina pays only for the dodge), soft targeting
 and a camera that frames the locked target, floating damage numbers, and a damage model with magic,

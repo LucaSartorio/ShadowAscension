@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BossAttack" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/bosses/boss_attack.gd" id="1_attack"]
+[ext_resource type="Script" path="res://scripts/combat/attack_data.gd" id="2_data"]
+
+[sub_resource type="Resource" id="attack_data"]
+script = ExtResource("2_data")
+id = &"boss_heavy_slam"
+damage_multiplier = 2.5
+windup = 1.1
+active = 0.2
+recovery = 1.4
+stagger_power = 0.0
+knockback_force = 0.0
+debug_color = Color(0.75, 0.3, 1, 0.35)
+
+[resource]
+script = ExtResource("1_attack")
+attack = SubResource("attack_data")
+hitbox_name = &"HeavySlamHitbox"
+min_range = 0.0
+max_range = 4.0
+cooldown = 8.0
+weight = 0.5
+telegraph = 4
+telegraph_color = Color(0.75, 0.3, 1, 1)
+facing_correction_fraction = 0.0
+telegraph_marker_name = &"HeavySlamMarker"

@@ -15,7 +15,7 @@ Core pillars:
   for every system that exists** (M10); a domain gets its resource when a system reads it, so skills,
   gates and dungeons get theirs with their systems (M17, M18)
 
-**Current state: M0–M11 complete; M12 in progress (M12.1–M12.8 done).** A playable vertical slice (RC1) — main menu, hub, gate, a
+**Current state: M0–M12 complete; M13 not started.** A playable vertical slice (RC1) — main menu, hub, gate, a
 three-room dungeon with a two-phase boss, XP and stat allocation, loot and equipment, and the full
 shadow mechanic (extraction, collection, summoning, ally AI, commands, levels) — on the architecture
 M10 consolidated: one source of truth per piece of state, data-driven configuration, decoupled
@@ -57,15 +57,25 @@ health-share threshold, an attack pool, modifiers), its own state machine (`_cha
 DEAD > TRANSITION > STAGGERED > ATTACK > movement), `BossPhaseController` (the phase, forward only),
 `BossCombat` (the one attack choice, asked only in DECIDE, and the attack under way: `BossAttack` composes an
 `AttackData`; per-attack runtime cooldowns) and `EnemyTargeting`; `start_encounter()`; the M11.6 rules shared
-through `HitReaction` (resistance 60: only the heavy staggers it; knockback ×0.1).
+through `HitReaction` (resistance 60: only the heavy staggers it; knockback ×0.1). Since M12.9 its phase 2
+is a real escalation by data — the Heavy Slam in its pool only, recoveries and cooldowns ×0.85, speed
+×1.19, never a shorter telegraph (`BossPhaseData`'s recovery / cooldown multipliers) — and it enrages at
+25% (`BossEnrageData`, owned with the phase by `BossPhaseController`; the `ENRAGING` beat; once, for good);
+every modifier is recomputed base → phase → enrage by `DungeonBoss._apply_modifiers()`, never written into
+an asset. M12.9 closed M12 with an audit (a ranged stuck outside its ring behind cover fixed; the
+placeholder mesh made optional for enemies, the boss and the shadow, so a definitive model needs no
+gameplay change), `mixed_encounter_test` and `m12_closure_run`.
 Everything visible is a **placeholder**: definitive art production starts at M13.
 
-Next: **M12 — Enemy AI 2.0 & Boss Framework**, from M12.9 (M12.1–M12.8 are complete). See
+Next: **M13 — Art Direction & Character Production**, not started. M12 — Enemy AI 2.0 & Boss Framework is
+complete (M12.1–M12.9). See
 `shadow-ascension/docs/ROADMAP.md` for the M12–M20 plan, `shadow-ascension/docs/PROGRESS.md` for what
 shipped, `docs/ARCHITECTURE.md`, *Combat architecture (M11)*, for how combat is built today, and
 *Enemy AI (M12.1)* for the enemy AI foundation, *Melee archetype (M12.2)*, *Ranged archetype (M12.3)*,
 *Tank archetype (M12.4)*, *Assassin archetype (M12.5)* and *Support archetype (M12.6)* for the
-archetypes, *Elite framework (M12.7)* for elites, and *Boss framework (M12.8)* for the boss.
+archetypes, *Elite framework (M12.7)* for elites, *Boss framework (M12.8–M12.9)* for the boss, *Enemy AI
+at the close of M12* for the overview, and *Model and animation decoupling (M12.9, for M13)* for what a
+definitive model must keep.
 
 ---
 

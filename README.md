@@ -4,7 +4,7 @@ Action RPG 3D in Godot 4.7 (GDScript). The Godot project lives in `shadow-ascens
 
 ## Status
 
-**M0–M11 complete, M12 in progress — Vertical Slice (RC1) on a consolidated architecture, with Combat System 2.0.**
+**M0–M12 complete — Vertical Slice (RC1) on its production foundation: consolidated architecture, Combat System 2.0, Enemy AI 2.0 and the Boss Framework. M13 (art) has not started.**
 
 The slice runs from the main menu through a hub, a dungeon and a boss, and back, with progression,
 loot, equipment and the shadow mechanic all live. Everything you can see is a **placeholder**:
@@ -16,14 +16,15 @@ phase, is complete. **M11 — Combat System 2.0** is complete: M11.1 (the combat
 (the light attack combo chain), M11.3 (the heavy attack), M11.4 (the dodge and its i-frames), M11.5
 (stamina), M11.6 (hit reactions, stagger and knockback), M11.7 (critical hits and the damage model),
 M11.8 (target lock) and M11.9 (combat feedback — hit stop, camera shake — and the closure of M11).
-**M12 — Enemy AI 2.0 & Boss Framework** is in progress: M12.1 (the enemy AI foundation — a state
+**M12 — Enemy AI 2.0 & Boss Framework** is complete: M12.1 (the enemy AI foundation — a state
 machine and a target owner), M12.2 (the melee archetype — a telegraphed swing as data), M12.3 (the
 ranged archetype — distance kept, a telegraphed projectile), M12.4 (the tank archetype — a heavy melee,
 from data alone), M12.5 (the assassin archetype — strike, disengage, re-engage), M12.6 (the support
 archetype — heals and buffs its allies, fights when idle), M12.7 (the elite framework — any
-archetype made elite by a data profile) and M12.8 (the boss framework — phases, attack selection and
-lifecycle as data, on a boss of its own) are done; the phase
-runs to Alpha 1 at M20.
+archetype made elite by a data profile), M12.8 (the boss framework — phases, attack selection and
+lifecycle as data, on a boss of its own) and M12.9 (boss phase mechanics — a phase-2 special and an
+enrage — and the M12 closure) are done, and with them the Core Production Foundation phase.
+**M13 — Art Direction & Character Production** has not started; the roadmap runs to Alpha 1 at M20.
 
 ```
 Main Menu  ->  Hub  ->  [E] Gate  ->  Dungeon  ->  Boss  ->  Run Summary  ->  [E] Exit  ->  Hub

@@ -13,8 +13,9 @@ extends Resource
 ## left, the swing under way and the history are BossCombat's.
 
 ## How the wind-up reads without real animation. Each shape is a different
-## channel, so attacks can be told apart at a glance.
-enum Telegraph { LEAN, SPIN, COMPRESS, RECOIL }
+## channel, so attacks can be told apart at a glance. RAISE (M12.9): it rears
+## up and towers — the heaviest blow's.
+enum Telegraph { LEAN, SPIN, COMPRESS, RECOIL, RAISE }
 
 ## Its id, timings, damage multiplier and impact. The boss's damage is its
 ## BossData.attack_damage scaled by this attack's damage_multiplier.
@@ -27,7 +28,8 @@ enum Telegraph { LEAN, SPIN, COMPRESS, RECOIL }
 @export_range(0.0, 50.0, 0.05, "or_greater") var min_range: float = 0.0
 @export_range(0.0, 50.0, 0.05, "or_greater") var max_range: float = 2.6
 ## Seconds, from the start of the attack, before this attack may be chosen again
-## — its own, not shared with the others. Scaled by the phase's tempo.
+## — its own, not shared with the others. Scaled by the boss's pace: its phase's
+## cooldown multiplier, and its enrage's.
 @export_range(0.0, 60.0, 0.05, "or_greater") var cooldown: float = 1.0
 ## Relative pick weight among the attacks valid at the moment of choosing: lower
 ## is rarer, never impossible while above 0.
@@ -49,6 +51,10 @@ enum Telegraph { LEAN, SPIN, COMPRESS, RECOIL }
 ## Share of the boss's rotation speed usable during the wind-up. 0: the attack
 ## is committed to where it was aimed the moment it begins.
 @export_range(0.0, 1.0) var facing_correction_fraction: float = 0.35
+## Optional: a node under the boss's AttackOrigins shown for as long as this
+## attack winds up — where it will land, drawn on the ground (PLACEHOLDER until
+## M14). Empty: none.
+@export var telegraph_marker_name: StringName = &""
 
 
 ## What names the attack wherever it is reported: its AttackData's id.

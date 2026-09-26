@@ -379,7 +379,10 @@ Turn prototype combat into a real action-RPG combat system.
 
 ## M12 — Enemy AI 2.0 & Boss Framework
 
-**Status:** in progress.
+**Status: Complete** — closed by M12.9 (Boss Phase Mechanics & M12 Closure), with the M12 audit, the
+mixed-encounter stress suite (`tests/enemies/mixed_encounter_test`) and the closure run
+(`tests/core/m12_closure_run.gd`): two whole Hub → Gate → Dungeon → mixed encounter → Boss (phase 1,
+phase 2, its special, the enrage, its death) → Hub cycles.
 
 | Step | State | What it did |
 | --- | --- | --- |
@@ -391,7 +394,21 @@ Turn prototype combat into a real action-RPG combat system.
 | **M12.6** Support Archetype 2.0 | **Complete** | the fifth archetype, the support — the first whose decisions are not all about hurting the player — on the M12.1 state machine with the ranged's distance model and shot, plus one optional part: `EnemySupport` (the support target, apart from the hostile target; the plan; the heal's and buff's cooldowns) and `EnemySupportAttack` (its casts run through the attack lifecycle), tuned by `EnemySupportData` (`EnemyData.support`). Allies found by one physics query every 0.5 s (enemies on the AI foundation, alive, awake — never the boss); the most hurt by share of health under 70% chosen and kept until healed, dead or gone; walks into 9 m and sight (round a wall); heal = a 1.2 s cast, then 25% of the ally's maximum through `HealthComponent.heal()` (clamped, never the dead), 0.6 s recovery, 6 s cooldown; a stagger cuts it (the heal spent), the ally dying or moving 12 m off drops it; a buff of +20% attack damage for 6 s, one slot on the ally's `EnemyAttack`, never stacked, cleared on death or parking — `DamageModel.buffed_damage()`; with nothing to do, the ranged's bolt (8 damage). `basic_support_enemy.tscn` / `.tres`, `support_heal` / `support_buff` / `support_bolt.tres`; `support_archetype_test` (56) and `m12_support_run` (15). The four other archetypes and the boss unchanged |
 | **M12.7** Elite Enemy Framework | **Complete** | any enemy on the AI foundation made elite by data alone — the same scene, script, state machine and attacks, no elite scene or branch: `BasicEnemy.elite_profile` (an `EliteModifierData`, set per instance where it is placed; null is normal — `get_rank()` / `is_elite()` read it) scales the archetype's numbers once, at spawn, into the instance's runtime copies: health ×1.6 (filled to the effective maximum), speed ×1.05, damage ×1.2, cooldown ×0.85 (shorter), stagger resistance ×1.3, knockback taken ×0.7, XP ×2 (`elite_standard.tres`). Telegraph / active / recovery, reach, distances and hitboxes untouched; a support's heal and buff unscaled. Damage order: base × elite (static) → × a support's buff (runtime) → × the attack's multiplier — each once. Shared `EnemyData` / `AttackData` never written; normal enemies exactly their data; the reward flow unchanged — the effective XP paid once, 70/30 for a shadow's kill. A gold ELITE tag and frame on the health bar. `elite_framework_test` (43) and `m12_elite_run` (16). The boss unchanged |
 | **M12.8** Boss Framework Foundation | **Complete** | a foundation of the boss's own — not an enemy with more health, not an elite: `DungeonBoss` on a `BossData` (`dungeon_boss_data.tres`, replacing `BossStats`), its own state machine (`INACTIVE, INTRO, DECIDE, CHASE, REPOSITION, ATTACK, STAGGERED, TRANSITION, DEAD`, one writer, a table of legal moves; priority DEAD > TRANSITION > STAGGERED > ATTACK > movement) and three parts: `BossPhaseController` (the phase, by health share, forward only — no rollback, a transition once), `BossCombat` (the one attack choice, asked only in DECIDE: the phase's pool, valid by hitbox, own cooldown, range band and a repeat ceiling of 2, weighted and seeded; the attack under way `NONE → TELEGRAPH → ACTIVE → (BETWEEN_HITS) → RECOVERY`; per-attack runtime cooldowns) and M12.1's `EnemyTargeting` (the player, as before). Phases as `BossPhaseData` (stable ids, `phase_1` 100–50%, `phase_2` ≤50%: a 1.5 s transition that cancels the attack and opens no hitbox, still hittable; Double Strike added, speed ×1.19, tempo ×0.8). `BossAttack` refit to compose an `AttackData`. The M11.6 rules shared through `HitReaction`: resistance 60 — the heavy staggers it, the lights never; 5 s immunity; knockback ×0.1. `start_encounter()`; death wins over a transition; completion by signal, once; the health bar by phase index. `boss_framework_test` (66) and `m12_boss_run` (19). Numbers and moveset kept; the archetypes and elites unchanged |
-| M12.9 onwards | Not started | the rest of the deliverables below |
+| **M12.9** Boss Phase Mechanics & M12 Closure | **Complete** | phase 2 made a real escalation on the M12.8 framework, by data alone: its pool adds the **Heavy Slam** (`boss_heavy_slam.tres`, phase 2 only: a 1.1 s telegraph — the longest — with a new rear-up wind-up and a ground marker, 0.2 s active, 1.4 s recovery, 50 damage, 8 s cooldown, weight 0.5, committed to its aim, dodgeable by moving or through the i-frames); its recoveries and cooldowns ×0.85, its speed ×1.19 — and **no telegraph shortened** (M12.8's `tempo_multiplier`, which shortened wind-ups, replaced by recovery and cooldown multipliers). A data-driven **enrage** (`BossEnrageData`: at 25%, a 1 s beat that is not interruptible and not invulnerable, then speed ×1.1 and cooldowns ×0.85, for good), owned with the phase by `BossPhaseController` — due only after every phase due, once, never undone; its own beat state (`ENRAGING`); modifiers recomputed base → phase → enrage, idempotent, no asset written; a lethal hit is a death through any threshold. The health bar calls "FURIA". The M12 audit: a ranged stuck for good just outside its ring behind cover, fixed ("on the ring" within its arrival tolerance); the placeholder mesh made optional for enemies, the boss and the shadow, so a definitive model replaces it without a gameplay change (M13). `boss_phase_mechanics_test` (42), `mixed_encounter_test` (14), `m12_closure_run` (20) |
+
+**Closed without** — built later, where the roadmap puts them:
+- **Target selection between the player and the shadow.** Enemies and the boss still fight the player
+  only; the candidates are data (`target_groups`), so a shadow group makes shadows candidates under the
+  same rules — but choosing between them (and any threat) belongs with the shadow army (M17).
+- **Patrol** and **Retreat** as states: no room needs them yet; the dungeon's content does (M18).
+  Stun is the stagger.
+- **A group-combat coordinator or formations**: spacing comes from the approach angles, the
+  navigation's avoidance and the attack desync when a fight is picked up — enough for the slice's
+  encounters; a coordinator waits for denser encounters (M18).
+- **The boss's ultimate and a death sequence**: the framework takes an ultimate as a `BossAttack` in a
+  later phase's pool, with no FSM change; the death is a placeholder topple until M14's animation.
+- **Enemy scaling by level or dungeon rank**: the elite profile is the scaling that exists; level and
+  rank scaling come with M16's stats and M18's gates.
 
 **Goal**
 Build a reusable framework for enemies and bosses, rather than one hand-made enemy and one
@@ -424,6 +441,10 @@ tool. The pipeline is documented in `ARCHITECTURE.md`.
 ---
 
 ## M13 — Art Direction & Character Production
+
+**Status:** not started. M12.9 left the gameplay ready for it: no AI or combat script needs a
+placeholder mesh, a clip name or a model hierarchy (`ARCHITECTURE.md`, *Model and animation decoupling
+(M12.9, for M13)*).
 
 **Goal**
 Establish the visual identity and produce the first definitive characters.

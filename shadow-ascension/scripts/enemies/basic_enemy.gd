@@ -171,7 +171,11 @@ var reposition_arrive_tolerance: float
 var target_update_interval: float
 
 @onready var visual_root: Node3D = $VisualRoot
-@onready var mesh_instance: MeshInstance3D = $VisualRoot/MeshInstance3D
+## The PLACEHOLDER body its looks deform and tint (the flinch, the stagger lean,
+## the telegraph's colour). Optional: a definitive model without one keeps every
+## rule of the AI and of combat, and only loses these placeholder looks until
+## M14's animation replaces them.
+@onready var mesh_instance: MeshInstance3D = get_node_or_null(^"VisualRoot/MeshInstance3D") as MeshInstance3D
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var health_component: HealthComponent = $HealthComponent
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -235,7 +239,8 @@ func _ready() -> void:
 	health_component.died.connect(_on_died)
 	targeting.setup(self, target_groups)
 	targeting.target_changed.connect(_on_target_changed)
-	_mesh_rest_quaternion = mesh_instance.quaternion
+	if mesh_instance != null:
+		_mesh_rest_quaternion = mesh_instance.quaternion
 	_setup_navigation()
 	_setup_debug_label()
 
@@ -537,9 +542,12 @@ func _update_chase(delta: float) -> void:
 
 	# On the ring but unable to see the target — a wall between them — holding
 	# there would wait for ever: it closes in on the target itself, down to the
-	# minimum distance, until it sees it again.
+	# minimum distance, until it sees it again. "On the ring" within the arrival
+	# tolerance: an enemy that stopped a few centimetres outside it (M12.9's
+	# mixed encounter: a ranged behind a pillar at 7.03 m of 7) is on it too, or
+	# it would hold there, blind, for good.
 	var ring: float = _ring_distance()
-	var blind: bool = dist <= ring and not _target_in_sight()
+	var blind: bool = dist <= ring + reposition_arrive_tolerance and not _target_in_sight()
 	var point: Vector3 = targeting.get_target_position() if blind else _combat_slot_position()
 	var stop_at: float = minimum_combat_distance if blind else ring
 	_update_nav_target(delta, point)
@@ -1008,11 +1016,14 @@ func _clear_reactions() -> void:
 		_flinch_tween.kill()
 	if _pose_tween != null and _pose_tween.is_running():
 		_pose_tween.kill()
-	mesh_instance.scale = Vector3.ONE
-	mesh_instance.quaternion = _mesh_rest_quaternion
+	if mesh_instance != null:
+		mesh_instance.scale = Vector3.ONE
+		mesh_instance.quaternion = _mesh_rest_quaternion
 
 
 func _play_flinch() -> void:
+	if mesh_instance == null:
+		return
 	if _flinch_tween != null and _flinch_tween.is_running():
 		_flinch_tween.kill()
 	_flinch_tween = create_tween()
@@ -1022,6 +1033,8 @@ func _play_flinch() -> void:
 
 ## Leans the body away from the blow, and holds it until the stagger ends.
 func _play_stagger_pose(direction: Vector3) -> void:
+	if mesh_instance == null:
+		return
 	var local: Vector3 = visual_root.global_basis.orthonormalized().inverse() * direction
 	local.y = 0.0
 	if local.length_squared() < 0.0001:
@@ -1035,6 +1048,8 @@ func _play_stagger_pose(direction: Vector3) -> void:
 
 
 func _release_stagger_pose() -> void:
+	if mesh_instance == null:
+		return
 	if _pose_tween != null and _pose_tween.is_running():
 		_pose_tween.kill()
 	_pose_tween = create_tween()

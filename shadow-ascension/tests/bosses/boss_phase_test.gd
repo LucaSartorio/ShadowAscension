@@ -15,6 +15,7 @@ const QUICK: int = 0
 const SWEEP: int = 1
 const SLAM: int = 2
 const DOUBLE: int = 3
+const HEAVY: int = 4
 
 var _pass: int = 0
 var _fail: int = 0
@@ -253,8 +254,9 @@ func _phase_1_tests() -> void:
 		p2.append(attack.get_id())
 	_record(p1.size() == 3 and not p1.has(&"boss_double_strike"),
 		"2) phase 1 offers the three original attacks: %s" % [p1])
-	_record(p2.size() == 4 and p2.has(&"boss_double_strike"),
-		"2b) phase 2 adds Double Strike: %s" % [p2])
+	_record(p2.size() == 5 and p2.has(&"boss_double_strike") and p2.has(&"boss_heavy_slam")
+			and p2.slice(0, 3) == p1,
+		"2b) phase 2 keeps phase 1's three and adds Double Strike and Heavy Slam: %s" % [p2])
 
 	# 3) above the threshold nothing happens
 	await _place_player(2.0)
@@ -327,7 +329,8 @@ func _transition_tests() -> void:
 
 func _phase_2_tests() -> void:
 	var phase_2: BossPhaseData = _boss.data.phases[1]
-	var tempo: float = phase_2.tempo_multiplier
+	var recovery: float = phase_2.recovery_multiplier
+	var cooldown: float = phase_2.cooldown_multiplier
 	var speed: float = _boss.data.movement_speed * phase_2.movement_speed_multiplier
 	_record(is_equal_approx(_boss.movement_speed, speed) and _boss.movement_speed > _boss.data.movement_speed
 			and is_equal_approx(_boss.nav_agent.max_speed, speed),
@@ -336,18 +339,19 @@ func _phase_2_tests() -> void:
 	var quick: BossAttack = _attack(QUICK)
 	var sweep: BossAttack = _attack(SWEEP)
 	var slam: BossAttack = _attack(SLAM)
-	_record(tempo < 1.0,
-		"12/13/14) phase 2 quickens every wind-up and recovery (tempo %.2f): quick %.2f/%.2f, sweep %.2f/%.2f, slam %.2f/%.2f" % [
-			tempo, quick.attack.windup * tempo, quick.attack.recovery * tempo,
-			sweep.attack.windup * tempo, sweep.attack.recovery * tempo,
-			slam.attack.windup * tempo, slam.attack.recovery * tempo])
+	_record(recovery < 1.0 and cooldown < 1.0 and is_equal_approx(_boss.combat.get_recovery_scale(), recovery)
+			and is_equal_approx(_boss.combat.get_cooldown_scale(), cooldown),
+		"12/13/14) phase 2 keeps every telegraph and shortens recoveries (x%.2f) and cooldowns (x%.2f): windup / recovery quick %.2f/%.2f, sweep %.2f/%.2f, slam %.2f/%.2f" % [
+			recovery, cooldown, quick.attack.windup, quick.attack.recovery * recovery,
+			sweep.attack.windup, sweep.attack.recovery * recovery,
+			slam.attack.windup, slam.attack.recovery * recovery])
 	_record(_boss.combat.get_hitbox(quick).damage == 20.0 and _boss.combat.get_hitbox(sweep).damage == 30.0
 			and _boss.combat.get_hitbox(slam).damage == 40.0,
 		"14b) phase 2 changes the rhythm, not the damage (%.0f/%.0f/%.0f)" % [
 			_boss.combat.get_hitbox(quick).damage, _boss.combat.get_hitbox(sweep).damage,
 			_boss.combat.get_hitbox(slam).damage])
 
-	# 12b) the telegraph still takes up most of the wind-up, so it stays readable
+	# 12b) the telegraph is never shortened by a phase: readability stays
 	_heal_player()
 	await _place_player(2.0)
 	_only_attack(QUICK)
@@ -360,23 +364,25 @@ func _phase_2_tests() -> void:
 			break
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
-	_record(startup_seen >= 0.15 and startup_seen <= quick.attack.windup * tempo + 0.05,
-		"12b) the phase 2 Quick Strike shows its quickened wind-up before it lands (%.2fs of %.2f)" % [
-			startup_seen, quick.attack.windup * tempo])
+	_record(startup_seen >= quick.attack.windup - 0.05 and startup_seen <= quick.attack.windup + 0.05,
+		"12b) the phase 2 Quick Strike shows its full wind-up before it lands (%.2fs of %.2f)" % [
+			startup_seen, quick.attack.windup])
 
 	# 28) cooldowns drop but still exist
-	_record(is_equal_approx(quick.cooldown * tempo, 0.8)
-			and is_equal_approx(sweep.cooldown * tempo, 1.6)
-			and is_equal_approx(slam.cooldown * tempo, 2.8),
-		"28) phase 2 cooldowns: %.1f / %.1f / %.1f" % [
-			quick.cooldown * tempo, sweep.cooldown * tempo, slam.cooldown * tempo])
+	_record(is_equal_approx(_boss.combat.get_effective_cooldown(quick), 0.85)
+			and is_equal_approx(_boss.combat.get_effective_cooldown(sweep), 1.7)
+			and is_equal_approx(_boss.combat.get_effective_cooldown(slam), 2.975)
+			and is_equal_approx(quick.cooldown, 1.0),
+		"28) phase 2 cooldowns: %.2f / %.2f / %.3f, the assets' still 1.0 / 2.0 / 3.5" % [
+			_boss.combat.get_effective_cooldown(quick), _boss.combat.get_effective_cooldown(sweep),
+			_boss.combat.get_effective_cooldown(slam)])
 	_heal_player()
 	await _place_player(2.0)
 	_only_attack(QUICK)
 	var saw: bool = await _await_attack_start()
 	_record(saw and _boss.combat.get_cooldown(quick) > 0.0
-			and _boss.combat.get_cooldown(quick) <= 0.8,
-		"28b) using it starts its phase 2 cooldown (%.2f of 0.8)" % _boss.combat.get_cooldown(quick))
+			and _boss.combat.get_cooldown(quick) <= 0.85,
+		"28b) using it starts its phase 2 cooldown (%.2f of 0.85)" % _boss.combat.get_cooldown(quick))
 
 
 # --- Double Strike ---------------------------------------------------------------
@@ -566,7 +572,7 @@ func _decision_tests() -> void:
 		await get_tree().physics_frame
 		elapsed += get_physics_process_delta_time()
 
-	var counts: Array[int] = [0, 0, 0, 0]
+	var counts: Array[int] = [0, 0, 0, 0, 0]
 	var max_run: int = 0
 	var run: int = 0
 	var previous: int = -1
@@ -587,8 +593,10 @@ func _decision_tests() -> void:
 	_record(idle / elapsed < 0.6,
 		"26c) phase 2 spends most of its time committed, not idling (%.0f%% idle)" % [
 			100.0 * idle / elapsed])
-	_record(counts[QUICK] > 0 and counts[SWEEP] > 0 and counts[SLAM] > 0 and counts[DOUBLE] > 0,
-		"26d) all four phase 2 attacks appear: %s" % [counts])
+	_record(counts[QUICK] > 0 and counts[SWEEP] > 0 and counts[SLAM] > 0 and counts[DOUBLE] > 0
+			and counts[HEAVY] > 0 and counts[HEAVY] * 4 <= sequence.size(),
+		"26d) all five phase 2 attacks appear, Heavy Slam the rarest-kept (%d of %d): %s" % [
+			counts[HEAVY], sequence.size(), counts])
 
 
 # --- death -------------------------------------------------------------------------

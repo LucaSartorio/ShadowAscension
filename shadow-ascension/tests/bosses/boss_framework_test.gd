@@ -192,8 +192,8 @@ func _selection_unit_tests() -> void:
 	var seen_p2: Dictionary = {}
 	for _i in 300:
 		seen_p2[combat.choose(p2, 2.0)] = true
-	_record(seen_p2.size() == 4 and seen_p2.has(double),
-		"82a) phase 2's pool adds Double Strike to the three it shares (%d seen)" % seen_p2.size())
+	_record(seen_p2.size() == 5 and seen_p2.has(double) and seen_p2.has(_attack(&"boss_heavy_slam")),
+		"82a) phase 2's pool adds Double Strike and Heavy Slam to the three it shares (%d seen)" % seen_p2.size())
 
 	var at_3: Dictionary = {}
 	for _i in 200:
@@ -219,13 +219,13 @@ func _selection_unit_tests() -> void:
 		var pick: BossAttack = combat.choose(p1, 2.0)
 		if pick != quick:
 			break
-		combat.start(pick, 1.0)
+		combat.start(pick)
 		combat.interrupt()
 		runs += 1
 	combat.set_cooldown(slam, 0.0)
 	combat.set_cooldown(quick, 0.0)
 	var other: BossAttack = combat.choose(p1, 2.0)
-	combat.start(other, 1.0)
+	combat.start(other)
 	combat.interrupt()
 	combat.set_cooldown(quick, 0.0)
 	var again: BossAttack = combat.choose(p1, 2.0)
@@ -577,9 +577,8 @@ func _phase_2_tests() -> void:
 		await get_tree().physics_frame
 		frames += 1
 	_record(hp - _player.health_component.current_health == 20.0
-			and telegraph <= quick.attack.windup * phase_2.tempo_multiplier + 2.0 * DT,
-		"82c) a shared attack still works in phase 2: Quick Strike lands for 20, after a %.2fs telegraph (tempo x%.2f)" % [
-			telegraph, phase_2.tempo_multiplier])
+			and absf(telegraph - quick.attack.windup) <= 2.0 * DT,
+		"82c) a shared attack still works in phase 2: Quick Strike lands for 20, after its full %.2fs telegraph" % telegraph)
 	_player.hurtbox.set_invulnerable(true)
 	await _until(func() -> bool: return _boss.get_attack_phase() == BossCombat.Phase.NONE, 240)
 
@@ -682,7 +681,7 @@ func _three_phase_tests() -> void:
 	p2.attacks = shipped.phases[1].attacks.duplicate()
 	var p3: BossPhaseData = _phase(&"phase_3", 0.4)
 	p3.transition_duration = 0.5
-	p3.tempo_multiplier = 0.6
+	p3.cooldown_multiplier = 0.6
 	p3.attacks = shipped.phases[1].attacks.duplicate()
 	var phases: Array[BossPhaseData] = [p1, p2, p3]
 	custom.phases = phases
@@ -728,8 +727,8 @@ func _three_phase_tests() -> void:
 	_record(boss.get_transition_target() == 2 and transitions == [1],
 		"43b) crossing 40% during the beat retargets it to phase 3 — one beat, deterministically")
 	await _until(func() -> bool: return not boss.is_in_transition(), 120)
-	_record(boss.get_phase_index() == 2 and changes == [0, 2] and is_equal_approx(boss._tempo(), 0.6),
-		"43c) it ends in phase_3, passing over phase_2 (%s), at phase 3's tempo" % [changes])
+	_record(boss.get_phase_index() == 2 and changes == [0, 2] and is_equal_approx(boss.combat.get_cooldown_scale(), 0.6),
+		"43c) it ends in phase_3, passing over phase_2 (%s), at phase 3's pace" % [changes])
 	boss.queue_free()
 	await _frames(2)
 
